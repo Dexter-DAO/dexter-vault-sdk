@@ -1,0 +1,29 @@
+import { defineConfig } from 'tsup';
+
+export default defineConfig({
+  entry: {
+    'index': 'src/index.ts',
+    'types': 'src/types.ts',
+    'counterfactual': 'src/counterfactual.ts',
+    'constants/index': 'src/constants/index.ts',
+    'instructions/index': 'src/instructions/index.ts',
+    'messages/index': 'src/messages/index.ts',
+    'reader/index': 'src/reader/index.ts',
+    'precompile/index': 'src/precompile/index.ts',
+    'signers/types': 'src/signers/types.ts',
+    'signers/node/index': 'src/signers/node/index.ts',
+  },
+  format: ['esm', 'cjs'],
+  dts: true,
+  clean: true,
+  minify: false,
+  splitting: false,
+  sourcemap: false,
+  target: 'es2022',
+  external: [
+    '@solana/web3.js',
+    '@solana/spl-token',
+    '@swig-wallet/kit',
+    '@swig-wallet/lib',
+  ],
+});
