@@ -2,7 +2,11 @@
 
 All notable changes to `@dexterai/vault`.
 
-## 0.1.1 — 2026-06-03
+## 0.1.2 — 2026-06-03
+
+Re-publish of 0.1.1 contents under a new version number. The 0.1.1 tag was unpublished from npm earlier the same day during a brief privacy-posture experiment; npm policy blocks reusing the same version number for 24 hours after an unpublish, so this is the same bytes under a bumped patch. No code or test changes from 0.1.1.
+
+## 0.1.1 — 2026-06-03 (unpublished, see 0.1.2)
 
 ### Added
 
