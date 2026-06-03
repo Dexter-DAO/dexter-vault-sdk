@@ -1,0 +1,445 @@
+{
+  "address": "Hg3wRaydFtJhYrdvYrKECacpJYDsC9Px7yKmpncj2fhc",
+  "metadata": {
+    "name": "dexter_vault",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "finalize_withdrawal",
+      "discriminator": [
+        178,
+        87,
+        206,
+        68,
+        201,
+        186,
+        164,
+        232
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "swig"
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "FinalizeWithdrawalArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_vault",
+      "discriminator": [
+        48,
+        191,
+        163,
+        44,
+        71,
+        129,
+        63,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.supabase_user_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "InitializeVaultArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "request_withdrawal",
+      "discriminator": [
+        251,
+        85,
+        121,
+        205,
+        56,
+        201,
+        12,
+        177
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RequestWithdrawalArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_swig",
+      "discriminator": [
+        253,
+        229,
+        89,
+        206,
+        192,
+        118,
+        137,
+        165
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SetSwigArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "settle_voucher",
+      "discriminator": [
+        144,
+        176,
+        128,
+        220,
+        156,
+        79,
+        41,
+        54
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "dexter_session_signer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SettleVoucherArgs"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Vault",
+      "discriminator": [
+        211,
+        8,
+        232,
+        43,
+        2,
+        152,
+        117,
+        119
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "CoolingOffNotElapsed",
+      "msg": "Cooling-off period has not elapsed"
+    },
+    {
+      "code": 6001,
+      "name": "PendingVouchersExist",
+      "msg": "Pending vouchers must settle before withdrawal can finalize"
+    },
+    {
+      "code": 6002,
+      "name": "NoPendingWithdrawal",
+      "msg": "No pending withdrawal request"
+    },
+    {
+      "code": 6003,
+      "name": "PasskeyVerificationFailed",
+      "msg": "Passkey signature verification failed"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidVoucherSignature",
+      "msg": "Voucher signature does not match Dexter session key"
+    }
+  ],
+  "types": [
+    {
+      "name": "FinalizeWithdrawalArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "client_data_json",
+            "docs": [
+              "WebAuthn clientDataJSON; challenge must be sha256(operation_message)."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "authenticator_data",
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitializeVaultArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "passkey_pubkey",
+            "type": {
+              "array": [
+                "u8",
+                33
+              ]
+            }
+          },
+          {
+            "name": "cooling_off_seconds",
+            "type": "i64"
+          },
+          {
+            "name": "supabase_user_id",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingWithdrawal",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "requested_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RequestWithdrawalArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "signed_at",
+            "type": "i64"
+          },
+          {
+            "name": "client_data_json",
+            "docs": [
+              "WebAuthn `clientDataJSON` from the browser. Its `challenge` field",
+              "must base64url-decode to `sha256(operation_message)`."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "authenticator_data",
+            "docs": [
+              "WebAuthn `authenticatorData` (37+ bytes)."
+            ],
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SetSwigArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "swig_address",
+            "type": "pubkey"
+          },
+          {
+            "name": "client_data_json",
+            "docs": [
+              "WebAuthn `clientDataJSON` produced by the browser. Must contain a",
+              "`challenge` field equal to base64url(sha256(operation_message))."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "authenticator_data",
+            "docs": [
+              "WebAuthn `authenticatorData` produced by the authenticator (37+ bytes)."
+            ],
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettleVoucherArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "increment",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Vault",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "passkey_pubkey",
+            "type": {
+              "array": [
+                "u8",
+                33
+              ]
+            }
+          },
+          {
+            "name": "swig_address",
+            "type": "pubkey"
+          },
+          {
+            "name": "cooling_off_seconds",
+            "type": "i64"
+          },
+          {
+            "name": "pending_voucher_count",
+            "type": "u32"
+          },
+          {
+            "name": "pending_withdrawal",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "PendingWithdrawal"
+                }
+              }
+            }
+          },
+          {
+            "name": "supabase_user_id",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

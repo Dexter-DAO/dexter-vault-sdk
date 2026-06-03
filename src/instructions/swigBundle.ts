@@ -1,0 +1,212 @@
+/**
+ * Canonical 4-role Swig provisioning bundle.
+ *
+ * THE ONLY place in the codebase that knows about Swig roles 0/1/2/3. Every
+ * enrollment path — dexter-api production, dexter-vault tests, future
+ * consumers — calls this. The drift bug that ate 4 hours on 2026-06-02 is
+ * structurally impossible because the role list lives in exactly one file.
+ *
+ * Role assignment (locked):
+ *   role 0 — Ed25519(fee-payer), manageAuthority only (bootstrap; can't spend)
+ *   role 1 — ProgramExec(vault, marker=finalize_withdrawal), all (withdraw path)
+ *   role 2 — Ed25519Session(master, TTL'd + token-limited), all (streaming spend)
+ *   role 3 — ProgramExec(vault, marker=settle_tab_voucher), all (Tab settle path)
+ *
+ * The HMAC key the Swig-id derivation needs is a CALLER-PROVIDED 32-byte
+ * seed. Production passes its session-master secret; tests pass a stable
+ * random seed they generated themselves. The package never touches process.env.
+ */
+
+import { createHmac } from 'node:crypto';
+import {
+  getInstructionsFromContext,
+  findSwigPda,
+  fetchNullableSwig,
+} from '@swig-wallet/kit';
+import {
+  Actions,
+  createProgramExecAuthorityInfo,
+  createEd25519AuthorityInfo,
+  createEd25519SessionAuthorityInfo,
+  getCreateSwigWithMultipleAuthoritiesInstructionContextBuilder,
+} from '@swig-wallet/lib';
+import { address, createSolanaRpc } from '@solana/kit';
+import bs58 from 'bs58';
+import { PublicKey } from '@solana/web3.js';
+
+import { DEXTER_VAULT_PROGRAM_ID, USDC_MAINNET } from '../constants/index.js';
+
+const SWIG_ID_DOMAIN = 'dexter-swig-id:v1:';
+const DEFAULT_SESSION_TTL_SECONDS = BigInt(30 * 24 * 60 * 60);
+const DEFAULT_SPEND_LIMIT_ATOMIC = BigInt(1_000_000_000);
+
+export const SWIG_PROGRAM_EXEC_PREFIX = new Uint8Array([
+  178, 87, 206, 68, 201, 186, 164, 232,
+]);
+export const SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB = new Uint8Array([
+  173, 22, 98, 31, 110, 129, 59, 161,
+]);
+export const SWIG_PROGRAM_EXEC_MARKERS: readonly Uint8Array[] = [
+  SWIG_PROGRAM_EXEC_PREFIX,
+  SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB,
+];
+
+function deriveSwigId(identitySeed: Uint8Array, hmacKey: Uint8Array): Buffer {
+  if (hmacKey.length !== 32) {
+    throw new Error(`hmacKey must be 32 bytes, got ${hmacKey.length}`);
+  }
+  return createHmac('sha256', Buffer.from(hmacKey))
+    .update(SWIG_ID_DOMAIN)
+    .update(Buffer.from(identitySeed))
+    .digest();
+}
+
+export interface BuildSwigCreationBundleParams {
+  feePayer: string;             // base58
+  dexterMasterPubkey: string;   // base58
+  identitySeed: Uint8Array;
+  /** 32-byte HMAC key for Swig-id derivation. Caller-provided (no env access). */
+  hmacKey: Uint8Array;
+  sessionTtlSeconds?: bigint;
+  spendLimitAtomic?: bigint;
+}
+
+export interface SwigCreationBundleOutput {
+  swigAddress: string;
+  swigIdBase58: string;
+  instructions: any[];
+}
+
+export async function buildSwigCreationBundle(
+  params: BuildSwigCreationBundleParams,
+): Promise<SwigCreationBundleOutput> {
+  const {
+    feePayer,
+    dexterMasterPubkey,
+    identitySeed,
+    hmacKey,
+    sessionTtlSeconds = DEFAULT_SESSION_TTL_SECONDS,
+    spendLimitAtomic = DEFAULT_SPEND_LIMIT_ATOMIC,
+  } = params;
+
+  const swigId = deriveSwigId(identitySeed, hmacKey);
+  const swigPda = await findSwigPda(swigId);
+  const swigAddressStr = String(swigPda);
+
+  const feePayerBytes = bs58.decode(feePayer);
+  const vaultProgramIdBytes = Uint8Array.from(DEXTER_VAULT_PROGRAM_ID.toBytes());
+  const dexterPubkeyBytes = bs58.decode(dexterMasterPubkey);
+
+  const bootstrapAuthorityInfo = createEd25519AuthorityInfo(feePayerBytes);
+  const bootstrapActions = Actions.set().manageAuthority().get();
+
+  const vaultAuthorityInfo = createProgramExecAuthorityInfo(
+    vaultProgramIdBytes,
+    SWIG_PROGRAM_EXEC_PREFIX,
+  );
+  const vaultActions = Actions.set().all().get();
+
+  const vaultTabSettleAuthorityInfo = createProgramExecAuthorityInfo(
+    vaultProgramIdBytes,
+    SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB,
+  );
+  const vaultTabSettleActions = Actions.set().all().get();
+
+  const sessionAuthorityInfo = createEd25519SessionAuthorityInfo(
+    dexterPubkeyBytes,
+    sessionTtlSeconds,
+  );
+  const sessionActions = Actions.set()
+    .tokenLimit({ mint: bs58.decode(USDC_MAINNET), amount: spendLimitAtomic })
+    .programAll()
+    .get();
+
+  const builder = getCreateSwigWithMultipleAuthoritiesInstructionContextBuilder({
+    payer: address(feePayer),
+    swigAddress: address(swigAddressStr),
+    id: swigId,
+    actions: bootstrapActions,
+    authorityInfo: bootstrapAuthorityInfo,
+    options: {},
+  })
+    .addAuthority(vaultAuthorityInfo, vaultActions)
+    .addAuthority(sessionAuthorityInfo, sessionActions)
+    .addAuthority(vaultTabSettleAuthorityInfo, vaultTabSettleActions);
+
+  const contexts = await builder.getInstructionContexts();
+  const instructions = contexts.flatMap((ctx) => getInstructionsFromContext(ctx));
+
+  return {
+    swigAddress: swigAddressStr,
+    swigIdBase58: bs58.encode(swigId),
+    instructions,
+  };
+}
+
+export async function expectedSwigAddressFor(
+  identitySeed: Uint8Array,
+  hmacKey: Uint8Array,
+): Promise<string> {
+  const swigId = deriveSwigId(identitySeed, hmacKey);
+  return String(await findSwigPda(swigId));
+}
+
+export interface SwigOwnershipCheck {
+  ok: boolean;
+  reason?: string;
+}
+
+export async function verifySwigIsOurs(params: {
+  swigAddress: string;
+  identitySeed: Uint8Array;
+  hmacKey: Uint8Array;
+  dexterMasterPubkey: string;
+  rpcEndpoint: string;
+}): Promise<SwigOwnershipCheck> {
+  const { swigAddress, identitySeed, hmacKey, dexterMasterPubkey, rpcEndpoint } = params;
+
+  const expected = await expectedSwigAddressFor(identitySeed, hmacKey);
+  if (swigAddress !== expected) {
+    return {
+      ok: false,
+      reason: `swig_address_mismatch: expected ${expected}, got ${swigAddress}`,
+    };
+  }
+
+  try {
+    const rpc: any = createSolanaRpc(rpcEndpoint);
+    const swig = await fetchNullableSwig(rpc, address(swigAddress));
+    if (swig) {
+      const ourRoles = swig.findRolesByAuthorityAddress(bs58.decode(dexterMasterPubkey));
+      if (!ourRoles || ourRoles.length === 0) {
+        return {
+          ok: false,
+          reason: 'swig_missing_session_master_role',
+        };
+      }
+    }
+  } catch {
+    // RPC failure here doesn't hard-block — the address match already proved ownership.
+  }
+
+  return { ok: true };
+}
+
+/**
+ * deriveVaultPda — supabaseUserId is the 16-byte UUID; the vault PDA seeds are
+ * ["vault", supabaseUserId]. Kept here because it's the canonical Swig-pair PDA
+ * derivation. Mirror of dexter-api/src/vault/instructions.ts.
+ */
+export function deriveVaultPda(supabaseUserId: Uint8Array): {
+  pda: PublicKey;
+  bump: number;
+} {
+  if (supabaseUserId.length !== 16) {
+    throw new Error('supabaseUserId must be 16 bytes (UUID v4)');
+  }
+  const [pda, bump] = PublicKey.findProgramAddressSync(
+    [Buffer.from('vault'), Buffer.from(supabaseUserId)],
+    DEXTER_VAULT_PROGRAM_ID,
+  );
+  return { pda, bump };
+}
