@@ -1,0 +1,8 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`counterfactual derivation > known-input snapshot 1`] = `
+{
+  "swigStateAddress": "3od7RUUgU5FTbeNCD3qxuzeSmEDgZQSBFsuNTqL16o5v",
+  "swigWalletAddress": "G4Fi31sXSTNF48e8XQoW9tKYF6Bnxx4BhzaRc6NHP4Sc",
+}
+`;

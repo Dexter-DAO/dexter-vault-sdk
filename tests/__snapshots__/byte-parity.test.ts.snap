@@ -1,0 +1,122 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`domain separators > OTS_SESSION_REGISTER_V1 1`] = `Uint8Array(32) "4f54535f53455353494f4e5f52454749535445525f5631000000000000000000"`;
+
+exports[`domain separators > OTS_SESSION_REVOKE_V1 1`] = `Uint8Array(32) "4f54535f53455353494f4e5f5245564f4b455f56310000000000000000000000"`;
+
+exports[`instruction data layouts > finalize_withdrawal > finalize_withdrawal data 1`] = `Uint8Array(24) "b257ce44c9baa4e804000000010203040400000005060708"`;
+
+exports[`instruction data layouts > finalize_withdrawal > finalize_withdrawal keys 1`] = `
+[
+  {
+    "isSigner": false,
+    "isWritable": false,
+    "pubkey": "Sysvar1nstructions1111111111111111111111111",
+  },
+  {
+    "isSigner": false,
+    "isWritable": false,
+    "pubkey": "59UDKAnnT1ECPK9Ev9Nwzsmnqmza4LnPC7r6WopkojjQ",
+  },
+  {
+    "isSigner": false,
+    "isWritable": true,
+    "pubkey": "Sysvar1nstructions1111111111111111111111111",
+  },
+  {
+    "isSigner": false,
+    "isWritable": false,
+    "pubkey": "Sysvar1nstructions1111111111111111111111111",
+  },
+]
+`;
+
+exports[`instruction data layouts > force_release > force_release data 1`] = `Uint8Array(24) "7abef3fc36cad0ea04000000010203040400000005060708"`;
+
+exports[`instruction data layouts > initialize_vault > initialize_vault data 1`] = `Uint8Array(77) "30bfa32c47813fa4cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc00000000dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"`;
+
+exports[`instruction data layouts > initialize_vault > initialize_vault keys 1`] = `
+[
+  {
+    "isSigner": false,
+    "isWritable": true,
+    "pubkey": "Sysvar1nstructions1111111111111111111111111",
+  },
+  {
+    "isSigner": true,
+    "isWritable": true,
+    "pubkey": "Ed25519SigVerify111111111111111111111111111",
+  },
+  {
+    "isSigner": true,
+    "isWritable": false,
+    "pubkey": "Ed25519SigVerify111111111111111111111111111",
+  },
+  {
+    "isSigner": false,
+    "isWritable": false,
+    "pubkey": "11111111111111111111111111111111",
+  },
+]
+`;
+
+exports[`instruction data layouts > prove_passkey > prove_passkey data 1`] = `Uint8Array(56) "23af298fc97631b8111111111111111111111111111111111111111111111111111111111111111104000000010203040400000005060708"`;
+
+exports[`instruction data layouts > register_session_key > register_session_key data 1`] = `Uint8Array(108) "455e3c2c31c7b7e9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa40420f00000000008085746700000000037d46d67c93fbbe12f9428f838d40ff0570744927f48a64fcca7044800000002a00000004000000010203040400000005060708"`;
+
+exports[`instruction data layouts > request_withdrawal > request_withdrawal data 1`] = `Uint8Array(72) "fb5579cd38c90cb1a08601000000000006920dec2fea71b5b723814d742da9031c83e75fdb795d568e75478020000000808574670000000004000000010203040400000005060708"`;
+
+exports[`instruction data layouts > revoke_session_key > revoke_session_key data 1`] = `Uint8Array(24) "51c0206e6874909704000000010203040400000005060708"`;
+
+exports[`instruction data layouts > rotate_dexter_authority > rotate_dexter_authority data 1`] = `Uint8Array(40) "913c0477b4cdec8606920dec2fea71b5b723814d742da9031c83e75fdb795d568e75478020000000"`;
+
+exports[`instruction data layouts > rotate_passkey > rotate_passkey data 1`] = `Uint8Array(57) "1c863159c4223aaeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee04000000010203040400000005060708"`;
+
+exports[`instruction data layouts > set_swig > set_swig data 1`] = `Uint8Array(56) "fde559cec07689a506a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000004000000010203040400000005060708"`;
+
+exports[`instruction data layouts > set_swig > set_swig keys 1`] = `
+[
+  "Sysvar1nstructions1111111111111111111111111",
+  "Sysvar1nstructions1111111111111111111111111",
+]
+`;
+
+exports[`instruction data layouts > settle_tab_voucher > settle_tab_voucher data 1`] = `Uint8Array(52) "ad16621f6e813ba1bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb393000000000000007000000"`;
+
+exports[`instruction data layouts > settle_tab_voucher > settle_tab_voucher keys 1`] = `
+[
+  {
+    "isSigner": false,
+    "isWritable": false,
+    "pubkey": "Sysvar1nstructions1111111111111111111111111",
+  },
+  {
+    "isSigner": false,
+    "isWritable": false,
+    "pubkey": "59UDKAnnT1ECPK9Ev9Nwzsmnqmza4LnPC7r6WopkojjQ",
+  },
+  {
+    "isSigner": false,
+    "isWritable": true,
+    "pubkey": "Sysvar1nstructions1111111111111111111111111",
+  },
+  {
+    "isSigner": true,
+    "isWritable": false,
+    "pubkey": "Ed25519SigVerify111111111111111111111111111",
+  },
+  {
+    "isSigner": false,
+    "isWritable": false,
+    "pubkey": "Sysvar1nstructions1111111111111111111111111",
+  },
+]
+`;
+
+exports[`message layouts > 44-byte voucher (named-arg form) 1`] = `Uint8Array(44) "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb393000000000000007000000"`;
+
+exports[`message layouts > 128-byte session revocation 1`] = `Uint8Array(128) "4f54535f53455353494f4e5f5245564f4b455f56310000000000000000000000f7bbf6fb3438424cb755a212ae90f51ad4ddcfd3d565b0d75e188e10711876f306a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f08000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`;
+
+exports[`message layouts > 180-byte session registration 1`] = `Uint8Array(180) "4f54535f53455353494f4e5f52454749535445525f5631000000000000000000f7bbf6fb3438424cb755a212ae90f51ad4ddcfd3d565b0d75e188e10711876f306a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f08000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa40420f00000000008085746700000000037d46d67c93fbbe12f9428f838d40ff0570744927f48a64fcca7044800000002a000000"`;
+
+exports[`message layouts > set_swig operation message 1`] = `Uint8Array(40) "7365745f73776967f7bbf6fb3438424cb755a212ae90f51ad4ddcfd3d565b0d75e188e10711876f3"`;
