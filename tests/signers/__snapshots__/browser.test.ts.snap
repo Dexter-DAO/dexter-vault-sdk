@@ -1,0 +1,7 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`derSignatureToCompactLowS > normalizes high-S to low-S (s ≤ n/2) 1`] = `Uint8Array(64) "111111111111111111111111111111111111111111111111111111111111111177777776777777787777777777777777345e72251e8f15fc6b31423a73da9cc9"`;
+
+exports[`derSignatureToCompactLowS > produces 64-byte r||s output (snapshot) 1`] = `Uint8Array(64) "11111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222"`;
+
+exports[`derSignatureToCompactLowS > strips DER positive-integer padding byte 1`] = `Uint8Array(64) "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2222222222222222222222222222222222222222222222222222222222222222"`;

@@ -2,6 +2,18 @@
 
 All notable changes to `@dexterai/vault`.
 
+## 0.2.0 — 2026-06-03
+
+### Added
+
+- **`@dexterai/vault/signers/browser`** — new subpath. Exports the `WebAuthnAssertion` class: pure-browser P-256 passkey ceremony. Runs `navigator.credentials.get()` over a caller-supplied challenge and returns the three on-chain-ready buffers: a 64-byte compact lowS r||s signature, raw `clientDataJSON`, raw `authenticatorData`. Zero `fetch` calls. The class implements the v0.1 `PasskeySigner` interface; consumers compose it with their own server-policy adapter.
+- **`derSignatureToCompactLowS`** exported from `signers/browser` — the canonical implementation. Lifts verbatim from dexter-fe's `passkey.ts:253-313` (and its byte-identical twin in `passkey-anon.ts`). After dexter-fe swaps in this release, those two copies go away.
+- 12 new tests in `tests/signers/browser.test.ts` — DER → compact lowS byte-parity snapshots (low-S + high-S + padding cases), invalid-DER rejection cases, `assertOver` happy path with a mocked `navigator.credentials.get`, `not_browser` / `invalid_challenge` / `user_cancelled` guards. Brings the suite to 78 tests, 7 files.
+
+### What this unlocks
+
+dexter-fe is the last consumer that hand-rolls the on-chain byte layouts. The v0.2 release adds the browser-side primitive; the dexter-fe swap (writing a ~40-line `DexterApiBrowserPasskeySigner` adapter that composes `WebAuthnAssertion` with its existing `/api/passkey[-anon]/sign/{challenge,verify}` round-trips) ships in dexter-fe next, then the demo queue opens.
+
 ## 0.1.3 — 2026-06-03
 
 ### Fixed
