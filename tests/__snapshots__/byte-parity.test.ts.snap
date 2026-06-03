@@ -113,6 +113,23 @@ exports[`instruction data layouts > settle_tab_voucher > settle_tab_voucher keys
 ]
 `;
 
+exports[`instruction data layouts > settle_voucher (legacy counter ix) > settle_voucher data 1`] = `Uint8Array(17) "90b080dc9c4f2936393000000000000001"`;
+
+exports[`instruction data layouts > settle_voucher (legacy counter ix) > settle_voucher keys 1`] = `
+[
+  {
+    "isSigner": false,
+    "isWritable": true,
+    "pubkey": "Sysvar1nstructions1111111111111111111111111",
+  },
+  {
+    "isSigner": true,
+    "isWritable": false,
+    "pubkey": "Ed25519SigVerify111111111111111111111111111",
+  },
+]
+`;
+
 exports[`message layouts > 44-byte voucher (named-arg form) 1`] = `Uint8Array(44) "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb393000000000000007000000"`;
 
 exports[`message layouts > 128-byte session revocation 1`] = `Uint8Array(128) "4f54535f53455353494f4e5f5245564f4b455f56310000000000000000000000f7bbf6fb3438424cb755a212ae90f51ad4ddcfd3d565b0d75e188e10711876f306a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f08000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`;

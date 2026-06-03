@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { PublicKey } from '@solana/web3.js';
 import { DISCRIMINATORS, OTS_SESSION_REGISTER_V1_DOMAIN, OTS_SESSION_REVOKE_V1_DOMAIN } from '../src/constants/index.js';
 import { sessionRegisterMessage, sessionRevokeMessage, voucherPayloadMessage, buildVoucherMessage, buildSetSwigOperationMessage } from '../src/messages/index.js';
-import { buildSettleTabVoucherInstruction, buildInitializeVaultInstruction, buildSetSwigInstruction, buildRegisterSessionKeyInstruction, buildRevokeSessionKeyInstruction, buildProvePasskeyInstruction, buildRequestWithdrawalInstruction, buildFinalizeWithdrawalInstruction, buildForceReleaseInstruction, buildRotatePasskeyInstruction, buildRotateDexterAuthorityInstruction } from '../src/instructions/index.js';
+import { buildSettleTabVoucherInstruction, buildInitializeVaultInstruction, buildSetSwigInstruction, buildRegisterSessionKeyInstruction, buildRevokeSessionKeyInstruction, buildProvePasskeyInstruction, buildRequestWithdrawalInstruction, buildFinalizeWithdrawalInstruction, buildForceReleaseInstruction, buildRotatePasskeyInstruction, buildRotateDexterAuthorityInstruction, buildSettleVoucherInstruction } from '../src/instructions/index.js';
 
 // ── Known-good test inputs (all-zero / sequential bytes so snapshots are stable) ──
 
@@ -272,5 +272,16 @@ describe('instruction data layouts', () => {
       newDexterAuthority: KNOWN_DESTINATION,
     });
     expect(new Uint8Array(ix.data)).toMatchSnapshot('rotate_dexter_authority data');
+  });
+
+  test('settle_voucher (legacy counter ix)', () => {
+    const ix = buildSettleVoucherInstruction({
+      vaultPda: KNOWN_VAULT_PDA,
+      dexterAuthority: KNOWN_COUNTERPARTY,
+      amount: 12_345n,
+      increment: true,
+    });
+    expect(new Uint8Array(ix.data)).toMatchSnapshot('settle_voucher data');
+    expect(ix.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable }))).toMatchSnapshot('settle_voucher keys');
   });
 });

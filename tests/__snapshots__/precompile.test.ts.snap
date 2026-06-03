@@ -1,0 +1,7 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Ed25519 precompile > instruction data layout (snapshot) > ed25519 verify data 1`] = `Uint8Array(156) "01003000ffff1000ffff70002c00ffffaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"`;
+
+exports[`precompile message assembly (authData || SHA-256(clientDataJSON)) > known-input snapshot > precompile message bytes 1`] = `Uint8Array(36) "050607089f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a"`;
+
+exports[`secp256r1 precompile > instruction data layout (snapshot) > secp256r1 verify data 1`] = `Uint8Array(149) "01001000ffff5000ffff71002400ffffc1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"`;
