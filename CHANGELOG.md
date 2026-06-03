@@ -2,6 +2,12 @@
 
 All notable changes to `@dexterai/vault`.
 
+## 0.1.3 — 2026-06-03
+
+### Fixed
+
+- **CJS bundle broke `buildSwigCreationBundle` for any non-ESM consumer.** `bs58@6` ships as a CJS module whose `module.exports` is `{ default: <bs58 instance> }`. esbuild/tsup's CJS interop double-wraps that, so `dist/instructions/index.cjs` emitted `bs58.decode(...)` calls that resolved to `undefined`. Source now imports the namespace and peels one `.default` layer at runtime — identical behavior under ESM (unchanged) and CJS (fixed). Discovered while swapping dexter-vault tests; the workaround in their commit `5798f83` can now revert to a static import.
+
 ## 0.1.2 — 2026-06-03
 
 Re-publish of 0.1.1 contents under a new version number. The 0.1.1 tag was unpublished from npm earlier the same day during a brief privacy-posture experiment; npm policy blocks reusing the same version number for 24 hours after an unpublish, so this is the same bytes under a bumped patch. No code or test changes from 0.1.1.

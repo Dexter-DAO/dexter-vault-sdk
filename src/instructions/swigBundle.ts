@@ -31,7 +31,14 @@ import {
   getCreateSwigWithMultipleAuthoritiesInstructionContextBuilder,
 } from '@swig-wallet/lib';
 import { address, createSolanaRpc } from '@solana/kit';
-import bs58 from 'bs58';
+// bs58@6 ships as a CJS module whose `module.exports` is `{ default: <instance> }`.
+// tsup/esbuild's CJS interop double-wraps that, leaving `bs58.decode` undefined
+// in the emitted .cjs file even though the ESM bundle is fine. Workaround:
+// import the namespace, then peel one layer of `.default` if present. Works
+// identically under ESM and CJS without changing call sites.
+import * as bs58Module from 'bs58';
+const bs58: { decode(s: string): Uint8Array; encode(b: Uint8Array): string } =
+  (bs58Module as any).default ?? bs58Module;
 import { PublicKey } from '@solana/web3.js';
 
 import { DEXTER_VAULT_PROGRAM_ID, USDC_MAINNET } from '../constants/index.js';
