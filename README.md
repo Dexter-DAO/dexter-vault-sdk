@@ -7,6 +7,12 @@ produces bytes the on-chain program will verify. If you are about to
 hand-roll an instruction builder, a precompile message, a Swig role list,
 or a vault account decoder, stop and import from here instead.
 
+## Install
+
+```bash
+npm install @dexterai/vault
+```
+
 ## Why this package exists
 
 Three places used to hand-roll the same protocol. Drift was the default.
@@ -17,15 +23,17 @@ the vault account, and provision the canonical 4-role Swig.
 ## Version coupling
 
 `@dexterai/vault@0.1.x` is compatible with dexter-vault program version 2
-(9 vault instructions including `prove_passkey`, role 3 ProgramExec for
-`settle_tab_voucher`). Future program versions will bump the SDK major
-or have their delta documented in CHANGELOG.
+(10 vault instructions plus 2 session-key instructions
+(`register_session_key`/`revoke_session_key`) — 12 total Anchor
+discriminators; role 3 ProgramExec for `settle_tab_voucher`). Future
+program versions will bump the SDK major or have their delta documented
+in CHANGELOG.
 
 ## Subpath exports
 
 - `@dexterai/vault` — types + counterfactual derivation
 - `@dexterai/vault/types` — `VaultState`, `ActiveSession`, `PendingWithdrawal`, `SessionKey`, `SessionScope`, `SignedVoucher`, `VoucherPayload`
-- `@dexterai/vault/constants` — program IDs, USDC mint, all 11 discriminators
+- `@dexterai/vault/constants` — program IDs, USDC mint, all 12 discriminators
 - `@dexterai/vault/instructions` — every builder; the canonical `buildSwigCreationBundle`
 - `@dexterai/vault/messages` — `sessionRegisterMessage` (180 bytes), `sessionRevokeMessage` (128 bytes), `voucherPayloadMessage` / `buildVoucherMessage` (44 bytes), `buildSetSwigOperationMessage`
 - `@dexterai/vault/reader` — `readVaultOnchain` (slim), `readVaultFull` (with active session)
@@ -43,8 +51,8 @@ or have their delta documented in CHANGELOG.
 
 ## Byte-parity guarantee
 
-`tests/byte-parity.test.ts` snapshots:
-- All 11 instruction discriminators
+`tests/byte-parity.test.ts` (added in v0.1 build, see Task 3 of the extract plan) snapshots:
+- All 12 instruction discriminators (10 vault + 2 session-key)
 - All 3 message layouts (180-byte registration, 128-byte revocation, 44-byte voucher)
 - The canonical vault account decode (v2 layout)
 - The counterfactual Swig derivation for a known seed
