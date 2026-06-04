@@ -358,11 +358,11 @@ describe('instruction data layouts', () => {
         .digest(),
     );
     const [swigAddress, swigAccountBump] = PublicKey.findProgramAddressSync(
-      [Buffer.from(swigId)],
+      [Buffer.from('swig'), Buffer.from(swigId)],
       SWIG_PROGRAM_ID,
     );
     const [swigWalletAddress, swigWalletAddressBump] = PublicKey.findProgramAddressSync(
-      [swigAddress.toBytes()],
+      [Buffer.from('swig-wallet-address'), swigAddress.toBytes()],
       SWIG_PROGRAM_ID,
     );
 

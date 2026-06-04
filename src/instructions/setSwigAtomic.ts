@@ -152,12 +152,18 @@ export function buildSetSwigAtomicFromIdentity(
     deriveSwigId(params.identitySeed, params.hmacKey),
   );
 
+  // Canonical Swig PDA seeds (from swig-wallet v1.4.0, state/src/swig.rs:28-50):
+  //   swig_account         : ["swig", id]
+  //   swig_wallet_address  : ["swig-wallet-address", swig_account_pubkey]
+  // @swig-wallet/kit's findSwigPda uses the same seeds for the state account
+  // but is async; we hand-derive here to keep this function synchronous and
+  // to get the bumps in one call.
   const [swigAddress, swigAccountBump] = PublicKey.findProgramAddressSync(
-    [Buffer.from(swigId)],
+    [Buffer.from('swig'), Buffer.from(swigId)],
     SWIG_PROGRAM_ID,
   );
   const [swigWalletAddress, swigWalletAddressBump] = PublicKey.findProgramAddressSync(
-    [swigAddress.toBytes()],
+    [Buffer.from('swig-wallet-address'), swigAddress.toBytes()],
     SWIG_PROGRAM_ID,
   );
 
