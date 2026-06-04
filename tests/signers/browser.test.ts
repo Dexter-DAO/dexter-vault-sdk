@@ -195,6 +195,10 @@ describe('WebAuthnAssertion', () => {
     expect(result.signature.length).toBe(64);
     expect(result.clientDataJSON).toEqual(fakeClientDataJSON);
     expect(result.authenticatorData).toEqual(fakeAuthData);
+    // DER passthrough — same bytes the authenticator produced, before
+    // compact-lowS conversion. Server-policy adapters need this to feed
+    // WebAuthn server libraries that expect DER.
+    expect(result.signatureDer).toEqual(fakeDerSig);
   });
 
   it('sign() is an alias for assertOver()', async () => {

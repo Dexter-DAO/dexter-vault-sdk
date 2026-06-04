@@ -2,6 +2,14 @@
 
 All notable changes to `@dexterai/vault`.
 
+## 0.2.1 — 2026-06-04
+
+### Added
+
+- `WebAuthnAssertionResult.signatureDer` — raw DER-encoded ECDSA signature as returned by the authenticator, exposed alongside the existing compact-lowS `signature`. Consumers composing the SDK with a server-policy verify leg (Dexter's `DexterApiBrowserPasskeySigner`, partner equivalents) need DER to feed WebAuthn server libraries like `@simplewebauthn/server`, which expect the authenticator's original DER bytes — not the compact form. The on-chain bytes remain `signature` (compact); DER is for server-side verify only.
+
+This is additive; v0.2.0 consumers continue to work unchanged.
+
 ## 0.2.0 — 2026-06-03
 
 ### Added

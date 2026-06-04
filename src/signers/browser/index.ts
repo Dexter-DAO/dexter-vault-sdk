@@ -45,6 +45,14 @@ export interface WebAuthnAssertionConfig {
 export interface WebAuthnAssertionResult {
   /** 64-byte compact r||s P-256 signature, lowS-normalized (SIMD-0075 requires lowS). */
   signature: Uint8Array;
+  /**
+   * Raw DER-encoded ECDSA signature as returned by the authenticator,
+   * BEFORE the compact-lowS conversion. Kept so consumers that need to
+   * forward the assertion to a WebAuthn server library (which expects
+   * DER) don't have to re-run the ceremony. The on-chain bytes are
+   * `signature` (compact); DER is for server-side verify legs.
+   */
+  signatureDer: Uint8Array;
   /** Raw clientDataJSON as returned by the authenticator. */
   clientDataJSON: Uint8Array;
   /** Raw authenticatorData as returned by the authenticator. */
@@ -148,6 +156,7 @@ export class WebAuthnAssertion implements PasskeySigner {
 
     return {
       signature: compactSignature,
+      signatureDer: derSignature,
       clientDataJSON: new Uint8Array(assertion.clientDataJSON),
       authenticatorData: new Uint8Array(assertion.authenticatorData),
     };
