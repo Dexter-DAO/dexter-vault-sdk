@@ -1,4 +1,6 @@
 import { defineConfig } from 'tsup';
+import { copyFile, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 
 export default defineConfig({
   entry: {
@@ -27,4 +29,14 @@ export default defineConfig({
     '@swig-wallet/kit',
     '@swig-wallet/lib',
   ],
+  async onSuccess() {
+    // Ship src/idl/*.json as raw assets under dist/idl/ for downstream
+    // tooling that needs the IDL without going through the JS bundle
+    // (verify scripts, audit tools, IETF I-D citations).
+    await mkdir(join(__dirname, 'dist', 'idl'), { recursive: true });
+    await copyFile(
+      join(__dirname, 'src', 'idl', 'dexter_vault.json'),
+      join(__dirname, 'dist', 'idl', 'dexter_vault.json'),
+    );
+  },
 });

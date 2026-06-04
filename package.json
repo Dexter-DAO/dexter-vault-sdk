@@ -1,6 +1,6 @@
 {
   "name": "@dexterai/vault",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Canonical off-chain mirror of the dexter-vault Solana Anchor program — Solana instruction builders, byte-precise message encoders, account decoders, secp256r1/Ed25519 precompile helpers, counterfactual Swig derivation, and signer interfaces. The single source of truth for any TypeScript code that produces bytes the on-chain program will verify.",
   "author": "Dexter",
   "license": "MIT",
@@ -16,7 +16,8 @@
     "./precompile": { "types": "./dist/precompile/index.d.ts", "import": "./dist/precompile/index.js", "require": "./dist/precompile/index.cjs" },
     "./signers": { "types": "./dist/signers/types.d.ts", "import": "./dist/signers/types.js", "require": "./dist/signers/types.cjs" },
     "./signers/node": { "types": "./dist/signers/node/index.d.ts", "import": "./dist/signers/node/index.js", "require": "./dist/signers/node/index.cjs" },
-    "./signers/browser": { "types": "./dist/signers/browser/index.d.ts", "import": "./dist/signers/browser/index.js", "require": "./dist/signers/browser/index.cjs" }
+    "./signers/browser": { "types": "./dist/signers/browser/index.d.ts", "import": "./dist/signers/browser/index.js", "require": "./dist/signers/browser/index.cjs" },
+    "./idl/dexter_vault.json": "./dist/idl/dexter_vault.json"
   },
   "files": ["dist", "README.md", "LICENSE", "assets"],
   "scripts": {
