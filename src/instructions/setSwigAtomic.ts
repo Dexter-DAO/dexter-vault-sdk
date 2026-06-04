@@ -27,6 +27,7 @@ import {
   SYSVAR_INSTRUCTIONS_PUBKEY,
 } from '@solana/web3.js';
 import { DEXTER_VAULT_PROGRAM_ID, SWIG_PROGRAM_ID } from '../constants/index.js';
+import { deriveSwigId } from './swigBundle.js';
 
 /** Anchor instruction discriminator = sha256("global:set_swig_atomic")[0..8].
  *  Captured from target/idl/dexter_vault.json after `anchor build` on commit 49aae30. */
@@ -105,5 +106,71 @@ export function buildSetSwigAtomicInstruction(
       { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isSigner: false, isWritable: false },
     ],
     data: Buffer.from(data),
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// High-level wrapper
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BuildSetSwigAtomicFromIdentityParams {
+  /** dexter-vault PDA. */
+  vaultPda: PublicKey;
+  /** Outer-tx signer + role-0 bootstrap authority. */
+  feePayer: PublicKey;
+  /** Becomes role-2 (Ed25519Session) authority. */
+  dexterMasterPubkey: PublicKey;
+  /** Operator identity seed (e.g. 16-byte UUID). */
+  identitySeed: Uint8Array;
+  /**
+   * 32-byte HMAC key for swig_id derivation. MUST match the key
+   * buildSwigCreationBundle uses, or the derived swigId will not match
+   * the expected on-chain PDA.
+   */
+  hmacKey: Uint8Array;
+  /** WebAuthn ceremony outputs. */
+  clientDataJSON: Uint8Array;
+  authenticatorData: Uint8Array;
+}
+
+/**
+ * High-level convenience wrapper around buildSetSwigAtomicInstruction.
+ *
+ * Derives the 32-byte swigId via HMAC(identitySeed, hmacKey) using the
+ * SAME deriveSwigId helper as buildSwigCreationBundle, then finds the
+ * Swig state PDA and the Swig wallet PDA (with their bumps), then
+ * delegates to the low-level builder.
+ *
+ * Suitable for normal callers. Use the low-level builder directly only
+ * when you need to control swigId derivation yourself (e.g., byte-parity
+ * snapshot tests).
+ */
+export function buildSetSwigAtomicFromIdentity(
+  params: BuildSetSwigAtomicFromIdentityParams,
+): TransactionInstruction {
+  const swigId = Uint8Array.from(
+    deriveSwigId(params.identitySeed, params.hmacKey),
+  );
+
+  const [swigAddress, swigAccountBump] = PublicKey.findProgramAddressSync(
+    [Buffer.from(swigId)],
+    SWIG_PROGRAM_ID,
+  );
+  const [swigWalletAddress, swigWalletAddressBump] = PublicKey.findProgramAddressSync(
+    [swigAddress.toBytes()],
+    SWIG_PROGRAM_ID,
+  );
+
+  return buildSetSwigAtomicInstruction({
+    vaultPda: params.vaultPda,
+    swigAddress,
+    swigWalletAddress,
+    feePayer: params.feePayer,
+    dexterMasterPubkey: params.dexterMasterPubkey,
+    swigId,
+    swigAccountBump,
+    swigWalletAddressBump,
+    clientDataJSON: params.clientDataJSON,
+    authenticatorData: params.authenticatorData,
   });
 }

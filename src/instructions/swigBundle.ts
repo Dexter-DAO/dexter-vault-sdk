@@ -58,7 +58,15 @@ export const SWIG_PROGRAM_EXEC_MARKERS: readonly Uint8Array[] = [
   SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB,
 ];
 
-function deriveSwigId(identitySeed: Uint8Array, hmacKey: Uint8Array): Buffer {
+/**
+ * HMAC-derive the 32-byte swigId used as the Swig state PDA seed.
+ *
+ * Exported so the high-level buildSetSwigAtomicFromIdentity wrapper in
+ * setSwigAtomic.ts can share the SAME derivation function — keeping a
+ * single source of truth and avoiding silent drift between the two
+ * paths that produce the same on-chain seed.
+ */
+export function deriveSwigId(identitySeed: Uint8Array, hmacKey: Uint8Array): Buffer {
   if (hmacKey.length !== 32) {
     throw new Error(`hmacKey must be 32 bytes, got ${hmacKey.length}`);
   }

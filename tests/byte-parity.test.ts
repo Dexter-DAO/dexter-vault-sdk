@@ -323,4 +323,72 @@ describe('instruction data layouts', () => {
     expect(new Uint8Array(ix.data)).toMatchSnapshot('settle_voucher data');
     expect(ix.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable }))).toMatchSnapshot('settle_voucher keys');
   });
+
+  test('buildSetSwigAtomicFromIdentity — produces same bytes as low-level builder', async () => {
+    const { buildSetSwigAtomicInstruction, buildSetSwigAtomicFromIdentity } = await import('../src/instructions/setSwigAtomic.js');
+    const { SWIG_PROGRAM_ID } = await import('../src/constants/index.js');
+    const { createHmac } = await import('node:crypto');
+
+    const identitySeed = new Uint8Array(16).fill(0x42);
+    const hmacKey = new Uint8Array(32).fill(0x13);
+    const vaultPda = new PublicKey('11111111111111111111111111111112');
+    const feePayer = new PublicKey('11111111111111111111111111111115');
+    const dexterMasterPubkey = new PublicKey('11111111111111111111111111111116');
+    const clientDataJSON = new TextEncoder().encode(
+      '{"type":"webauthn.get","challenge":"abc","origin":"https://dexter.cash"}',
+    );
+    const authenticatorData = new Uint8Array(37).fill(0xBB);
+
+    // High-level call
+    const hi = buildSetSwigAtomicFromIdentity({
+      vaultPda,
+      feePayer,
+      dexterMasterPubkey,
+      identitySeed,
+      hmacKey,
+      clientDataJSON,
+      authenticatorData,
+    });
+
+    // Reproduce the derivation the wrapper does, then call the low-level builder
+    const swigId = new Uint8Array(
+      createHmac('sha256', Buffer.from(hmacKey))
+        .update('dexter-swig-id:v1:')
+        .update(Buffer.from(identitySeed))
+        .digest(),
+    );
+    const [swigAddress, swigAccountBump] = PublicKey.findProgramAddressSync(
+      [Buffer.from(swigId)],
+      SWIG_PROGRAM_ID,
+    );
+    const [swigWalletAddress, swigWalletAddressBump] = PublicKey.findProgramAddressSync(
+      [swigAddress.toBytes()],
+      SWIG_PROGRAM_ID,
+    );
+
+    const lo = buildSetSwigAtomicInstruction({
+      vaultPda,
+      swigAddress,
+      swigWalletAddress,
+      feePayer,
+      dexterMasterPubkey,
+      swigId,
+      swigAccountBump,
+      swigWalletAddressBump,
+      clientDataJSON,
+      authenticatorData,
+    });
+
+    expect(Buffer.from(hi.data)).toEqual(Buffer.from(lo.data));
+    expect(hi.keys.map((k) => ({
+      pubkey: k.pubkey.toBase58(),
+      isSigner: k.isSigner,
+      isWritable: k.isWritable,
+    }))).toEqual(lo.keys.map((k) => ({
+      pubkey: k.pubkey.toBase58(),
+      isSigner: k.isSigner,
+      isWritable: k.isWritable,
+    })));
+    expect(hi.programId.toBase58()).toEqual(lo.programId.toBase58());
+  });
 });
