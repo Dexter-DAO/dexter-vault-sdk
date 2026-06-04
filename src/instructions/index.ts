@@ -1,5 +1,6 @@
 export * from './initialize.js';
 export * from './setSwig.js';
+export * from './setSwigAtomic.js';
 export * from './registerSession.js';
 export * from './revokeSession.js';
 export * from './settleVoucher.js';

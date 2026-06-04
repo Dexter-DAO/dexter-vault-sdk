@@ -81,6 +81,48 @@ exports[`instruction data layouts > set_swig > set_swig keys 1`] = `
 ]
 `;
 
+exports[`instruction data layouts > set_swig_atomic — instruction byte layout is locked > set_swig_atomic-data 1`] = `"776ff7d7be03aa17aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaafcfd0000000000000000000000000000000000000000000000000000000000000005480000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a22616263222c226f726967696e223a2268747470733a2f2f6465787465722e63617368227d25000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"`;
+
+exports[`instruction data layouts > set_swig_atomic — instruction byte layout is locked > set_swig_atomic-keys 1`] = `
+[
+  {
+    "isSigner": false,
+    "isWritable": true,
+    "pubkey": "11111111111111111111111111111112",
+  },
+  {
+    "isSigner": true,
+    "isWritable": true,
+    "pubkey": "11111111111111111111111111111115",
+  },
+  {
+    "isSigner": false,
+    "isWritable": true,
+    "pubkey": "11111111111111111111111111111113",
+  },
+  {
+    "isSigner": false,
+    "isWritable": true,
+    "pubkey": "11111111111111111111111111111114",
+  },
+  {
+    "isSigner": false,
+    "isWritable": false,
+    "pubkey": "swigypWHEksbC64pWKwah1WTeh9JXwx8H1rJHLdbQMB",
+  },
+  {
+    "isSigner": false,
+    "isWritable": false,
+    "pubkey": "11111111111111111111111111111111",
+  },
+  {
+    "isSigner": false,
+    "isWritable": false,
+    "pubkey": "Sysvar1nstructions1111111111111111111111111",
+  },
+]
+`;
+
 exports[`instruction data layouts > settle_tab_voucher > settle_tab_voucher data 1`] = `Uint8Array(52) "ad16621f6e813ba1bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb393000000000000007000000"`;
 
 exports[`instruction data layouts > settle_tab_voucher > settle_tab_voucher keys 1`] = `

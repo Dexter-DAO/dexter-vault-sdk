@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { PublicKey } from '@solana/web3.js';
 import { DISCRIMINATORS, OTS_SESSION_REGISTER_V1_DOMAIN, OTS_SESSION_REVOKE_V1_DOMAIN } from '../src/constants/index.js';
 import { sessionRegisterMessage, sessionRevokeMessage, voucherPayloadMessage, buildVoucherMessage, buildSetSwigOperationMessage } from '../src/messages/index.js';
-import { buildSettleTabVoucherInstruction, buildInitializeVaultInstruction, buildSetSwigInstruction, buildRegisterSessionKeyInstruction, buildRevokeSessionKeyInstruction, buildProvePasskeyInstruction, buildRequestWithdrawalInstruction, buildFinalizeWithdrawalInstruction, buildForceReleaseInstruction, buildRotatePasskeyInstruction, buildRotateDexterAuthorityInstruction, buildSettleVoucherInstruction } from '../src/instructions/index.js';
+import { buildSettleTabVoucherInstruction, buildInitializeVaultInstruction, buildSetSwigInstruction, buildSetSwigAtomicInstruction, SET_SWIG_ATOMIC_DISCRIMINATOR, buildRegisterSessionKeyInstruction, buildRevokeSessionKeyInstruction, buildProvePasskeyInstruction, buildRequestWithdrawalInstruction, buildFinalizeWithdrawalInstruction, buildForceReleaseInstruction, buildRotatePasskeyInstruction, buildRotateDexterAuthorityInstruction, buildSettleVoucherInstruction } from '../src/instructions/index.js';
 
 // ── Known-good test inputs (all-zero / sequential bytes so snapshots are stable) ──
 
@@ -272,6 +272,45 @@ describe('instruction data layouts', () => {
       newDexterAuthority: KNOWN_DESTINATION,
     });
     expect(new Uint8Array(ix.data)).toMatchSnapshot('rotate_dexter_authority data');
+  });
+
+  test('set_swig_atomic — instruction byte layout is locked', () => {
+    // Fixed-seed fixture so the snapshot is deterministic.
+    const vaultPda = new PublicKey('11111111111111111111111111111112');
+    const swigAddress = new PublicKey('11111111111111111111111111111113');
+    const swigWalletAddress = new PublicKey('11111111111111111111111111111114');
+    const feePayer = new PublicKey('11111111111111111111111111111115');
+    const dexterMasterPubkey = new PublicKey('11111111111111111111111111111116');
+    const swigId = new Uint8Array(32).fill(0xAA);
+    const clientDataJSON = new TextEncoder().encode(
+      '{"type":"webauthn.get","challenge":"abc","origin":"https://dexter.cash"}',
+    );
+    const authenticatorData = new Uint8Array(37).fill(0xBB);
+
+    const ix = buildSetSwigAtomicInstruction({
+      vaultPda,
+      swigAddress,
+      swigWalletAddress,
+      feePayer,
+      dexterMasterPubkey,
+      swigId,
+      swigAccountBump: 0xFC,
+      swigWalletAddressBump: 0xFD,
+      clientDataJSON,
+      authenticatorData,
+    });
+
+    // Lock the wire format.
+    expect(ix.programId.toBase58()).toBe('Hg3wRaydFtJhYrdvYrKECacpJYDsC9Px7yKmpncj2fhc');
+    expect(Buffer.from(ix.data).toString('hex')).toMatchSnapshot('set_swig_atomic-data');
+    expect(ix.keys.map((k) => ({
+      pubkey: k.pubkey.toBase58(),
+      isSigner: k.isSigner,
+      isWritable: k.isWritable,
+    }))).toMatchSnapshot('set_swig_atomic-keys');
+
+    // Discriminator sanity: first 8 bytes of data must equal SET_SWIG_ATOMIC_DISCRIMINATOR.
+    expect(Buffer.from(ix.data.subarray(0, 8))).toEqual(Buffer.from(SET_SWIG_ATOMIC_DISCRIMINATOR));
   });
 
   test('settle_voucher (legacy counter ix)', () => {
