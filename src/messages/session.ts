@@ -2,7 +2,7 @@
  * Byte-deterministic session-key message builders.
  *
  * MUST match the on-chain Rust handlers byte-for-byte:
- *   - register_session_key.rs::build_registration_message → sessionRegisterMessage (180 bytes)
+ *   - register_session_key.rs::build_registration_message → sessionRegisterMessage (188 bytes, V2)
  *   - revoke_session_key.rs::build_revocation_message     → sessionRevokeMessage (128 bytes)
  *
  * Any drift makes every signature look forged to the on-chain handler.
@@ -10,7 +10,7 @@
 
 import type { PublicKey } from '@solana/web3.js';
 import {
-  OTS_SESSION_REGISTER_V1_DOMAIN,
+  OTS_SESSION_REGISTER_V2_DOMAIN,
   OTS_SESSION_REVOKE_V1_DOMAIN,
 } from '../constants/index.js';
 
@@ -22,11 +22,12 @@ export interface SessionRegisterMessageArgs {
   expiresAt: bigint;
   allowedCounterparty: PublicKey;
   nonce: number;
+  maxRevolvingCapacity: bigint;    // NEW — u64, must be > 0 (program enforces)
 }
 
 /**
- * 180-byte session registration message. Layout:
- *    0   32  domain separator (REGISTER_DOMAIN)
+ * 188-byte V2 session registration message. Layout:
+ *    0   32  domain separator (OTS_SESSION_REGISTER_V2)
  *   32   32  program_id
  *   64   32  vault_pda
  *   96   32  session_pubkey
@@ -34,17 +35,18 @@ export interface SessionRegisterMessageArgs {
  *  136    8  expires_at (i64 LE)
  *  144   32  allowed_counterparty
  *  176    4  nonce (u32 LE)
+ *  180    8  max_revolving_capacity (u64 LE)
  *                                    ────
- *                                    180
+ *                                    188
  */
 export function sessionRegisterMessage(args: SessionRegisterMessageArgs): Uint8Array {
   if (args.sessionPubkey.length !== 32) {
     throw new Error(`sessionPubkey must be 32 bytes, got ${args.sessionPubkey.length}`);
   }
-  const buf = new Uint8Array(180);
+  const buf = new Uint8Array(188);
   const view = new DataView(buf.buffer);
   let o = 0;
-  buf.set(OTS_SESSION_REGISTER_V1_DOMAIN, o); o += 32;
+  buf.set(OTS_SESSION_REGISTER_V2_DOMAIN, o); o += 32;
   buf.set(args.programId.toBytes(), o); o += 32;
   buf.set(args.vaultPda.toBytes(), o); o += 32;
   buf.set(args.sessionPubkey, o); o += 32;
@@ -52,8 +54,9 @@ export function sessionRegisterMessage(args: SessionRegisterMessageArgs): Uint8A
   view.setBigInt64(o, args.expiresAt, true); o += 8;
   buf.set(args.allowedCounterparty.toBytes(), o); o += 32;
   view.setUint32(o, args.nonce >>> 0, true); o += 4;
-  if (o !== 180) {
-    throw new Error(`internal: session register message wrong length ${o}, expected 180`);
+  view.setBigUint64(o, args.maxRevolvingCapacity, true); o += 8;
+  if (o !== 188) {
+    throw new Error(`internal: session register message wrong length ${o}, expected 188`);
   }
   return buf;
 }

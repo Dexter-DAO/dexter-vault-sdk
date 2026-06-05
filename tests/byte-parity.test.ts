@@ -108,7 +108,7 @@ describe('domain separators', () => {
 // ── Message layouts ──
 
 describe('message layouts', () => {
-  test('180-byte session registration', () => {
+  test('188-byte V2 session registration', () => {
     const bytes = sessionRegisterMessage({
       programId: KNOWN_PROGRAM_ID,
       vaultPda: KNOWN_VAULT_PDA,
@@ -117,9 +117,12 @@ describe('message layouts', () => {
       expiresAt: 1735689600n,
       allowedCounterparty: KNOWN_COUNTERPARTY,
       nonce: 42,
+      maxRevolvingCapacity: 2_000_000n,
     });
-    expect(bytes.length).toBe(180);
-    expect(bytes.subarray(0, 32)).toEqual(OTS_SESSION_REGISTER_V1_DOMAIN);
+    expect(bytes.length).toBe(188);
+    expect(bytes.subarray(0, 32)).toEqual(OTS_SESSION_REGISTER_V2_DOMAIN);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    expect(view.getBigUint64(180, true)).toBe(2_000_000n);
     expect(bytes).toMatchSnapshot();
   });
 
