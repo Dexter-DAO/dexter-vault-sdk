@@ -90,6 +90,10 @@ export type HumanAmount = string;
 export interface SessionScope {
   channelId: string;
   maxAmountAtomic: AtomicAmount;
+  /** Revolving capacity cap (atomic units) the on-chain meter (current_outstanding)
+   *  is checked against. Optional; callers who omit it default to maxAmountAtomic
+   *  (revolving cap == total cap). The on-chain program requires > 0. */
+  revolvingCapacityAtomic?: AtomicAmount;
   expiresAtUnix: number;
   allowedCounterparty: string;
 }
