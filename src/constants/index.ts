@@ -63,6 +63,12 @@ export const OTS_SESSION_REGISTER_V1_DOMAIN: Uint8Array = (() => {
   return buf;
 })();
 
+export const OTS_SESSION_REGISTER_V2_DOMAIN: Uint8Array = (() => {
+  const buf = new Uint8Array(32);
+  buf.set(new TextEncoder().encode('OTS_SESSION_REGISTER_V2'), 0);
+  return buf;
+})();
+
 export const OTS_SESSION_REVOKE_V1_DOMAIN: Uint8Array = (() => {
   const buf = new Uint8Array(32);
   buf.set(new TextEncoder().encode('OTS_SESSION_REVOKE_V1'), 0);

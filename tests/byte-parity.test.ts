@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { PublicKey } from '@solana/web3.js';
-import { DISCRIMINATORS, OTS_SESSION_REGISTER_V1_DOMAIN, OTS_SESSION_REVOKE_V1_DOMAIN } from '../src/constants/index.js';
+import { DISCRIMINATORS, OTS_SESSION_REGISTER_V1_DOMAIN, OTS_SESSION_REGISTER_V2_DOMAIN, OTS_SESSION_REVOKE_V1_DOMAIN } from '../src/constants/index.js';
 import { sessionRegisterMessage, sessionRevokeMessage, voucherPayloadMessage, buildVoucherMessage, buildSetSwigOperationMessage } from '../src/messages/index.js';
 import { buildSettleTabVoucherInstruction, buildInitializeVaultInstruction, buildSetSwigInstruction, buildSetSwigAtomicInstruction, SET_SWIG_ATOMIC_DISCRIMINATOR, buildRegisterSessionKeyInstruction, buildRevokeSessionKeyInstruction, buildProvePasskeyInstruction, buildRequestWithdrawalInstruction, buildFinalizeWithdrawalInstruction, buildForceReleaseInstruction, buildRotatePasskeyInstruction, buildRotateDexterAuthorityInstruction, buildSettleVoucherInstruction } from '../src/instructions/index.js';
 
@@ -93,6 +93,15 @@ describe('domain separators', () => {
   test('OTS_SESSION_REVOKE_V1', () => {
     expect(OTS_SESSION_REVOKE_V1_DOMAIN.length).toBe(32);
     expect(OTS_SESSION_REVOKE_V1_DOMAIN).toMatchSnapshot();
+  });
+  test('OTS_SESSION_REGISTER_V2 is 32 bytes, 23-char label + 9 NUL', () => {
+    expect(OTS_SESSION_REGISTER_V2_DOMAIN.length).toBe(32);
+    // "OTS_SESSION_REGISTER_V2" is 23 chars
+    const label = new TextDecoder().decode(OTS_SESSION_REGISTER_V2_DOMAIN.slice(0, 23));
+    expect(label).toBe('OTS_SESSION_REGISTER_V2');
+    for (let i = 23; i < 32; i++) {
+      expect(OTS_SESSION_REGISTER_V2_DOMAIN[i]).toBe(0);
+    }
   });
 });
 
