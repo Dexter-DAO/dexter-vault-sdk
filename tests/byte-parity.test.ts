@@ -189,7 +189,7 @@ describe('instruction data layouts', () => {
     expect(ix.keys.map(k => k.pubkey.toBase58())).toMatchSnapshot('set_swig keys');
   });
 
-  test('register_session_key', () => {
+  test('register_session_key (V2 — carries max_revolving_capacity)', () => {
     const ix = buildRegisterSessionKeyInstruction({
       vaultPda: KNOWN_VAULT_PDA,
       sessionPubkey: KNOWN_SESSION_PUBKEY,
@@ -197,10 +197,17 @@ describe('instruction data layouts', () => {
       expiresAt: 1735689600n,
       allowedCounterparty: KNOWN_COUNTERPARTY,
       nonce: 42,
+      maxRevolvingCapacity: 2_000_000n,
       clientDataJSON: KNOWN_CLIENT_DATA,
       authenticatorData: KNOWN_AUTH_DATA,
     });
-    expect(new Uint8Array(ix.data)).toMatchSnapshot('register_session_key data');
+    // Borsh arg order: disc(8) + session_pubkey(32) + max_amount(8) + expires_at(8)
+    //   + allowed_counterparty(32) + nonce(4) + max_revolving_capacity(8) + vecs...
+    // max_revolving_capacity sits at offset 8+32+8+8+32+4 = 92, u64 LE.
+    const data = new Uint8Array(ix.data);
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    expect(view.getBigUint64(92, true)).toBe(2_000_000n);
+    expect(data).toMatchSnapshot('register_session_key data');
   });
 
   test('revoke_session_key', () => {

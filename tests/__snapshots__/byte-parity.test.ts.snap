@@ -62,7 +62,7 @@ exports[`instruction data layouts > initialize_vault > initialize_vault keys 1`]
 
 exports[`instruction data layouts > prove_passkey > prove_passkey data 1`] = `Uint8Array(56) "23af298fc97631b8111111111111111111111111111111111111111111111111111111111111111104000000010203040400000005060708"`;
 
-exports[`instruction data layouts > register_session_key > register_session_key data 1`] = `Uint8Array(108) "455e3c2c31c7b7e9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa40420f00000000008085746700000000037d46d67c93fbbe12f9428f838d40ff0570744927f48a64fcca7044800000002a00000004000000010203040400000005060708"`;
+exports[`instruction data layouts > register_session_key (V2 — carries max_revolving_capacity) > register_session_key data 1`] = `Uint8Array(116) "455e3c2c31c7b7e9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa40420f00000000008085746700000000037d46d67c93fbbe12f9428f838d40ff0570744927f48a64fcca7044800000002a00000080841e000000000004000000010203040400000005060708"`;
 
 exports[`instruction data layouts > request_withdrawal > request_withdrawal data 1`] = `Uint8Array(72) "fb5579cd38c90cb1a08601000000000006920dec2fea71b5b723814d742da9031c83e75fdb795d568e75478020000000808574670000000004000000010203040400000005060708"`;
 

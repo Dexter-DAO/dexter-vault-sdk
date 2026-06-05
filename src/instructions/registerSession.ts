@@ -13,6 +13,7 @@
  *   expires_at: i64
  *   allowed_counterparty: Pubkey (32 bytes)
  *   nonce: u32
+ *   max_revolving_capacity: u64
  *   client_data_json: Vec<u8>
  *   authenticator_data: Vec<u8>
  */
@@ -68,6 +69,7 @@ export interface BuildRegisterSessionKeyArgs {
   expiresAt: bigint;                 // i64 seconds
   allowedCounterparty: PublicKey;
   nonce: number;                     // u32
+  maxRevolvingCapacity: bigint;      // NEW — u64, must be > 0 (program enforces)
   clientDataJSON: Uint8Array;        // WebAuthn ceremony output
   authenticatorData: Uint8Array;     // WebAuthn ceremony output
 }
@@ -86,6 +88,7 @@ export function buildRegisterSessionKeyInstruction(
     encodeI64LE(args.expiresAt),
     args.allowedCounterparty.toBytes(),
     encodeU32LE(args.nonce),
+    encodeU64LE(args.maxRevolvingCapacity),
     encodeVecU8(args.clientDataJSON),
     encodeVecU8(args.authenticatorData),
   );
