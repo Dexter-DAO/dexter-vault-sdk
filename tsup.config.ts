@@ -8,6 +8,7 @@ export default defineConfig({
     'types': 'src/types.ts',
     'counterfactual': 'src/counterfactual.ts',
     'constants/index': 'src/constants/index.ts',
+    'factoring/index': 'src/factoring/index.ts',
     'instructions/index': 'src/instructions/index.ts',
     'messages/index': 'src/messages/index.ts',
     'reader/index': 'src/reader/index.ts',

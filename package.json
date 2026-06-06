@@ -26,6 +26,11 @@
       "import": "./dist/counterfactual.js",
       "require": "./dist/counterfactual.cjs"
     },
+    "./factoring": {
+      "types": "./dist/factoring/index.d.ts",
+      "import": "./dist/factoring/index.js",
+      "require": "./dist/factoring/index.cjs"
+    },
     "./instructions": {
       "types": "./dist/instructions/index.d.ts",
       "import": "./dist/instructions/index.js",
@@ -83,6 +88,8 @@
   "dependencies": {
     "@noble/curves": "^1.9.7",
     "@noble/hashes": "^1.8.0",
+    "@solana-program/token": "^0.5.1",
+    "@solana/kit": "^2.3.0",
     "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.98.0",
     "@swig-wallet/kit": "^1.9.0",
