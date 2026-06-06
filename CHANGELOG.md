@@ -16,6 +16,7 @@ All notable changes to `@dexterai/vault`.
 - Byte-parity tests for all four builders (account order, signer/writable flags, arg layout, `Option<i64>` Borsh encoding, claim-PDA derivation) plus discriminator pinning against hardcoded literals.
 - Account-list updates to `register_session_key` (2→5 accounts) and `finalize_withdrawal` (4→5 accounts: adds `vault_usdc_ata`) to match the deployed program's Phase 1 reservation/overcommit gates.
 - Refreshed the bundled `idl/dexter_vault.json` to the current program (now includes the LockedClaim instructions).
+- **Factoring / instant-payout** (`@dexterai/vault/factoring`) — `computeFactoringSplit` (pure split math) + `buildInstantPayoutInstructions` (settles a LockedClaim and splits the payout: seller gets instant cash, financier keeps the spread — one atomic `settle_locked_voucher` + Swig SignV2). The spread is caller-supplied (neutral mechanism; operator sets policy). Fully wired against `@swig-wallet/kit` + `@solana-program/token`.
 
 This is additive; prior consumers continue to work unchanged.
 
