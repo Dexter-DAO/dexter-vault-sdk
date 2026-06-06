@@ -1,25 +1,74 @@
 {
   "name": "@dexterai/vault",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Canonical off-chain mirror of the dexter-vault Solana Anchor program — Solana instruction builders, byte-precise message encoders, account decoders, secp256r1/Ed25519 precompile helpers, counterfactual Swig derivation, and signer interfaces. The single source of truth for any TypeScript code that produces bytes the on-chain program will verify.",
   "author": "Dexter",
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js", "require": "./dist/index.cjs" },
-    "./types": { "types": "./dist/types.d.ts", "import": "./dist/types.js", "require": "./dist/types.cjs" },
-    "./constants": { "types": "./dist/constants/index.d.ts", "import": "./dist/constants/index.js", "require": "./dist/constants/index.cjs" },
-    "./counterfactual": { "types": "./dist/counterfactual.d.ts", "import": "./dist/counterfactual.js", "require": "./dist/counterfactual.cjs" },
-    "./instructions": { "types": "./dist/instructions/index.d.ts", "import": "./dist/instructions/index.js", "require": "./dist/instructions/index.cjs" },
-    "./messages": { "types": "./dist/messages/index.d.ts", "import": "./dist/messages/index.js", "require": "./dist/messages/index.cjs" },
-    "./reader": { "types": "./dist/reader/index.d.ts", "import": "./dist/reader/index.js", "require": "./dist/reader/index.cjs" },
-    "./precompile": { "types": "./dist/precompile/index.d.ts", "import": "./dist/precompile/index.js", "require": "./dist/precompile/index.cjs" },
-    "./signers": { "types": "./dist/signers/types.d.ts", "import": "./dist/signers/types.js", "require": "./dist/signers/types.cjs" },
-    "./signers/node": { "types": "./dist/signers/node/index.d.ts", "import": "./dist/signers/node/index.js", "require": "./dist/signers/node/index.cjs" },
-    "./signers/browser": { "types": "./dist/signers/browser/index.d.ts", "import": "./dist/signers/browser/index.js", "require": "./dist/signers/browser/index.cjs" },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js",
+      "require": "./dist/types.cjs"
+    },
+    "./constants": {
+      "types": "./dist/constants/index.d.ts",
+      "import": "./dist/constants/index.js",
+      "require": "./dist/constants/index.cjs"
+    },
+    "./counterfactual": {
+      "types": "./dist/counterfactual.d.ts",
+      "import": "./dist/counterfactual.js",
+      "require": "./dist/counterfactual.cjs"
+    },
+    "./instructions": {
+      "types": "./dist/instructions/index.d.ts",
+      "import": "./dist/instructions/index.js",
+      "require": "./dist/instructions/index.cjs"
+    },
+    "./messages": {
+      "types": "./dist/messages/index.d.ts",
+      "import": "./dist/messages/index.js",
+      "require": "./dist/messages/index.cjs"
+    },
+    "./reader": {
+      "types": "./dist/reader/index.d.ts",
+      "import": "./dist/reader/index.js",
+      "require": "./dist/reader/index.cjs"
+    },
+    "./precompile": {
+      "types": "./dist/precompile/index.d.ts",
+      "import": "./dist/precompile/index.js",
+      "require": "./dist/precompile/index.cjs"
+    },
+    "./signers": {
+      "types": "./dist/signers/types.d.ts",
+      "import": "./dist/signers/types.js",
+      "require": "./dist/signers/types.cjs"
+    },
+    "./signers/node": {
+      "types": "./dist/signers/node/index.d.ts",
+      "import": "./dist/signers/node/index.js",
+      "require": "./dist/signers/node/index.cjs"
+    },
+    "./signers/browser": {
+      "types": "./dist/signers/browser/index.d.ts",
+      "import": "./dist/signers/browser/index.js",
+      "require": "./dist/signers/browser/index.cjs"
+    },
     "./idl/dexter_vault.json": "./dist/idl/dexter_vault.json"
   },
-  "files": ["dist", "README.md", "LICENSE", "assets"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "assets"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -47,9 +96,28 @@
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
-  "engines": { "node": ">=18" },
-  "keywords": ["solana", "dexter", "vault", "passkey", "webauthn", "swig", "secp256r1", "ed25519", "ots", "tab", "x402"],
-  "repository": { "type": "git", "url": "https://github.com/Dexter-DAO/dexter-vault-sdk" },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "solana",
+    "dexter",
+    "vault",
+    "passkey",
+    "webauthn",
+    "swig",
+    "secp256r1",
+    "ed25519",
+    "ots",
+    "tab",
+    "x402"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Dexter-DAO/dexter-vault-sdk"
+  },
   "homepage": "https://dexter.cash",
-  "bugs": { "url": "https://github.com/Dexter-DAO/dexter-vault-sdk/issues" }
+  "bugs": {
+    "url": "https://github.com/Dexter-DAO/dexter-vault-sdk/issues"
+  }
 }
