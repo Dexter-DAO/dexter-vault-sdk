@@ -17,6 +17,7 @@ const KNOWN_CLIENT_DATA       = new Uint8Array([1, 2, 3, 4]);
 const KNOWN_AUTH_DATA         = new Uint8Array([5, 6, 7, 8]);
 const KNOWN_NEW_PASSKEY       = new Uint8Array(33).fill(0xEE);
 const KNOWN_DESTINATION       = new PublicKey('Secp256r1SigVerify1111111111111111111111111');
+const KNOWN_VAULT_USDC_ATA    = new PublicKey('So11111111111111111111111111111111111111112');
 
 // ── Discriminators (the "Role not found for ID: 3" preventer) ──
 
@@ -258,11 +259,16 @@ describe('instruction data layouts', () => {
     const ix = buildFinalizeWithdrawalInstruction({
       vaultPda: KNOWN_VAULT_PDA,
       swigAddress: KNOWN_VAULT_PDA,
+      vaultUsdcAta: KNOWN_VAULT_USDC_ATA,
       clientDataJSON: KNOWN_CLIENT_DATA,
       authenticatorData: KNOWN_AUTH_DATA,
     });
     expect(new Uint8Array(ix.data)).toMatchSnapshot('finalize_withdrawal data');
-    expect(ix.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable }))).toMatchSnapshot('finalize_withdrawal keys');
+    const finalizeKeys = ix.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable }));
+    // 5-account layout: swig, swig_wallet_address, vault, vault_usdc_ata (NEW, idx 3), instructions_sysvar
+    expect(finalizeKeys).toHaveLength(5);
+    expect(finalizeKeys[3]).toEqual({ pubkey: KNOWN_VAULT_USDC_ATA.toBase58(), isSigner: false, isWritable: false });
+    expect(finalizeKeys).toMatchSnapshot('finalize_withdrawal keys');
   });
 
   test('force_release', () => {

@@ -94,6 +94,11 @@ export function buildRequestWithdrawalInstruction(
 export interface FinalizeWithdrawalParams {
   vaultPda: PublicKey;
   swigAddress: PublicKey;
+  /**
+   * The swig wallet's USDC ATA — read live on-chain for the Phase 1 reservation
+   * gate (isWritable false; the transfer is the separate Swig::SignV2 ix).
+   */
+  vaultUsdcAta: PublicKey;
   clientDataJSON: Uint8Array;
   authenticatorData: Uint8Array;
 }
@@ -103,7 +108,8 @@ export interface FinalizeWithdrawalParams {
  *   [0] swig                — required by Swig's ProgramExec validator + bound via Anchor `address`
  *   [1] swig_wallet_address — canonical PDA under the Swig program
  *   [2] vault               — the vault PDA being mutated
- *   [3] instructions_sysvar — for the secp256r1 precompile sibling lookup
+ *   [3] vault_usdc_ata      — swig wallet's USDC ATA, read for the Phase 1 reservation gate (read-only)
+ *   [4] instructions_sysvar — for the secp256r1 precompile sibling lookup
  */
 export function buildFinalizeWithdrawalInstruction(
   p: FinalizeWithdrawalParams,
@@ -121,6 +127,7 @@ export function buildFinalizeWithdrawalInstruction(
       { pubkey: p.swigAddress, isSigner: false, isWritable: false },
       { pubkey: swigWalletAddress, isSigner: false, isWritable: false },
       { pubkey: p.vaultPda, isSigner: false, isWritable: true },
+      { pubkey: p.vaultUsdcAta, isSigner: false, isWritable: false },
       { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isSigner: false, isWritable: false },
     ],
     data,
