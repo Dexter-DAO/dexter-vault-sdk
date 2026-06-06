@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { PublicKey } from '@solana/web3.js';
 import { buildTransferLockOwnershipInstruction } from '../src/instructions/lockedClaim.js';
 import { buildRecoverAbandonedLockInstruction } from '../src/instructions/lockedClaim.js';
+import { buildSettleLockedVoucherInstruction } from '../src/instructions/lockedClaim.js';
+import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
 import { DEXTER_VAULT_PROGRAM_ID, DISCRIMINATORS } from '../src/constants/index.js';
 
 const CLAIM = new PublicKey('11111111111111111111111111111111');
@@ -26,6 +28,37 @@ describe('transferLockOwnership', () => {
     expect(ix.data.length).toBe(40);
     expect(Buffer.from(ix.data.subarray(0, 8))).toEqual(Buffer.from(DISCRIMINATORS.transfer_lock_ownership));
     expect(Buffer.from(ix.data.subarray(8, 40))).toEqual(NEW_HOLDER.toBuffer());
+  });
+});
+
+describe('settleLockedVoucher', () => {
+  it('emits 6 accounts in canonical order, empty args (discriminator only)', () => {
+    // Distinct valid base58 pubkeys — avoid collision with HOLDER (So11..112)
+    // and NEW_HOLDER (EPjF..Dt1v) so positional assertions stay unambiguous.
+    const SWIG = new PublicKey('SysvarRent111111111111111111111111111111111');
+    const VAULT = new PublicKey('SysvarC1ock11111111111111111111111111111111');
+    const ix = buildSettleLockedVoucherInstruction({
+      swigAddress: SWIG,
+      claimPda: CLAIM,
+      vaultPda: VAULT,
+      holder: HOLDER,
+      dexterAuthority: NEW_HOLDER,
+    });
+    expect(ix.keys.length).toBe(6);
+    expect(ix.keys[0].pubkey.equals(SWIG)).toBe(true);
+    expect(ix.keys[0].isWritable).toBe(false);
+    expect(ix.keys[1].pubkey.equals(deriveSwigWalletAddress(SWIG))).toBe(true);
+    expect(ix.keys[1].isWritable).toBe(false);
+    expect(ix.keys[2].pubkey.equals(CLAIM)).toBe(true);
+    expect(ix.keys[2].isWritable).toBe(true);
+    expect(ix.keys[3].pubkey.equals(VAULT)).toBe(true);
+    expect(ix.keys[3].isWritable).toBe(true);
+    expect(ix.keys[4].pubkey.equals(HOLDER)).toBe(true);
+    expect(ix.keys[4].isSigner).toBe(true);
+    expect(ix.keys[5].pubkey.equals(NEW_HOLDER)).toBe(true);
+    expect(ix.keys[5].isSigner).toBe(true);
+    expect(ix.data.length).toBe(8); // discriminator only
+    expect(Buffer.from(ix.data)).toEqual(Buffer.from(DISCRIMINATORS.settle_locked_voucher));
   });
 });
 
