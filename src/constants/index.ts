@@ -37,6 +37,9 @@ export const USDC_DEVNET = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 
 export const VAULT_SEED_PREFIX = Buffer.from('vault');
 
+// LockedClaim PDA seed — matches programs/dexter-vault/src/state.rs (b"locked-claim").
+export const LOCKED_CLAIM_SEED = Buffer.from('locked-claim');
+
 // ── Anchor discriminators (8 bytes each, locked) ──────────────────────────
 // sha256("global:<ix_name>")[..8]. Cross-checked against IDL.
 
@@ -53,6 +56,10 @@ export const DISCRIMINATORS = Object.freeze({
   settle_tab_voucher:      Uint8Array.from([173, 22, 98, 31, 110, 129, 59, 161]),
   register_session_key:    Uint8Array.from([69, 94, 60, 44, 49, 199, 183, 233]),
   revoke_session_key:      Uint8Array.from([81, 192, 32, 110, 104, 116, 144, 151]),
+  lock_voucher:            Uint8Array.from([91, 138, 5, 227, 119, 239, 48, 254]),
+  settle_locked_voucher:   Uint8Array.from([44, 80, 216, 43, 247, 253, 101, 45]),
+  transfer_lock_ownership: Uint8Array.from([193, 13, 131, 134, 95, 25, 229, 157]),
+  recover_abandoned_lock:  Uint8Array.from([169, 213, 107, 64, 229, 49, 43, 234]),
 });
 
 // ── Domain separators (32 bytes each, NUL-padded) ────────────────────────
