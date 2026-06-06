@@ -2,6 +2,23 @@
 
 All notable changes to `@dexterai/vault`.
 
+## 0.4.2 — 2026-06-06
+
+### Added
+
+- **LockedClaim instruction builders** — client-side builders for the four LockedClaim instructions deployed on the dexter-vault program (the credit-claim "crystallized" tier). Exposed via `@dexterai/vault/instructions`:
+  - `buildLockVoucherInstruction` — crystallize an accepted voucher into a transferable, buyer-irrevocable on-chain claim (10 accounts; derives the claim PDA + swig-wallet PDA).
+  - `buildSettleLockedVoucherInstruction` — the claim holder (financier) collects the USDC.
+  - `buildTransferLockOwnershipInstruction` — sell/transfer a claim to a new holder.
+  - `buildRecoverAbandonedLockInstruction` — buyer reclaims after the holder-recovery deadline.
+  - `deriveLockedClaimPda(vaultPda, voucherHash)` — derive the claim PDA (`[LOCKED_CLAIM_SEED, vault, voucher_hash]`).
+- `LOCKED_CLAIM_SEED` and the four LockedClaim Anchor discriminators in `constants`.
+- Byte-parity tests for all four builders (account order, signer/writable flags, arg layout, `Option<i64>` Borsh encoding, claim-PDA derivation) plus discriminator pinning against hardcoded literals.
+- Account-list updates to `register_session_key` (2→5 accounts) and `finalize_withdrawal` (4→5 accounts: adds `vault_usdc_ata`) to match the deployed program's Phase 1 reservation/overcommit gates.
+- Refreshed the bundled `idl/dexter_vault.json` to the current program (now includes the LockedClaim instructions).
+
+This is additive; prior consumers continue to work unchanged.
+
 ## 0.2.1 — 2026-06-04
 
 ### Added

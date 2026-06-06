@@ -125,6 +125,15 @@
           "writable": true
         },
         {
+          "name": "vault_usdc_ata",
+          "docs": [
+            "The swig wallet's USDC ATA — read live to enforce the reservation",
+            "invariant per V0.3 Decision 1: post-withdrawal balance must remain",
+            "at or above `vault.outstanding_locked_amount`. The token account's",
+            "`owner` field must match the swig_wallet_address PDA."
+          ]
+        },
+        {
           "name": "instructions_sysvar",
           "address": "Sysvar1nstructions1111111111111111111111111"
         }
@@ -225,6 +234,279 @@
       ]
     },
     {
+      "name": "lock_voucher",
+      "discriminator": [
+        91,
+        138,
+        5,
+        227,
+        119,
+        239,
+        48,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "vault_usdc_ata",
+          "docs": [
+            "The swig wallet's USDC ATA — read to enforce the vault-balance",
+            "self-check per V0.3 Decision 1. The handler cross-checks that this",
+            "token account's `owner` field equals the canonical swig wallet PDA",
+            "derived below so a caller cannot pass an unrelated funded ATA."
+          ]
+        },
+        {
+          "name": "swig"
+        },
+        {
+          "name": "swig_wallet_address",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "claim",
+          "docs": [
+            "Claim PDA created in this instruction."
+          ],
+          "writable": true
+        },
+        {
+          "name": "seller_holder",
+          "docs": [
+            "Holder at creation — the seller who collected the voucher."
+          ],
+          "signer": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "Fee gate (matches settle_tab_voucher's discipline). Recorded on the",
+            "vault at init; only this key authorizes the accumulator mutation."
+          ],
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Pays rent for the claim PDA. May be dexter_authority, may be a",
+            "separate funder. Not security-load-bearing."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "LockVoucherArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "migrate_v2_to_v3",
+      "discriminator": [
+        25,
+        157,
+        17,
+        205,
+        179,
+        34,
+        196,
+        207
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "V3 struct, so it CANNOT be loaded as `Account<'info, Vault>` (the",
+            "auto-deserialize would over-run the buffer on the `active_session`",
+            "field). We validate it manually in the handler: discriminator match,",
+            "version == 2, and `dexter_authority` ownership. We also require it be",
+            "owned by this program before touching its bytes."
+          ],
+          "writable": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "Must equal the vault's recorded `dexter_authority`. Same authority that",
+            "gates `settle_voucher` / `rotate_dexter_authority`. Validated by hand",
+            "against the raw buffer (no `has_one`, since the vault is untyped here)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Funds the rent for the 16 extra bytes the realloc adds. A separate",
+            "signer so the authority key need not hold lamports."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "MigrateV2ToV3Args"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "migrate_v3_to_v4",
+      "discriminator": [
+        28,
+        136,
+        16,
+        88,
+        66,
+        176,
+        223,
+        54
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "(305 bytes on mainnet). We deliberately do NOT load it as",
+            "`Account<'info, Vault>`, because Anchor would auto-deserialize it against",
+            "the CURRENT (larger, V4) struct and over-run the still-V3-sized buffer. We",
+            "validate it by hand in the handler: discriminator match, version == 3, and",
+            "`dexter_authority` ownership. We also require it be owned by this program",
+            "before touching its bytes."
+          ],
+          "writable": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "Must equal the vault's recorded `dexter_authority`. Same authority that",
+            "gates `settle_voucher` / `rotate_dexter_authority`. Validated by hand",
+            "against the decoded V3 struct (no `has_one`, since the vault is untyped",
+            "here)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Funds the rent for the 36 extra bytes the realloc adds. A separate signer",
+            "so the authority key need not hold lamports."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "MigrateV3ToV4Args"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "prove_passkey",
       "discriminator": [
         35,
@@ -263,6 +545,43 @@
       ]
     },
     {
+      "name": "recover_abandoned_lock",
+      "discriminator": [
+        169,
+        213,
+        107,
+        64,
+        229,
+        49,
+        43,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "claim",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RecoverAbandonedLockArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "register_session_key",
       "discriminator": [
         69,
@@ -283,6 +602,91 @@
             "precompile sibling) is what authorizes the mutation."
           ],
           "writable": true
+        },
+        {
+          "name": "vault_usdc_ata",
+          "docs": [
+            "The swig wallet's USDC ATA — read live to enforce the overcommit",
+            "invariant per V0.3 Decision 1: the new session's max_amount plus",
+            "the existing outstanding_locked_amount must fit within actual USDC",
+            "balance. The ATA's `owner` field is verified against the canonical",
+            "swig wallet PDA."
+          ]
+        },
+        {
+          "name": "swig"
+        },
+        {
+          "name": "swig_wallet_address",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
         },
         {
           "name": "instructions_sysvar",
@@ -543,7 +947,13 @@
         {
           "name": "system_program",
           "docs": [
-            "System program — Swig CreateV1 needs it to create the state account."
+            "System program. Declared readonly at the outer-ix level — Solana's",
+            "runtime demotes the System Program to readonly anyway (program-id",
+            "accounts cannot be writable in the outer transaction). All inner CPIs",
+            "(both CreateV1 and AddAuthority) therefore pass System Program as",
+            "`AccountMeta::new_readonly(...)` to avoid privilege escalation.",
+            "`system_program::CreateAccount` itself doesn't require the System",
+            "Program account to be writable — it operates on `from`/`to`."
           ],
           "address": "11111111111111111111111111111111"
         },
@@ -561,6 +971,140 @@
           "type": {
             "defined": {
               "name": "SetSwigAtomicArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "settle_locked_voucher",
+      "discriminator": [
+        44,
+        80,
+        216,
+        43,
+        247,
+        253,
+        101,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "swig",
+          "docs": [
+            "Position 0 — required at this index by Swig's ProgramExec validator."
+          ]
+        },
+        {
+          "name": "swig_wallet_address",
+          "docs": [
+            "Position 1 — required by Swig's ProgramExec validator."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "claim",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Accumulator vault. Mutated to decrement outstanding_locked_amount",
+            "and advance total_settled_amount. Per V0.3 Decision 7, the",
+            "`active_session` field is NOT read here."
+          ],
+          "writable": true
+        },
+        {
+          "name": "holder",
+          "docs": [
+            "Must equal claim.current_holder. This signature is the sole",
+            "authority for the settlement."
+          ],
+          "signer": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "Fee gate (matches settle_tab_voucher's discipline)."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SettleLockedVoucherArgs"
             }
           }
         }
@@ -751,9 +1295,60 @@
           }
         }
       ]
+    },
+    {
+      "name": "transfer_lock_ownership",
+      "discriminator": [
+        193,
+        13,
+        131,
+        134,
+        95,
+        25,
+        229,
+        157
+      ],
+      "accounts": [
+        {
+          "name": "claim",
+          "writable": true
+        },
+        {
+          "name": "current_holder",
+          "docs": [
+            "Must equal the claim's current_holder. This is the sole authority",
+            "for transferring the claim per the reservation semantics doc",
+            "(Reservation 2)."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "TransferLockOwnershipArgs"
+            }
+          }
+        }
+      ]
     }
   ],
   "accounts": [
+    {
+      "name": "LockedClaim",
+      "discriminator": [
+        146,
+        227,
+        254,
+        205,
+        9,
+        82,
+        6,
+        245
+      ]
+    },
     {
       "name": "Vault",
       "discriminator": [
@@ -833,6 +1428,41 @@
       "code": 6012,
       "name": "SessionPubkeyMismatch",
       "msg": "Revocation message session pubkey does not match the active session"
+    },
+    {
+      "code": 6013,
+      "name": "RevolvingCapacityExceeded",
+      "msg": "Opening this tab would exceed the session's revolving capacity"
+    },
+    {
+      "code": 6014,
+      "name": "RevolvingCapacityZero",
+      "msg": "max_revolving_capacity must be greater than zero"
+    },
+    {
+      "code": 6015,
+      "name": "LockRangeAlreadyClaimed",
+      "msg": "Voucher's cumulative_amount does not advance the XOR frontier (already covered by spent or crystallized_cumulative)"
+    },
+    {
+      "code": 6016,
+      "name": "LockWouldOvercommitVault",
+      "msg": "Locking this voucher would push outstanding_locked_amount above vault USDC balance"
+    },
+    {
+      "code": 6017,
+      "name": "WithdrawalWouldViolateReservation",
+      "msg": "Finalizing this withdrawal would bring vault balance below outstanding_locked_amount"
+    },
+    {
+      "code": 6018,
+      "name": "SessionWouldOvercommitVault",
+      "msg": "Registering this session would push max_amount + outstanding_locked_amount above vault USDC balance"
+    },
+    {
+      "code": 6019,
+      "name": "RecoveryBeforeMaturity",
+      "msg": "holder_recovery_at must be strictly greater than maturity_at when both are set"
     }
   ],
   "types": [
@@ -914,6 +1544,246 @@
       }
     },
     {
+      "name": "LockVoucherArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "channel_id",
+            "docs": [
+              "Channel id from the voucher payload (first 32 bytes of the 44-byte",
+              "signed message)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "cumulative_amount",
+            "docs": [
+              "Voucher's cumulative amount. Must strictly exceed the XOR frontier",
+              "`max(session.spent, session.crystallized_cumulative)`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "sequence_number",
+            "docs": [
+              "Sequence number from the voucher payload. Updates",
+              "`session.last_locked_sequence` but is NOT load-bearing for replay",
+              "defense (the frontier guard is)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "voucher_hash",
+            "docs": [
+              "sha256(voucher_message) — used as the third PDA seed for the claim.",
+              "The handler verifies this matches the actually-signed message before",
+              "trusting it as a seed."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "maturity_at",
+            "docs": [
+              "Optional settlement maturity. If set, settle_locked_voucher rejects",
+              "before this time."
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "holder_recovery_at",
+            "docs": [
+              "Optional buyer-recovery deadline. If set with `maturity_at`, the",
+              "handler enforces `holder_recovery_at > maturity_at` per V0.3",
+              "Decision 4."
+            ],
+            "type": {
+              "option": "i64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LockedClaim",
+      "docs": [
+        "Crystallized claim against vault USDC. Created by `lock_voucher`,",
+        "transferable via `transfer_lock_ownership`, settled by",
+        "`settle_locked_voucher`, reclaimed by `recover_abandoned_lock`. Independent",
+        "of `active_session` after creation — see V0.3 Decision 7. State machine",
+        "per V0.3 Decision 6: pending → {settled, abandoned}, both terminal one-way."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version. v0.3 is the first version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "Vault PDA this claim is reserved against. All reservation invariants",
+              "gate on this vault's `outstanding_locked_amount`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "session_pubkey_at_lock",
+            "docs": [
+              "Session pubkey that signed the voucher being crystallized. Snapshot at",
+              "lock time per V0.3 Decision 7; never re-read at settlement."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "voucher_hash",
+            "docs": [
+              "Voucher payload hash — sha256 of the 44-byte canonical voucher message.",
+              "For audit / indexer correlation; not re-verified at settle."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "USDC amount this claim reserves against the vault. `delta` from",
+              "`voucher.cumulative_amount - session.crystallized_cumulative` at lock."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Wall-clock time the lock instruction landed."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "maturity_at",
+            "docs": [
+              "Earliest time settlement may run. If None, claim is instantly",
+              "settleable."
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "holder_recovery_at",
+            "docs": [
+              "Earliest time the buyer's passkey may reclaim. If None, claim is",
+              "indefinitely buyer-irrevocable. Invariant: when both set, MUST satisfy",
+              "`holder_recovery_at > maturity_at` per V0.3 Decision 4."
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "current_holder",
+            "docs": [
+              "Current owner. Set at creation to the seller; mutated by",
+              "`transfer_lock_ownership` signed by the previous holder."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "State machine status per V0.3 Decision 6."
+            ],
+            "type": {
+              "defined": {
+                "name": "LockedClaimStatus"
+              }
+            }
+          },
+          {
+            "name": "settled_at",
+            "docs": [
+              "Set when status == Settled. None otherwise."
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "recovered_at",
+            "docs": [
+              "Set when status == Abandoned. None otherwise."
+            ],
+            "type": {
+              "option": "i64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LockedClaimStatus",
+      "docs": [
+        "Claim state per V0.3 Decision 6 state machine."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Settled"
+          },
+          {
+            "name": "Abandoned"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MigrateV2ToV3Args",
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    },
+    {
+      "name": "MigrateV3ToV4Args",
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    },
+    {
       "name": "PendingWithdrawal",
       "type": {
         "kind": "struct",
@@ -956,6 +1826,25 @@
             "docs": [
               "WebAuthn clientDataJSON; its `challenge` field must base64url-decode to",
               "`sha256(\"siwx_login\" || challenge)`."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "authenticator_data",
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RecoverAbandonedLockArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "client_data_json",
+            "docs": [
+              "WebAuthn clientDataJSON; challenge must be sha256(operation_message)."
             ],
             "type": "bytes"
           },
@@ -1017,6 +1906,13 @@
               "buyer's own footgun, not a protocol attack)."
             ],
             "type": "u32"
+          },
+          {
+            "name": "max_revolving_capacity",
+            "docs": [
+              "Cap the revolving meter (`current_outstanding`) is checked against."
+            ],
+            "type": "u64"
           },
           {
             "name": "client_data_json",
@@ -1174,6 +2070,41 @@
           {
             "name": "spent",
             "type": "u64"
+          },
+          {
+            "name": "current_outstanding",
+            "docs": [
+              "Live unsettled exposure. Rises at tab-open (settle_voucher increment),",
+              "falls at confirmed settle (settle_tab_voucher). This is the field that",
+              "REVOLVES — the credex meter."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_revolving_capacity",
+            "docs": [
+              "Admission cap the revolving meter is checked against. Set + passkey-",
+              "endorsed at register_session_key. May be <= max_amount."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "crystallized_cumulative",
+            "docs": [
+              "Session-scope monotonic locked-into-claim odometer; mirror of `spent`",
+              "for the lock terminal path. Rises at `lock_voucher`. Never decremented.",
+              "The XOR frontier `max(spent, crystallized_cumulative)` gates both",
+              "terminal paths (seam spec section 4). (Seam spec section 1.)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "last_locked_sequence",
+            "docs": [
+              "Last voucher sequence number that was locked. Reserved for future",
+              "out-of-order lock detection — NOT the XOR guard (the frontier is)."
+            ],
+            "type": "u32"
           }
         ]
       }
@@ -1261,6 +2192,13 @@
       }
     },
     {
+      "name": "SettleLockedVoucherArgs",
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    },
+    {
       "name": "SettleTabVoucherArgs",
       "type": {
         "kind": "struct",
@@ -1312,6 +2250,18 @@
           {
             "name": "increment",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TransferLockOwnershipArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_holder",
+            "type": "pubkey"
           }
         ]
       }
@@ -1409,6 +2359,31 @@
                 }
               }
             }
+          },
+          {
+            "name": "outstanding_locked_amount",
+            "docs": [
+              "Sum of unsettled LockedClaim amounts for this vault. Rises at",
+              "`lock_voucher`, falls at `settle_locked_voucher` / `recover_abandoned_lock`.",
+              "The crystallized (buyer-irrevocable) reservation tier. Read by",
+              "`finalize_withdrawal` to reject withdrawals that would violate the",
+              "reservation. (Seam spec section 1.)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_crystallized_amount",
+            "docs": [
+              "Lifetime monotonic locked-into-claim odometer at vault scope. Never decremented."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_settled_amount",
+            "docs": [
+              "Lifetime monotonic settled-from-claim odometer at vault scope. Never decremented."
+            ],
+            "type": "u64"
           }
         ]
       }
