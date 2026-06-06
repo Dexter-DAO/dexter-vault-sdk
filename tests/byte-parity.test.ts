@@ -82,6 +82,26 @@ describe('discriminators (8 bytes, locked)', () => {
       Uint8Array.from([35, 175, 41, 143, 201, 118, 49, 184]),
     );
   });
+  test('lock_voucher', () => {
+    expect(DISCRIMINATORS.lock_voucher).toEqual(
+      Uint8Array.from([91, 138, 5, 227, 119, 239, 48, 254]),
+    );
+  });
+  test('settle_locked_voucher', () => {
+    expect(DISCRIMINATORS.settle_locked_voucher).toEqual(
+      Uint8Array.from([44, 80, 216, 43, 247, 253, 101, 45]),
+    );
+  });
+  test('transfer_lock_ownership', () => {
+    expect(DISCRIMINATORS.transfer_lock_ownership).toEqual(
+      Uint8Array.from([193, 13, 131, 134, 95, 25, 229, 157]),
+    );
+  });
+  test('recover_abandoned_lock', () => {
+    expect(DISCRIMINATORS.recover_abandoned_lock).toEqual(
+      Uint8Array.from([169, 213, 107, 64, 229, 49, 43, 234]),
+    );
+  });
 });
 
 // ── Domain separators (32 bytes, NUL-padded) ──

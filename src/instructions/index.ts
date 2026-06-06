@@ -9,3 +9,4 @@ export * from './withdraw.js';
 export * from './rotate.js';
 export * from './provePasskey.js';
 export * from './swigBundle.js';
+export * from './lockedClaim.js';
