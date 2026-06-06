@@ -190,7 +190,7 @@ describe('instruction data layouts', () => {
     expect(ix.keys.map(k => k.pubkey.toBase58())).toMatchSnapshot('set_swig keys');
   });
 
-  test('register_session_key (V2 — carries max_revolving_capacity)', () => {
+  test('register_session_key (V2 — carries max_revolving_capacity)', async () => {
     const ix = buildRegisterSessionKeyInstruction({
       vaultPda: KNOWN_VAULT_PDA,
       sessionPubkey: KNOWN_SESSION_PUBKEY,
@@ -199,16 +199,38 @@ describe('instruction data layouts', () => {
       allowedCounterparty: KNOWN_COUNTERPARTY,
       nonce: 42,
       maxRevolvingCapacity: 2_000_000n,
+      swigAddress: KNOWN_VAULT_PDA,
+      vaultUsdcAta: KNOWN_VAULT_USDC_ATA,
       clientDataJSON: KNOWN_CLIENT_DATA,
       authenticatorData: KNOWN_AUTH_DATA,
     });
     // Borsh arg order: disc(8) + session_pubkey(32) + max_amount(8) + expires_at(8)
     //   + allowed_counterparty(32) + nonce(4) + max_revolving_capacity(8) + vecs...
     // max_revolving_capacity sits at offset 8+32+8+8+32+4 = 92, u64 LE.
+    // DATA is UNCHANGED by the account growth — only the keys array grows.
     const data = new Uint8Array(ix.data);
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     expect(view.getBigUint64(92, true)).toBe(2_000_000n);
     expect(data).toMatchSnapshot('register_session_key data');
+
+    // ── Phase 1 overcommit gate: 5-account layout ──
+    //   [0] vault (writable)
+    //   [1] vault_usdc_ata        (NEW, read)
+    //   [2] swig                  (NEW, read)
+    //   [3] swig_wallet_address   (NEW, derived, read)
+    //   [4] instructions_sysvar   (read)
+    const { SWIG_PROGRAM_ID, INSTRUCTIONS_SYSVAR_ID } = await import('../src/constants/index.js');
+    const [expectedSwigWalletAddress] = PublicKey.findProgramAddressSync(
+      [Buffer.from('swig-wallet-address'), KNOWN_VAULT_PDA.toBytes()],
+      SWIG_PROGRAM_ID,
+    );
+
+    expect(ix.keys).toHaveLength(5);
+    expect(ix.keys[0]).toEqual({ pubkey: KNOWN_VAULT_PDA, isSigner: false, isWritable: true });
+    expect(ix.keys[1]).toEqual({ pubkey: KNOWN_VAULT_USDC_ATA, isSigner: false, isWritable: false });
+    expect(ix.keys[2]).toEqual({ pubkey: KNOWN_VAULT_PDA, isSigner: false, isWritable: false });
+    expect(ix.keys[3]).toEqual({ pubkey: expectedSwigWalletAddress, isSigner: false, isWritable: false });
+    expect(ix.keys[4]).toEqual({ pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false });
   });
 
   test('revoke_session_key', () => {
