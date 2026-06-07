@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'vitest';
+import { createHash } from 'node:crypto';
 import { PublicKey } from '@solana/web3.js';
 import { DISCRIMINATORS, OTS_SESSION_REGISTER_V1_DOMAIN, OTS_SESSION_REGISTER_V2_DOMAIN, OTS_SESSION_REVOKE_V1_DOMAIN } from '../src/constants/index.js';
 import { sessionRegisterMessage, sessionRevokeMessage, voucherPayloadMessage, buildVoucherMessage, buildSetSwigOperationMessage } from '../src/messages/index.js';
@@ -101,6 +102,39 @@ describe('discriminators (8 bytes, locked)', () => {
     expect(DISCRIMINATORS.recover_abandoned_lock).toEqual(
       Uint8Array.from([169, 213, 107, 64, 229, 49, 43, 234]),
     );
+  });
+});
+
+// ── REAL parity: derive each discriminator from the Anchor formula, not a copy ──
+//
+// The block above pins constants against hand-copied literals — that catches an
+// ACCIDENTAL CHANGE, but it does NOT verify the values are actually correct: a
+// typo copied into both the constant and its literal passes green. An Anchor
+// instruction discriminator is sha256("global:<ix_name>")[..8]. We compute that
+// here INDEPENDENTLY and assert every shipped DISCRIMINATOR matches the derived
+// value. This is the load-bearing guarantee the package sells; it must verify
+// against the formula the chain uses, not against a snapshot of itself.
+describe('discriminators — derived parity (sha256("global:<name>")[..8])', () => {
+  function derive(ixName: string): Uint8Array {
+    return Uint8Array.from(
+      createHash('sha256').update(`global:${ixName}`).digest().subarray(0, 8),
+    );
+  }
+
+  // Every key in DISCRIMINATORS is the snake_case on-chain instruction name, so
+  // we can derive directly from the key. This also auto-covers any future
+  // instruction added to the map — no new test needed.
+  for (const name of Object.keys(DISCRIMINATORS)) {
+    test(`${name} matches the Anchor formula`, () => {
+      const shipped = (DISCRIMINATORS as Record<string, Uint8Array>)[name];
+      expect(shipped).toEqual(derive(name));
+    });
+  }
+
+  // Guard against the formula itself silently no-op'ing: prove derive() actually
+  // discriminates (a wrong name must NOT match a real discriminator).
+  test('a wrong instruction name does NOT match (the test can fail)', () => {
+    expect(DISCRIMINATORS.settle_tab_voucher).not.toEqual(derive('not_a_real_instruction'));
   });
 });
 
