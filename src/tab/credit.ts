@@ -26,8 +26,9 @@ export interface DrawCreditParams {
 
 /**
  * The borrow. draw_credit moves funds FINANCIER → seller, so the SignV2 transfer
- * spends the FINANCIER swig. The on-chain draw_credit derives the financier's
- * swig_wallet_address PDA internally (see buildDrawCreditInstruction).
+ * spends the FINANCIER swig. buildDrawCreditInstruction derives the financier's
+ * swig_wallet_address PDA off-chain and passes it as an account; the on-chain
+ * program validates it.
  */
 export async function drawCredit(p: DrawCreditParams): Promise<TransactionInstruction[]> {
   const vaultIx = buildDrawCreditInstruction({
@@ -62,7 +63,8 @@ export interface RepayCreditParams {
 /**
  * The paydown. repay_credit moves funds USER → financier, so the SignV2 transfer
  * spends the USER swig. buildRepayCreditInstruction takes the user swig as
- * `swigAddress` and derives its swig_wallet_address PDA internally.
+ * `swigAddress`, derives its swig_wallet_address PDA off-chain and passes it as
+ * an account; the on-chain program validates it.
  */
 export async function repayCredit(p: RepayCreditParams): Promise<TransactionInstruction[]> {
   const vaultIx = buildRepayCreditInstruction({
