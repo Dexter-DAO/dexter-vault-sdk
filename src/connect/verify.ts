@@ -5,12 +5,18 @@
  * It reconstructs the read-only two-instruction proof transaction
  *   [secp256r1_verify, prove_passkey]
  * from the proof + the challenge it issued + the vault's passkey pubkey, and
- * `simulateTransaction(..., { sigVerify: false })` against the caller-supplied
- * Connection (Helius mainnet). `err === null` → the holder controls the vault.
+ * simulates it against the caller-supplied Connection (Helius mainnet) via the
+ * legacy `Transaction` simulate overload — which does NOT verify signatures, so
+ * the placeholder blockhash and formal feePayer are never checked.
+ * `err === null` → the holder controls the vault.
+ *   (`connection.simulateTransaction(tx, undefined, false)`: signature is
+ *    `(transaction, signers?, includeAccounts?)`; the third arg is
+ *    `includeAccounts`, set false. There is no `sigVerify` param on this
+ *    overload — `sigVerify` exists only on the VersionedTransaction config.)
  *
- * This is THE canonical method documented verbatim in provePasskey.ts:
- *   "A verifier treats a passing simulateTransaction([secp256r1_verify,
- *    prove_passkey], {sigVerify:false}) (err === null) as proof of control."
+ * This is THE canonical method documented in provePasskey.ts: a verifier treats
+ * a passing simulate of [secp256r1_verify, prove_passkey] (err === null) as
+ * proof of control.
  * It reuses the exact on-chain P-256 semantics rather than re-implementing
  * verification — a forged/wrong-key/wrong-challenge proof makes the on-chain
  * precompile (or prove_passkey's op-message check) reject, and simulate
@@ -49,8 +55,17 @@ export interface ConnectVerifyResult {
 }
 
 /** Injectable simulate fn — defaults to the real connection.simulateTransaction.
- *  Matches the on-chain verifier method documented in provePasskey.ts. */
-export type SimulateFn = (tx: Transaction) => Promise<{ value: { err: unknown } }>;
+ *  Matches the on-chain verifier method documented in provePasskey.ts.
+ *
+ *  The return shape is intentionally MINIMAL: only `value.err` is consumed by
+ *  the decision path. The real `simulateTransaction` response is richer —
+ *  `{ context, value: { err, logs, accounts, unitsConsumed, ... } }`. A future
+ *  maintainer wanting richer `reason` diagnostics can read `value.logs` (it is
+ *  present on the real response and on the optional `logs?` below). Keeping the
+ *  type narrow also keeps the tests' fake simulate trivial. */
+export type SimulateFn = (
+  tx: Transaction,
+) => Promise<{ value: { err: unknown; logs?: string[] | null } }>;
 
 /**
  * CHALLENGE-ENCODING CONTRACT (C2 — the ceremony — MUST match this):
@@ -60,10 +75,16 @@ export type SimulateFn = (tx: Transaction) => Promise<{ value: { err: unknown } 
  * clientDataJSON.challenge field must base64url-decode to
  * sha256("siwx_login" || challenge).
  *
+ * The op-message is exactly utf8("siwx_login") concatenated DIRECTLY with the
+ * 32 challenge bytes — no separator, no length prefix, no padding between them
+ * (it is rebuilt on-chain by plain byte concatenation; see provePasskey.ts).
+ *
  * The relying-app `challenge` STRING that this verifier receives maps to those
  * 32 bytes by this rule:
  *   - if it base64url-decodes to EXACTLY 32 bytes, those bytes ARE the challenge;
  *   - otherwise, sha256(utf8(challenge)) → 32 bytes.
+ * The base64url form is accepted with OR without `=` padding; the canonical
+ * issuer form is unpadded `base64url(random 32 bytes)`.
  *
  * So a relying app SHOULD issue `base64url(random 32 bytes)` (the canonical,
  * zero-ambiguity form). The fallback (sha256 of an arbitrary string) keeps any
@@ -121,11 +142,13 @@ export async function verifyConnectProof(args: {
       authenticatorData: proof.authenticatorData,
     });
 
-    // 4. Assemble [secp256r1_verify, prove_passkey]. simulateTransaction with a
-    //    legacy Transaction needs a feePayer + recentBlockhash even when
-    //    sigVerify:false. Both accounts are read-only/non-signer, so the
-    //    feePayer is purely formal — use the vault pubkey. The blockhash is a
-    //    placeholder; sigVerify:false means it is never checked for signatures.
+    // 4. Assemble [secp256r1_verify, prove_passkey]. The legacy Transaction
+    //    simulate overload needs a feePayer + recentBlockhash set, but it does
+    //    NOT verify signatures — so neither is ever checked. Both accounts are
+    //    read-only/non-signer, so the feePayer is purely formal (use the vault
+    //    pubkey) and the blockhash is a placeholder that goes unvalidated.
+    //    (simulateTransaction(tx, undefined, false): the third arg is
+    //    includeAccounts=false; there is no sigVerify param on this overload.)
     const tx = new Transaction();
     tx.add(ix0, ix1);
     tx.feePayer = vaultPda;
