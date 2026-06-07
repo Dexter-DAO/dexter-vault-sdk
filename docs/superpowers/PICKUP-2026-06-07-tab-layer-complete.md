@@ -1,7 +1,37 @@
-# PICKUP — `./tab` product layer COMPLETE, ready to publish 0.5.0. 2026-06-07
+# PICKUP — `./tab` layer SHIPPED, 0.5.0 PUBLISHED. 2026-06-07
 
 Read this first after a compact. Single source of truth for resuming with zero loss.
 Written by credex/vault Claude for Branch.
+
+═══════════════════════════════════════════════════════════════════════════════════
+## ⏩ UPDATE — 0.5.0 IS PUBLISHED + GTM REVIEW DONE (latest state, read this first)
+═══════════════════════════════════════════════════════════════════════════════════
+
+**`@dexterai/vault@0.5.0` is LIVE on npm** (confirmed: registry shows 0.5.0; `./tab` + `./kit`
+in published exports; prepublishOnly ran build+test green; git tag `v0.5.0`; published via
+`npm run release:minor`). The whole `./tab` product layer shipped.
+
+**GTM review (via agent-mail) resolved all 3 positioning calls:**
+1. Credit inside `./tab` — ✅ confirmed.
+2. README — GTM REWROTE it directly in the repo (product-first resequence, parts box behind a
+   "stop reading here" handoff), ran Branch's anti-slop gate → 0 hits (I re-verified). Committed `59e2ea0`.
+3. Two-sided story — tell it in PLAIN PROSE; the "DAP SDK / Dexter Agent Payments SDK" umbrella name
+   is KILLED for now (Branch dislikes the acronym; placeholder). README says buyer=@dexterai/vault,
+   seller=@dexterai/x402. A coined noun is Branch's later call. No DAP string in shipped surface (verified).
+
+**Notified GTM that 0.5.0 is live** (agent-mail) so he can un-gate the Foundation-amplified announcement's
+Tab landing (install `npm i @dexterai/vault`, import `@dexterai/vault/tab`, headline verb `openTab()`).
+
+**THE THREE REMAINING ITEMS (all post-publish, none time-sensitive):**
+1. **Facilitator cutover** (Step B) — point `dexter-facilitator/src/tabSettle.ts` at the published
+   `@dexterai/vault/tab` verbs, delete its private hand-rolled copy (kills composition-level drift).
+   Facilitator keeps the kitchen (fee payer / compute budget / Helius send). pm2 restart dexter-facilitator after.
+2. **Upstreaming feasibility question** (from GTM, weeks-out) — see memory
+   [[todo-dap-sdk-brand-and-x402-cleanup]] for the 4 specific questions impl must answer via agent-mail.
+3. **GTM announcement** lands when GTM is ready (un-gated now).
+
+The rest of this doc (below) is the pre-publish detail — still accurate as the build record.
+═══════════════════════════════════════════════════════════════════════════════════
 
 ═══════════════════════════════════════════════════════════════════════════════════
 ## TL;DR — WHERE WE ARE
