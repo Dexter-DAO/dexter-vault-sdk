@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { AssembleSignV2, AssembleSignV2Args } from '../src/tab/assembleSignV2.js';
+import { defaultAssembleSignV2 } from '../src/tab/assembleSignV2.js';
 import { PublicKey, TransactionInstruction } from '@solana/web3.js';
 
 describe('tab AssembleSignV2 contract', () => {
@@ -16,10 +17,14 @@ describe('tab AssembleSignV2 contract', () => {
     const out = await fake({
       connection: {} as any,
       swigAddress: new PublicKey('So11111111111111111111111111111111111111112'),
-      feePayer: new PublicKey('Sysvar1nstructions1111111111111111111111111'),
+      feePayer: new PublicKey('So11111111111111111111111111111111111111112'),
       vaultIx: marker,
       transfers: [{ destinationAta: new PublicKey('So11111111111111111111111111111111111111112'), amount: 1n }],
     });
     expect(out).toEqual([marker]);
+  });
+
+  test('defaultAssembleSignV2 is a real exported function (module loads)', () => {
+    expect(typeof defaultAssembleSignV2).toBe('function');
   });
 });
