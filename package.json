@@ -76,6 +76,11 @@
       "import": "./dist/tab/index.js",
       "require": "./dist/tab/index.cjs"
     },
+    "./connect": {
+      "types": "./dist/connect/index.d.ts",
+      "import": "./dist/connect/index.js",
+      "require": "./dist/connect/index.cjs"
+    },
     "./idl/dexter_vault.json": "./dist/idl/dexter_vault.json"
   },
   "files": [

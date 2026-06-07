@@ -18,6 +18,7 @@ export default defineConfig({
     'signers/node/index': 'src/signers/node/index.ts',
     'signers/browser/index': 'src/signers/browser/index.ts',
     'tab/index': 'src/tab/index.ts',
+    'connect/index': 'src/connect/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
