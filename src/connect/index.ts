@@ -9,3 +9,6 @@
  */
 export { verifyConnectProof, decodeChallengeTo32Bytes } from './verify.js';
 export type { ConnectProof, ConnectVerifyResult, SimulateFn } from './verify.js';
+
+export { connectTab } from './ceremony.js';
+export type { ConnectTabArgs } from './ceremony.js';
