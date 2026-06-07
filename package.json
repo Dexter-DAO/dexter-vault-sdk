@@ -71,6 +71,11 @@
       "import": "./dist/signers/browser/index.js",
       "require": "./dist/signers/browser/index.cjs"
     },
+    "./tab": {
+      "types": "./dist/tab/index.d.ts",
+      "import": "./dist/tab/index.js",
+      "require": "./dist/tab/index.cjs"
+    },
     "./idl/dexter_vault.json": "./dist/idl/dexter_vault.json"
   },
   "files": [
