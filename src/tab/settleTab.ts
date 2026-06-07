@@ -22,15 +22,10 @@ export interface SettleTabParams {
   cumulativeAmount: bigint;
   sequenceNumber: number;        // u32
   sessionSigner: Ed25519Signer;
-  mint: PublicKey;
   sellerAta: PublicKey;
   feePayer: PublicKey;
-  /**
-   * The vault's dexter_authority — the signer the on-chain settle_tab_voucher
-   * requires (must equal vault.dexter_authority). Defaults to feePayer, the
-   * common deployment where the master key both pays the tx and authorizes.
-   */
-  dexterAuthority?: PublicKey;
+  /** Must equal the vault's recorded dexter_authority; the settle_tab_voucher signer. */
+  dexterAuthority: PublicKey;
   assembleSignV2?: AssembleSignV2;
   readPriorSpent?: (connection: Connection, vaultPda: PublicKey) => Promise<bigint>;
 }
@@ -73,7 +68,7 @@ export async function settleTab(p: SettleTabParams): Promise<TransactionInstruct
   const vaultIx = buildSettleTabVoucherInstruction({
     vaultPda: p.vaultPda,
     swigAddress: p.swigAddress,
-    dexterAuthority: p.dexterAuthority ?? p.feePayer,
+    dexterAuthority: p.dexterAuthority,
     channelId: p.channelId,
     cumulativeAmount: p.cumulativeAmount,
     sequenceNumber: p.sequenceNumber,

@@ -4,7 +4,6 @@ import { settleTab } from '../src/tab/settleTab.js';
 
 const VAULT = new PublicKey('SysvarC1ock11111111111111111111111111111111');
 const SWIG = new PublicKey('SysvarRent111111111111111111111111111111111');
-const MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 const SELLER_ATA = new PublicKey('So11111111111111111111111111111111111111112');
 const FEEPAYER = new PublicKey('11111111111111111111111111111111');
 
@@ -25,7 +24,8 @@ describe('settleTab', () => {
       vaultPda: VAULT, swigAddress: SWIG,
       channelId: new Uint8Array(32).fill(1),
       cumulativeAmount: 5_000_000n, sequenceNumber: 3,
-      sessionSigner, mint: MINT, sellerAta: SELLER_ATA, feePayer: FEEPAYER,
+      sessionSigner, sellerAta: SELLER_ATA, feePayer: FEEPAYER,
+      dexterAuthority: FEEPAYER,
       assembleSignV2: fakeAssemble,
       readPriorSpent: async () => 2_000_000n,
     });
@@ -41,10 +41,25 @@ describe('settleTab', () => {
         connection: {} as any, vaultPda: VAULT, swigAddress: SWIG,
         channelId: new Uint8Array(32).fill(1),
         cumulativeAmount: 2_000_000n, sequenceNumber: 3,
-        sessionSigner, mint: MINT, sellerAta: SELLER_ATA, feePayer: FEEPAYER,
+        sessionSigner, sellerAta: SELLER_ATA, feePayer: FEEPAYER,
+        dexterAuthority: FEEPAYER,
         assembleSignV2: async () => [],
         readPriorSpent: async () => 2_000_000n,
       }),
     ).rejects.toThrow(/non-monotonic|cumulative/i);
+  });
+
+  test('propagates a no-active-session read error', async () => {
+    await expect(
+      settleTab({
+        connection: {} as any, vaultPda: VAULT, swigAddress: SWIG,
+        channelId: new Uint8Array(32).fill(1),
+        cumulativeAmount: 5_000_000n, sequenceNumber: 3,
+        sessionSigner, sellerAta: SELLER_ATA, feePayer: FEEPAYER,
+        dexterAuthority: FEEPAYER,
+        assembleSignV2: async () => [],
+        readPriorSpent: async () => { throw new Error('settleTab: no active session on vault'); },
+      }),
+    ).rejects.toThrow(/no active session/);
   });
 });
