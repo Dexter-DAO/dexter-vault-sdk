@@ -25,7 +25,7 @@
 
 ## Open a tab for your agent
 
-You open a tab with a hard limit. Your agent spends against it. The chain enforces the limit — the SDK never holds a key that can overspend it. Verify the cap on-chain yourself.
+You open a tab with a hard limit. Your agent spends against it, charge by charge, with no signature prompt per charge. When the work is done you settle and the tab closes. The spending limit is enforced by the Solana program at consensus, not by this SDK and not by Dexter. The SDK never holds a key that can overspend it, and you can verify the cap on-chain yourself.
 
 ```ts
 import { openTab, settleTab, readTabMeter } from '@dexterai/vault/tab';
@@ -43,19 +43,29 @@ const settle = await settleTab({
 const meter = await readTabMeter(connection, vaultPda);
 ```
 
-A tab can also spend past the user's balance, backed by a financier's standby capital — non-custodial, with the buyer unable to rug the financier. Same import: `drawCredit`, `repayCredit`, `seizeCollateral`.
+That is the whole product loop: `openTab` arms a capped tab, `settleTab` records each streamed charge against it, `readTabMeter` reports the headroom left. The buyer's USDC never leaves their wallet while the tab runs; the program gates their exit until the tab settles. The closest familiar shape is an auth-and-capture credit-card hold, except the hold is enforced on-chain instead of by a processor.
 
-> **Two sides.** This package is the buyer side. The seller side (verify vouchers, meter, accept payment) lives in `@dexterai/x402/tab/seller`. Together they are the Dexter Agent Payments SDK.
+A tab can also spend **past** the user's balance, backed by a financier's standby capital: non-custodial, and structured so the buyer cannot rug the financier and the financier cannot seize more than the agreed bound. Every guard in that path is proven on Solana mainnet, including a real draw, a real repayment, a real default-and-seize, and every anti-rug rejection. Same import, three more verbs:
 
-Every `./tab` verb returns `TransactionInstruction[]` — you own signing, fees, and sending.
+```ts
+import { drawCredit, repayCredit, seizeCollateral } from '@dexterai/vault/tab';
+```
+
+Credit is not a separate product bolted onto a tab. It is a tab that can spend past its balance. That is why it lives in the same import.
+
+> **Two sides.** This package is the buyer side. The seller side (verify vouchers, meter consumption, accept payment in about ten lines) lives in `@dexterai/x402`. Together they cover both halves of agent payments on Solana.
+
+Every `./tab` verb returns `TransactionInstruction[]`, so you own signing, fees, and sending.
 
 ---
 
-## Under the hood — the primitives
+## Under the hood: the primitives
 
-The `dexter-vault` Solana program is a non-custodial passkey-rooted vault: WebAuthn signs every spend, a programmatic Swig role makes the unruggable streaming channel possible, and the entire spend path goes through the vault program — no master key, no escrow, no trust.
+If the four `./tab` verbs are all you need, you can stop reading here. The rest of this package is the low-level surface those verbs are built from, exposed for the servers that assemble their own transactions.
 
-This package is the TypeScript that talks to it. Every byte the on-chain program checks — instruction discriminators, the 188-byte V2 session-registration message, the 128-byte revocation message, the 44-byte voucher payload, the vault account layout — lives here, in exactly one file each. Three repos used to hand-roll these primitives and one of them missed a role; that bug is now structurally impossible.
+The `dexter-vault` Solana program is a non-custodial passkey-rooted vault: WebAuthn signs every spend, a programmatic Swig role makes the unruggable streaming channel possible, and the entire spend path goes through the vault program, with no master key, no escrow, and no trust.
+
+This package is the TypeScript that talks to it. Every byte the on-chain program checks lives here, in exactly one file each: instruction discriminators, the 188-byte V2 session-registration message, the 128-byte revocation message, the 44-byte voucher payload, and the vault account layout. Three repos used to hand-roll these primitives and one of them missed a role; that bug is now structurally impossible.
 
 The `./tab` verbs above compose these primitives. The tiers stack on top of the same building blocks: the streaming tab (`settle_tab_voucher`), the credit tab (`draw_credit` / `repay_credit` / `seize_collateral`), the LockedClaim crystallized tier (`@dexterai/vault/instructions`), and factoring / instant payout (`@dexterai/vault/factoring`).
 
@@ -95,7 +105,7 @@ const bundle = await buildSwigCreationBundle({
 const tx = new Transaction().add(...bundle.instructions);
 ```
 
-The 4-role design — role 0 bootstrap, role 1 `ProgramExec(finalize_withdrawal)`, role 2 session master, role 3 `ProgramExec(settle_tab_voucher)` — lives in exactly one function. Tests in this repo lock the role list against the on-chain Anchor discriminators.
+The 4-role design (role 0 bootstrap, role 1 `ProgramExec(finalize_withdrawal)`, role 2 session master, role 3 `ProgramExec(settle_tab_voucher)`) lives in exactly one function. Tests in this repo lock the role list against the on-chain Anchor discriminators.
 
 ### Settle a Tab voucher on chain (facilitator-side)
 
@@ -192,7 +202,7 @@ Each subpath is a tree-shakeable entry point. Pull only what you need.
 
 Three places used to hand-roll the same protocol: `dexter-api/src/vault/`, `dexter-facilitator/src/vault/`, and `dexter-vault/tests/`. One of them added role 3 (`ProgramExec` for `settle_tab_voucher`); two didn't. The end-to-end Tab settle smoke kept failing with `Role not found for ID: 3` and it ate hours of debugging on 2026-06-02 before anyone noticed the drift.
 
-This package is the structural fix. The canonical 4-role Swig provisioner, every instruction builder, every byte-precise message encoder, the vault account decoder, the precompile helpers — they live in exactly one file each. Consumers (`dexter-api`, `dexter-facilitator`, `dexter-vault` tests, `@dexterai/x402/tab`) import from here. The drift bug class is gone.
+This package is the structural fix. The canonical 4-role Swig provisioner, every instruction builder, every byte-precise message encoder, the vault account decoder, and the precompile helpers each live in exactly one file. Consumers (`dexter-api`, `dexter-facilitator`, `dexter-vault` tests, `@dexterai/x402/tab`) import from here. The drift bug class is gone.
 
 ---
 
@@ -200,9 +210,9 @@ This package is the structural fix. The canonical 4-role Swig provisioner, every
 
 `tests/byte-parity.test.ts`, `tests/precompile.test.ts`, `tests/swigBundle.test.ts`, `tests/counterfactual.test.ts`, and `tests/reader.test.ts` together snapshot:
 
-- All **21 instruction discriminators** — derived from `sha256("global:<name>")` and checked against the pinned bytes — covering the vault core, the session-key pair, the LockedClaim set, and the credit set.
-- All **3 message layouts** — 188-byte V2 session registration, 128-byte revocation, 44-byte voucher payload — byte-by-byte.
-- Both **precompile builders** — secp256r1 (SIMD-0075) and Ed25519 — including the 14-byte offsets table.
+- All **21 instruction discriminators**, derived from `sha256("global:<name>")` and checked against the pinned bytes, covering the vault core, the session-key pair, the LockedClaim set, and the credit set.
+- All **3 message layouts**, byte-by-byte: 188-byte V2 session registration, 128-byte revocation, 44-byte voucher payload.
+- Both **precompile builders**, secp256r1 (SIMD-0075) and Ed25519, including the 14-byte offsets table.
 - The **vault account decoder** for every V5 layout combination (with/without pending withdrawal, with/without active session).
 - The **`buildSwigCreationBundle` structural lock**: ≥4 instructions, idempotent for the same `(identitySeed, hmacKey)`, distinct outputs for different inputs, the `settle_tab_voucher` Swig exec marker bytes match the on-chain discriminator.
 - The **counterfactual derivation** for a known seed.
@@ -273,7 +283,7 @@ interface PasskeySigner {
 
 The current SDK targets the `dexter-vault` V5 program (21 Anchor instructions; role 3 `ProgramExec` for `settle_tab_voucher` registered on every new Swig).
 
-Future program versions will bump the SDK major or document the delta in the CHANGELOG. The byte-parity tests are the structural lock — any layout change requires an explicit snapshot update.
+Future program versions will bump the SDK major or document the delta in the CHANGELOG. The byte-parity tests are the structural lock: any layout change requires an explicit snapshot update.
 
 ---
 
