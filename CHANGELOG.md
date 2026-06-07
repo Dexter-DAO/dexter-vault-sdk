@@ -2,6 +2,18 @@
 
 All notable changes to `@dexterai/vault`.
 
+## 0.5.0 — 2026-06-07
+
+### Added
+- **`@dexterai/vault/tab`** — the composed product layer over the buyer-side primitives. `openTab`, `settleTab` (atomic Ed25519 precompile + settle_tab_voucher + Swig SignV2, with the cumulative-delta freshness-read done inside the verb), `readTabMeter` (read-only headroom reporter; the chain stays the authoritative cap guard), and the credit verbs `drawCredit` / `repayCredit` / `seizeCollateral`. Each composes and returns `TransactionInstruction[]` with an injectable `assembleSignV2` (defaults to real Swig); none send. Promoted from the proven facilitator settle loop.
+- **`@dexterai/vault/kit`** — single home for the `kitInstructionsToWeb3` / `getRpc` Swig-kit↔web3 bridge (previously duplicated across 8 files). `./factoring` now imports it.
+
+### Fixed
+- **Byte-parity test is a real parity check** — derives each discriminator from `sha256("global:<name>")` instead of comparing constants to copies of themselves.
+- **README brought current** — was documenting program v2 / 12 discriminators / 180-byte session; now reflects the V5 program, 21 discriminators, 188-byte V2 session, shipped `WebAuthnAssertion`, and the credit / lockedClaim / factoring tiers.
+
+This is additive; prior consumers continue to work unchanged.
+
 ## 0.4.2 — 2026-06-06
 
 ### Added

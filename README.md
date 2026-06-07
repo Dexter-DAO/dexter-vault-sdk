@@ -21,11 +21,43 @@
 
 ---
 
-## What is `@dexterai/vault`?
+<!-- GTM-DRAFT: product framing/wording pending GTM agent review before publish -->
+
+## Open a tab for your agent
+
+You open a tab with a hard limit. Your agent spends against it. The chain enforces the limit — the SDK never holds a key that can overspend it. Verify the cap on-chain yourself.
+
+```ts
+import { openTab, settleTab, readTabMeter } from '@dexterai/vault/tab';
+
+// arm a tab with a chain-enforced cap
+const open = await openTab({ vaultPda, amount: 5_000_000n, dexterAuthority });
+
+// settle a streamed micro-charge (composes precompile + settle + transfer)
+const settle = await settleTab({
+  connection, vaultPda, swigAddress, channelId,
+  cumulativeAmount, sequenceNumber, sessionSigner, sellerAta, feePayer, dexterAuthority,
+});
+
+// read remaining headroom (the chain is the real guard)
+const meter = await readTabMeter(connection, vaultPda);
+```
+
+A tab can also spend past the user's balance, backed by a financier's standby capital — non-custodial, with the buyer unable to rug the financier. Same import: `drawCredit`, `repayCredit`, `seizeCollateral`.
+
+> **Two sides.** This package is the buyer side. The seller side (verify vouchers, meter, accept payment) lives in `@dexterai/x402/tab/seller`. Together they are the Dexter Agent Payments SDK.
+
+Every `./tab` verb returns `TransactionInstruction[]` — you own signing, fees, and sending.
+
+---
+
+## Under the hood — the primitives
 
 The `dexter-vault` Solana program is a non-custodial passkey-rooted vault: WebAuthn signs every spend, a programmatic Swig role makes the unruggable streaming channel possible, and the entire spend path goes through the vault program — no master key, no escrow, no trust.
 
-This package is the TypeScript that talks to it. Every byte the on-chain program checks — instruction discriminators, the 180-byte session-registration message, the 128-byte revocation message, the 44-byte voucher payload, the vault account layout — lives here, in exactly one file each. Three repos used to hand-roll these primitives and one of them missed a role; that bug is now structurally impossible.
+This package is the TypeScript that talks to it. Every byte the on-chain program checks — instruction discriminators, the 188-byte V2 session-registration message, the 128-byte revocation message, the 44-byte voucher payload, the vault account layout — lives here, in exactly one file each. Three repos used to hand-roll these primitives and one of them missed a role; that bug is now structurally impossible.
+
+The `./tab` verbs above compose these primitives. The tiers stack on top of the same building blocks: the streaming tab (`settle_tab_voucher`), the credit tab (`draw_credit` / `repay_credit` / `seize_collateral`), the LockedClaim crystallized tier (`@dexterai/vault/instructions`), and factoring / instant payout (`@dexterai/vault/factoring`).
 
 If you are about to hand-roll a vault instruction builder, a precompile message, a Swig role list, or a vault account decoder, **stop and import from here instead**.
 
@@ -37,7 +69,7 @@ If you are about to hand-roll a vault instruction builder, a precompile message,
 npm install @dexterai/vault
 ```
 
-Compatible with `dexter-vault` program version 2 (12 Anchor discriminators including `prove_passkey`, `settle_tab_voucher`, and the session-key register/revoke pair).
+Targets the `dexter-vault` V5 program (21 Anchor discriminators including `prove_passkey`, `settle_tab_voucher`, the session-key register/revoke pair, the LockedClaim set, and the credit set `open_standby` / `draw_credit` / `repay_credit` / `seize_collateral`).
 
 ---
 
@@ -141,14 +173,18 @@ Each subpath is a tree-shakeable entry point. Pull only what you need.
 |---|---|
 | `@dexterai/vault` | Re-exports `types` + `counterfactual` for convenience |
 | `@dexterai/vault/types` | `VaultState`, `VaultStateFull`, `ActiveSession`, `PendingWithdrawal`, `SessionKey`, `SessionScope`, `SignedVoucher`, `VoucherPayload`, `AtomicAmount`, `HumanAmount`, `TabNetworkId` |
-| `@dexterai/vault/constants` | `DEXTER_VAULT_PROGRAM_ID`, `SWIG_PROGRAM_ID`, `USDC_MAINNET`/`USDC_DEVNET`, all 12 `DISCRIMINATORS`, `OTS_SESSION_REGISTER_V1_DOMAIN`, `OTS_SESSION_REVOKE_V1_DOMAIN` |
+| `@dexterai/vault/constants` | `DEXTER_VAULT_PROGRAM_ID`, `SWIG_PROGRAM_ID`, `USDC_MAINNET`/`USDC_DEVNET`, all 21 `DISCRIMINATORS`, `LOCKED_CLAIM_SEED`, `OTS_SESSION_REGISTER_V1_DOMAIN`, `OTS_SESSION_REGISTER_V2_DOMAIN`, `OTS_SESSION_REVOKE_V1_DOMAIN` |
 | `@dexterai/vault/instructions` | Every builder: `buildInitializeVaultInstruction`, `buildSetSwigInstruction`, `buildRegisterSessionKeyInstruction`, `buildRevokeSessionKeyInstruction`, `buildSettleVoucherInstruction`, `buildSettleTabVoucherInstruction`, `buildRequestWithdrawalInstruction`, `buildFinalizeWithdrawalInstruction`, `buildForceReleaseInstruction`, `buildRotatePasskeyInstruction`, `buildRotateDexterAuthorityInstruction`, `buildProvePasskeyInstruction`, and the canonical `buildSwigCreationBundle` + `expectedSwigAddressFor` + `verifySwigIsOurs` |
-| `@dexterai/vault/messages` | `sessionRegisterMessage` (180 bytes), `sessionRevokeMessage` (128 bytes), `voucherPayloadMessage` / `buildVoucherMessage` (44 bytes), `buildSetSwigOperationMessage` |
+| `@dexterai/vault/messages` | `sessionRegisterMessage` (188 bytes, V2), `sessionRevokeMessage` (128 bytes), `voucherPayloadMessage` / `buildVoucherMessage` (44 bytes), `buildSetSwigOperationMessage` |
 | `@dexterai/vault/reader` | `readVaultOnchain` (slim), `readVaultFull` (with active session) |
 | `@dexterai/vault/precompile` | `buildSecp256r1VerifyInstruction`, `buildPrecompileMessage`, `buildEd25519VerifyInstruction` |
 | `@dexterai/vault/counterfactual` | `deriveCounterfactualAddresses` |
 | `@dexterai/vault/signers` | `Ed25519Signer`, `PasskeySigner` interfaces |
 | `@dexterai/vault/signers/node` | `NodeEd25519Signer` (tweetnacl-backed) |
+| `@dexterai/vault/signers/browser` | `WebAuthnAssertion` (pure-browser P-256 passkey ceremony, shipped 0.2.0), `derSignatureToCompactLowS` |
+| `@dexterai/vault/tab` | Product layer: `openTab`, `settleTab`, `readTabMeter`, `drawCredit`, `repayCredit`, `seizeCollateral`, `defaultAssembleSignV2` |
+| `@dexterai/vault/factoring` | `computeFactoringSplit`, `buildInstantPayoutInstructions` (settle a LockedClaim and split the payout) |
+| `@dexterai/vault/kit` | `kitInstructionsToWeb3`, `getRpc` (Swig-kit↔web3 bridge) |
 
 ---
 
@@ -164,10 +200,10 @@ This package is the structural fix. The canonical 4-role Swig provisioner, every
 
 `tests/byte-parity.test.ts`, `tests/precompile.test.ts`, `tests/swigBundle.test.ts`, `tests/counterfactual.test.ts`, and `tests/reader.test.ts` together snapshot:
 
-- All **12 instruction discriminators** (10 vault + 2 session-key) as exact byte arrays.
-- All **3 message layouts** — 180-byte session registration, 128-byte revocation, 44-byte voucher payload — byte-by-byte.
+- All **21 instruction discriminators** — derived from `sha256("global:<name>")` and checked against the pinned bytes — covering the vault core, the session-key pair, the LockedClaim set, and the credit set.
+- All **3 message layouts** — 188-byte V2 session registration, 128-byte revocation, 44-byte voucher payload — byte-by-byte.
 - Both **precompile builders** — secp256r1 (SIMD-0075) and Ed25519 — including the 14-byte offsets table.
-- The **vault account decoder** for every Anchor v2 layout combination (with/without pending withdrawal, with/without active session).
+- The **vault account decoder** for every V5 layout combination (with/without pending withdrawal, with/without active session).
 - The **`buildSwigCreationBundle` structural lock**: ≥4 instructions, idempotent for the same `(identitySeed, hmacKey)`, distinct outputs for different inputs, the `settle_tab_voucher` Swig exec marker bytes match the on-chain discriminator.
 - The **counterfactual derivation** for a known seed.
 
@@ -184,7 +220,7 @@ npm test
 ```
                 ┌─────────────────────────────────┐
                 │  dexter-vault (Anchor program)  │  ← source of truth
-                │  12 discriminators, 3 layouts   │
+                │  V5: 21 discriminators, 3 layouts│
                 └────────────────┬────────────────┘
                                  │ defines bytes
                                  ▼
@@ -229,13 +265,13 @@ interface PasskeySigner {
 }
 ```
 
-`NodeEd25519Signer` ships at `@dexterai/vault/signers/node`. `BrowserPasskeySigner` is the v0.2 work — lifted from `dexter-fe`'s existing WebAuthn ceremony, it unlocks browser-buyer flows on dexter.cash and anywhere else a user pays through their passkey vault.
+`NodeEd25519Signer` ships at `@dexterai/vault/signers/node`. The browser passkey signer shipped in 0.2.0 as `WebAuthnAssertion` at `@dexterai/vault/signers/browser`: a pure-browser P-256 ceremony that runs `navigator.credentials.get()` and returns the three on-chain-ready buffers (64-byte compact lowS signature, raw `clientDataJSON`, raw `authenticatorData`), zero `fetch` calls. It implements the `PasskeySigner` interface; consumers compose it with their own server-policy adapter. This unlocks browser-buyer flows on dexter.cash and anywhere else a user pays through their passkey vault.
 
 ---
 
 ## Versioning
 
-`@dexterai/vault@0.1.x` is compatible with `dexter-vault` program version 2 (12 Anchor instructions; role 3 `ProgramExec` for `settle_tab_voucher` registered on every new Swig).
+The current SDK targets the `dexter-vault` V5 program (21 Anchor instructions; role 3 `ProgramExec` for `settle_tab_voucher` registered on every new Swig).
 
 Future program versions will bump the SDK major or document the delta in the CHANGELOG. The byte-parity tests are the structural lock — any layout change requires an explicit snapshot update.
 
