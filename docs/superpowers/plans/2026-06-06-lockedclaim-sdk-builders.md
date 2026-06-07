@@ -78,20 +78,29 @@
 - Modify: `src/constants/index.ts`
 - Reference: `src/idl/dexter_vault.json` (read the discriminator bytes from here)
 
-- [ ] **Step 1: Read the four discriminators from the IDL**
+- [ ] **Step 1: The four discriminators (VERIFIED 2026-06-06 against the fresh program IDL)**
 
-Run: `node -e "const idl=require('./src/idl/dexter_vault.json'); for (const n of ['lock_voucher','settle_locked_voucher','transfer_lock_ownership','recover_abandoned_lock']){const ix=idl.instructions.find(i=>i.name===n||i.name===n.replace(/_(.)/g,(_,c)=>c.toUpperCase())); console.log(n, ix && ix.discriminator);}"`
-Expected: four arrays of 8 numbers each. Record them. (If the IDL uses camelCase names, the find handles both.)
+NOTE: the SDK's bundled `src/idl/dexter_vault.json` is STALE (predates the Phase 1 upgrade — does NOT contain these instructions). The discriminators below were computed as `sha256("global:<ix>")[..8]` AND cross-checked against the fresh `../dexter-vault/target/idl/dexter_vault.json` — all four matched exactly. Use these literal bytes:
+
+```
+lock_voucher:            [91, 138, 5, 227, 119, 239, 48, 254]
+settle_locked_voucher:   [44, 80, 216, 43, 247, 253, 101, 45]
+transfer_lock_ownership: [193, 13, 131, 134, 95, 25, 229, 157]
+recover_abandoned_lock:  [169, 213, 107, 64, 229, 49, 43, 234]
+```
+
+(To re-verify: `node -e "const c=require('crypto'); for(const n of ['lock_voucher','settle_locked_voucher','transfer_lock_ownership','recover_abandoned_lock']) console.log(n, Array.from(c.createHash('sha256').update('global:'+n).digest().subarray(0,8)))"`)
 
 - [ ] **Step 2: Verify SWIG_WALLET_ADDRESS_SEED + LOCKED_CLAIM_SEED presence**
 
 Run: `grep -nE "SWIG_WALLET_ADDRESS_SEED|LOCKED_CLAIM_SEED" src/constants/index.ts`
 Expected: note which exist. `LOCKED_CLAIM_SEED` is expected MISSING; `SWIG_WALLET_ADDRESS_SEED` may exist (used by `deriveSwigWalletAddress`).
 
-- [ ] **Step 3: Get the on-chain seed byte values**
+- [ ] **Step 3: The on-chain seed values (VERIFIED 2026-06-06)**
 
-Run: `grep -rnE "LOCKED_CLAIM_SEED|SWIG_WALLET_ADDRESS_SEED" ../dexter-vault/programs/dexter-vault/src/constants.rs`
-Expected: the literal byte strings, e.g. `pub const LOCKED_CLAIM_SEED: &[u8] = b"locked-claim";`. Use the EXACT string.
+Confirmed from the program source:
+- `LOCKED_CLAIM_SEED = b"locked-claim"` (in `programs/dexter-vault/src/state.rs:161`) — MISSING from SDK constants, must add.
+- `SWIG_WALLET_ADDRESS_SEED = b"swig-wallet-address"` (in `constants.rs:14`) — also MISSING from SDK constants as a named export, BUT `deriveSwigWalletAddress` (withdraw.ts) already hardcodes this string internally, so no new seed export is needed for it. Only add `LOCKED_CLAIM_SEED`.
 
 - [ ] **Step 4: Add the discriminators + seed to the DISCRIMINATORS map and exports**
 
@@ -660,6 +669,16 @@ Run: `npx tsc --noEmit && npm run build`
 Expected: build succeeds. Then:
 Run: `node -e "const m=require('./dist/instructions/index.cjs'); console.log(['buildLockVoucherInstruction','buildSettleLockedVoucherInstruction','buildTransferLockOwnershipInstruction','buildRecoverAbandonedLockInstruction'].map(k=>k+':'+(typeof m[k])).join(' '))"`
 Expected: all four print `:function`.
+
+- [ ] **Step 3b: Pin all 4 discriminators against hardcoded literals (review carry-over from Task 2)**
+
+The new builder tests assert `ix.data` against `DISCRIMINATORS.x` — the same constant the builder consumes — so a wrong constant would pass silently. The existing `tests/byte-parity.test.ts` has a "discriminators (8 bytes, locked)" block that pins each discriminator against a HARDCODED literal. Add the 4 LockedClaim discriminators to that locked block (or assert hardcoded literals in `lockedClaim.byte-parity.test.ts`) so the constant values themselves are pinned independently:
+```typescript
+expect(DISCRIMINATORS.lock_voucher).toEqual(Uint8Array.from([91, 138, 5, 227, 119, 239, 48, 254]));
+expect(DISCRIMINATORS.settle_locked_voucher).toEqual(Uint8Array.from([44, 80, 216, 43, 247, 253, 101, 45]));
+expect(DISCRIMINATORS.transfer_lock_ownership).toEqual(Uint8Array.from([193, 13, 131, 134, 95, 25, 229, 157]));
+expect(DISCRIMINATORS.recover_abandoned_lock).toEqual(Uint8Array.from([169, 213, 107, 64, 229, 49, 43, 234]));
+```
 
 - [ ] **Step 4: Run the full test suite (regression check)**
 
