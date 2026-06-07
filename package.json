@@ -36,6 +36,11 @@
       "import": "./dist/instructions/index.js",
       "require": "./dist/instructions/index.cjs"
     },
+    "./kit": {
+      "types": "./dist/kit/index.d.ts",
+      "import": "./dist/kit/index.js",
+      "require": "./dist/kit/index.cjs"
+    },
     "./messages": {
       "types": "./dist/messages/index.d.ts",
       "import": "./dist/messages/index.js",

@@ -10,6 +10,7 @@ export default defineConfig({
     'constants/index': 'src/constants/index.ts',
     'factoring/index': 'src/factoring/index.ts',
     'instructions/index': 'src/instructions/index.ts',
+    'kit/index': 'src/kit/index.ts',
     'messages/index': 'src/messages/index.ts',
     'reader/index': 'src/reader/index.ts',
     'precompile/index': 'src/precompile/index.ts',
