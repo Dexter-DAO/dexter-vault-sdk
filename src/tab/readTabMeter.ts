@@ -5,6 +5,7 @@
  */
 import { Connection, PublicKey } from '@solana/web3.js';
 import { readVaultFull } from '../reader/index.js';
+import type { VaultStateFull } from '../types.js';
 
 export interface TabMeter {
   spent: bigint;        // activeSession.spent
@@ -15,13 +16,12 @@ export interface TabMeter {
 export async function readTabMeter(
   connection: Connection,
   vaultPda: PublicKey,
-  read: (c: Connection, v: PublicKey) => Promise<any> = readVaultFull,
+  read: (c: Connection, v: PublicKey) => Promise<VaultStateFull> = readVaultFull,
 ): Promise<TabMeter> {
   const vault = await read(connection, vaultPda);
   const session = vault.activeSession;
   if (!session) throw new Error('readTabMeter: no active session on vault');
-  const spent: bigint = session.spent;       // VERIFIED native bigint
-  const maxAmount: bigint = session.maxAmount; // VERIFIED native bigint
+  const { spent, maxAmount } = session;
   const raw = maxAmount - spent;
   const remaining = raw > 0n ? raw : 0n;
   return { spent, maxAmount, remaining };

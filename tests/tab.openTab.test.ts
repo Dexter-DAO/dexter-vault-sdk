@@ -12,5 +12,8 @@ describe('openTab', () => {
     expect(Array.isArray(ixs)).toBe(true);
     expect(ixs.length).toBeGreaterThanOrEqual(1);
     expect(ixs[0].programId.equals(new PublicKey('Hg3wRaydFtJhYrdvYrKECacpJYDsC9Px7yKmpncj2fhc'))).toBe(true);
+    const data = ixs[0].data;
+    expect(data.readBigUInt64LE(8)).toBe(1_000_000n); // amount packed correctly
+    expect(data[data.length - 1]).toBe(1);            // increment flag === true
   });
 });
