@@ -77,6 +77,45 @@ export function buildOpenStandbyInstruction(p: OpenStandbyParams): TransactionIn
   });
 }
 
+// ── set_standby_reserve (mechanism B) ───────────────────────────────────────
+
+export interface SetStandbyReserveParams {
+  financierSwig: PublicKey;
+  feePayer: PublicKey;
+  newReserve: bigint;
+}
+
+/**
+ * Raw set_standby_reserve instruction. MECHANISM B: this ix must be submitted as
+ * the INNER CPI of the financier swig's SignV2 (see assembleStandbyReserveSignV2).
+ * financier_swig_wallet_address is a struct-level Signer in the program, so its
+ * meta is emitted isSigner:true here; Swig invoke_signed's the PDA at submission.
+ * Account order MUST match the on-chain struct:
+ *   [0] financier_swig             (readonly)
+ *   [1] financier_swig_wallet_addr (SIGNER, readonly, PDA)
+ *   [2] standby_backer             (writable, PDA)
+ *   [3] fee_payer                  (signer, writable)
+ *   [4] system_program
+ * Data: disc || new_reserve(u64). NO instructions_sysvar.
+ */
+export function buildSetStandbyReserveInstruction(p: SetStandbyReserveParams): TransactionInstruction {
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.set_standby_reserve),
+    encodeU64(p.newReserve),
+  ]);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: p.financierSwig, isSigner: false, isWritable: false },
+      { pubkey: deriveSwigWalletAddress(p.financierSwig), isSigner: true, isWritable: false },
+      { pubkey: deriveStandbyBackerPda(p.financierSwig), isSigner: false, isWritable: true },
+      { pubkey: p.feePayer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data,
+  });
+}
+
 // ── draw_credit ────────────────────────────────────────────────────────────
 
 export interface DrawCreditParams {
