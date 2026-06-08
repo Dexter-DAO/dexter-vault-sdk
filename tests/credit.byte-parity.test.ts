@@ -6,6 +6,7 @@ import {
   buildRepayCreditInstruction,
   buildSeizeCollateralInstruction,
   buildMigrateV4ToV5Instruction,
+  deriveStandbyBackerPda,
 } from '../src/instructions/credit.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
 import { DEXTER_VAULT_PROGRAM_ID, DISCRIMINATORS, INSTRUCTIONS_SYSVAR_ID } from '../src/constants/index.js';
@@ -18,7 +19,7 @@ const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 const SYSTEM = new PublicKey('11111111111111111111111111111111');
 
 describe('openStandby', () => {
-  it('emits 3 accounts in canonical order with u64 cap + two byte-vec args', () => {
+  it('emits 4 accounts in canonical order with u64 cap + two byte-vec args', () => {
     const clientDataJSON = new Uint8Array([1, 2, 3]);
     const authenticatorData = new Uint8Array([4, 5, 6, 7]);
     const ix = buildOpenStandbyInstruction({
@@ -29,7 +30,7 @@ describe('openStandby', () => {
       authenticatorData,
     });
     expect(ix.programId.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);
-    expect(ix.keys.length).toBe(3);
+    expect(ix.keys.length).toBe(4);
     // [0] vault (writable, not signer)
     expect(ix.keys[0].pubkey.equals(RENT)).toBe(true);
     expect(ix.keys[0].isWritable).toBe(true);
@@ -38,10 +39,14 @@ describe('openStandby', () => {
     expect(ix.keys[1].pubkey.equals(CLOCK)).toBe(true);
     expect(ix.keys[1].isWritable).toBe(false);
     expect(ix.keys[1].isSigner).toBe(false);
-    // [2] instructions_sysvar (readonly)
-    expect(ix.keys[2].pubkey.equals(INSTRUCTIONS_SYSVAR_ID)).toBe(true);
-    expect(ix.keys[2].isWritable).toBe(false);
+    // [2] standby_backer (writable, PDA derived from financier_swig)
+    expect(ix.keys[2].pubkey.equals(deriveStandbyBackerPda(CLOCK))).toBe(true);
+    expect(ix.keys[2].isWritable).toBe(true);
     expect(ix.keys[2].isSigner).toBe(false);
+    // [3] instructions_sysvar (readonly)
+    expect(ix.keys[3].pubkey.equals(INSTRUCTIONS_SYSVAR_ID)).toBe(true);
+    expect(ix.keys[3].isWritable).toBe(false);
+    expect(ix.keys[3].isSigner).toBe(false);
     // data: disc(8) + cap u64(8) + (len4+3) + (len4+4) = 8 + 8 + 7 + 8 = 31
     expect(ix.data.length).toBe(31);
     expect(Buffer.from(ix.data.subarray(0, 8))).toEqual(Buffer.from(DISCRIMINATORS.open_standby));

@@ -62,6 +62,8 @@ export const DISCRIMINATORS = Object.freeze({
   recover_abandoned_lock:  Uint8Array.from([169, 213, 107, 64, 229, 49, 43, 234]),
   open_standby:            Uint8Array.from([234, 184, 232, 135, 246, 191, 90, 250]),
   draw_credit:             Uint8Array.from([20, 84, 47, 211, 78, 117, 195, 210]),
+  set_standby_reserve:     Uint8Array.from([198, 227, 172, 10, 133, 119, 213, 7]),
+  close_standby:           Uint8Array.from([218, 35, 75, 51, 72, 244, 20, 108]),
   repay_credit:            Uint8Array.from([38, 113, 240, 182, 109, 179, 154, 245]),
   seize_collateral:        Uint8Array.from([40, 250, 7, 243, 168, 184, 116, 154]),
   migrate_v4_to_v5:        Uint8Array.from([226, 105, 140, 184, 101, 39, 235, 116]),

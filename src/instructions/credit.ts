@@ -32,6 +32,14 @@ function encodeI64(value: bigint): Buffer {
   return out;
 }
 
+export function deriveStandbyBackerPda(financierSwig: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('standby-backer'), financierSwig.toBuffer()],
+    DEXTER_VAULT_PROGRAM_ID,
+  );
+  return pda;
+}
+
 // ── open_standby ───────────────────────────────────────────────────────────
 
 export interface OpenStandbyParams {
@@ -46,7 +54,8 @@ export interface OpenStandbyParams {
  * Account order MUST match the on-chain struct:
  *   [0] vault               (writable)
  *   [1] financier_swig      (readonly)
- *   [2] instructions_sysvar (readonly)
+ *   [2] standby_backer      (writable, PDA: ["standby-backer", financier_swig])
+ *   [3] instructions_sysvar (readonly)
  * Data: disc || cap(u64) || vec(client_data_json) || vec(authenticator_data).
  */
 export function buildOpenStandbyInstruction(p: OpenStandbyParams): TransactionInstruction {
@@ -61,6 +70,7 @@ export function buildOpenStandbyInstruction(p: OpenStandbyParams): TransactionIn
     keys: [
       { pubkey: p.vaultPda, isSigner: false, isWritable: true },
       { pubkey: p.financierSwig, isSigner: false, isWritable: false },
+      { pubkey: deriveStandbyBackerPda(p.financierSwig), isSigner: false, isWritable: true },
       { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
     ],
     data,
