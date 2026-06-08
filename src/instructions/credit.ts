@@ -116,6 +116,54 @@ export function buildSetStandbyReserveInstruction(p: SetStandbyReserveParams): T
   });
 }
 
+// ── close_standby (both legs) ────────────────────────────────────────────────
+
+export interface CloseStandbyParams {
+  /** 'financier' → mechanism-B (SignV2 inner CPI); 'user' → passkey precompile pair. */
+  closer: 'user' | 'financier';
+  vaultPda: PublicKey;
+  financierSwig: PublicKey;
+  clientDataJSON: Uint8Array;
+  authenticatorData: Uint8Array;
+}
+
+/**
+ * Raw close_standby instruction. The account list is identical for both legs
+ * (the on-chain struct is shared); the leg differs only in the `closer` arg byte
+ * (user=0, financier=1) and, at SUBMISSION time, the wrapping: financier =
+ * mechanism-B SignV2 inner CPI (see assembleStandbyReserveSignV2; the assembler
+ * patches financier_swig_wallet to signer), user = a [secp256r1 precompile,
+ * close_standby{user}] pair. The raw ix emits financier_swig_wallet isSigner:false
+ * (it is AccountInfo in the struct, shared by both legs).
+ * Account order MUST match the on-chain struct:
+ *   [0] financier_swig             (readonly)
+ *   [1] financier_swig_wallet_addr (readonly, PDA)
+ *   [2] vault                      (writable)
+ *   [3] standby_backer             (writable, PDA)
+ *   [4] instructions_sysvar        (readonly)
+ * Data: disc || closer(u8) || vec(client_data_json) || vec(authenticator_data).
+ */
+export function buildCloseStandbyInstruction(p: CloseStandbyParams): TransactionInstruction {
+  const closerByte = p.closer === 'financier' ? 1 : 0;
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.close_standby),
+    Buffer.from([closerByte]),
+    encodeBytesVec(p.clientDataJSON),
+    encodeBytesVec(p.authenticatorData),
+  ]);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: p.financierSwig, isSigner: false, isWritable: false },
+      { pubkey: deriveSwigWalletAddress(p.financierSwig), isSigner: false, isWritable: false },
+      { pubkey: p.vaultPda, isSigner: false, isWritable: true },
+      { pubkey: deriveStandbyBackerPda(p.financierSwig), isSigner: false, isWritable: true },
+      { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+    ],
+    data,
+  });
+}
+
 // ── draw_credit ────────────────────────────────────────────────────────────
 
 export interface DrawCreditParams {
