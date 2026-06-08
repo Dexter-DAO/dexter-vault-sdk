@@ -11,3 +11,4 @@ export * from './provePasskey.js';
 export * from './swigBundle.js';
 export * from './lockedClaim.js';
 export * from './credit.js';
+export * from './registerProgramAuthority.js';
