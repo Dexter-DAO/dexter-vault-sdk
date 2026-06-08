@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PublicKey, SystemProgram } from '@solana/web3.js';
+import { PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 import {
   buildOpenStandbyInstruction,
   buildSetStandbyReserveInstruction,
@@ -7,6 +7,7 @@ import {
   deriveStandbyBackerPda,
 } from '../src/instructions/credit.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
+import { patchSwigWalletSigner } from '../src/tab/assembleStandbyReserveSignV2.js';
 import { DISCRIMINATORS, INSTRUCTIONS_SYSVAR_ID } from '../src/constants/index.js';
 
 const FIN = new PublicKey('11111111111111111111111111111112');
@@ -78,5 +79,42 @@ describe('buildCloseStandbyInstruction', () => {
       clientDataJSON: new Uint8Array([9]), authenticatorData: new Uint8Array([8]),
     });
     expect(ix.data[8]).toBe(0);
+  });
+});
+
+describe('patchSwigWalletSigner (mechanism-B signer patch)', () => {
+  const SWIG_WALLET = new PublicKey('11111111111111111111111111111115');
+  function fakeCloseIx(): TransactionInstruction {
+    return new TransactionInstruction({
+      programId: VAULT,
+      keys: [
+        { pubkey: FIN, isSigner: false, isWritable: false },
+        { pubkey: SWIG_WALLET, isSigner: false, isWritable: false }, // close emits false
+        { pubkey: VAULT, isSigner: false, isWritable: true },
+      ],
+      data: Buffer.from([]),
+    });
+  }
+  it('flips the swig_wallet meta to isSigner:true (close_standby leg)', () => {
+    const ix = fakeCloseIx();
+    patchSwigWalletSigner(ix, SWIG_WALLET);
+    expect(ix.keys[1].isSigner).toBe(true);
+    expect(ix.keys[0].isSigner).toBe(false); // others untouched
+    expect(ix.keys[2].isWritable).toBe(true); // writable untouched
+  });
+  it('is idempotent (set_standby_reserve already isSigner:true)', () => {
+    const ix = new TransactionInstruction({
+      programId: VAULT,
+      keys: [{ pubkey: SWIG_WALLET, isSigner: true, isWritable: false }],
+      data: Buffer.from([]),
+    });
+    patchSwigWalletSigner(ix, SWIG_WALLET);
+    expect(ix.keys[0].isSigner).toBe(true);
+  });
+  it('throws if swig_wallet not present (wrong-ix guard)', () => {
+    const ix = new TransactionInstruction({
+      programId: VAULT, keys: [{ pubkey: FIN, isSigner: false, isWritable: false }], data: Buffer.from([]),
+    });
+    expect(() => patchSwigWalletSigner(ix, SWIG_WALLET)).toThrow(/not found in inner ix/);
   });
 });
