@@ -9,8 +9,15 @@ import {
   buildDrawCreditInstruction,
   buildRepayCreditInstruction,
   buildSeizeCollateralInstruction,
+  buildSetStandbyReserveInstruction,
+  buildCloseStandbyInstruction,
 } from '../instructions/index.js';
+import { buildSecp256r1VerifyInstruction } from '../precompile/index.js';
 import { defaultAssembleSignV2, type AssembleSignV2 } from './assembleSignV2.js';
+import {
+  defaultAssembleStandbyReserveSignV2,
+  type AssembleStandbyReserveSignV2,
+} from './assembleStandbyReserveSignV2.js';
 
 export interface DrawCreditParams {
   connection: Connection;
@@ -116,4 +123,106 @@ export async function seizeCollateral(p: SeizeCollateralParams): Promise<Transac
     transfers: [{ destinationAta: p.financierAta, amount: p.seizeAmount }],
   });
   return [vaultIx, ...signV2Ixs];
+}
+
+// ── set_standby_reserve (financier; mechanism B) ─────────────────────────────
+
+export interface SetStandbyReserveArgs {
+  connection: Connection;
+  financierSwig: PublicKey;
+  feePayer: PublicKey;
+  newReserve: bigint;
+  /** Financier swig role index holding the Program(dexter_vault) authority.
+   *  The financier swig must have this authority registered (a one-time setup;
+   *  see docs). */
+  programRoleId: number;
+  assembleStandbyReserveSignV2?: AssembleStandbyReserveSignV2;
+}
+
+/**
+ * Set/raise the financier's committed reserve. MECHANISM B: the vault ix runs as
+ * the INNER CPI of the financier swig's SignV2 (the swig_wallet signs it). UNLIKE
+ * drawCredit, this returns ONLY the SignV2 ixs — the vault ix is the inner CPI,
+ * not a separate top-level instruction. Returns instructions; does NOT send.
+ */
+export async function setStandbyReserve(p: SetStandbyReserveArgs): Promise<TransactionInstruction[]> {
+  const vaultIx = buildSetStandbyReserveInstruction({
+    financierSwig: p.financierSwig,
+    feePayer: p.feePayer,
+    newReserve: p.newReserve,
+  });
+  const assemble = p.assembleStandbyReserveSignV2 ?? defaultAssembleStandbyReserveSignV2;
+  return assemble({
+    connection: p.connection,
+    financierSwig: p.financierSwig,
+    feePayer: p.feePayer,
+    vaultIx,
+    programRoleId: p.programRoleId,
+  });
+}
+
+// ── close_standby (both legs) ────────────────────────────────────────────────
+
+export interface CloseStandbyArgs {
+  connection: Connection;
+  vaultPda: PublicKey;
+  financierSwig: PublicKey;
+  feePayer: PublicKey;
+  closer: 'user' | 'financier';
+  /** FINANCIER leg only: the swig role index holding Program(dexter_vault). */
+  programRoleId?: number;
+  /** USER leg only: the pre-signed passkey artifacts over buildCloseStandbyMessage. */
+  userPasskey?: {
+    publicKey: Uint8Array;       // 33-byte compressed P-256
+    signature: Uint8Array;       // 64-byte
+    /** The exact bytes the passkey signed. MUST equal
+     *  buildPrecompileMessage(clientDataJSON, authenticatorData) (= authenticatorData
+     *  || SHA-256(clientDataJSON)); a mismatch silently fails on-chain verification. */
+    precompileMessage: Uint8Array;
+    clientDataJSON: Uint8Array;
+    authenticatorData: Uint8Array;
+  };
+  assembleStandbyReserveSignV2?: AssembleStandbyReserveSignV2;
+}
+
+/**
+ * Close a standby. FINANCIER leg = mechanism B (vault ix is the SignV2 inner CPI;
+ * returns ONLY the SignV2 ixs). USER leg = a [secp256r1 precompile, close_standby{user}]
+ * pair (the precompile MUST immediately precede the close ix; the handler reads
+ * instructions_sysvar at current_index-1). Returns instructions; does NOT send.
+ */
+export async function closeStandby(p: CloseStandbyArgs): Promise<TransactionInstruction[]> {
+  if (p.closer === 'user') {
+    if (!p.userPasskey) throw new Error('closeStandby user leg requires userPasskey');
+    const precompileIx = buildSecp256r1VerifyInstruction(
+      p.userPasskey.publicKey,
+      p.userPasskey.signature,
+      p.userPasskey.precompileMessage,
+    );
+    const closeIx = buildCloseStandbyInstruction({
+      closer: 'user',
+      vaultPda: p.vaultPda,
+      financierSwig: p.financierSwig,
+      clientDataJSON: p.userPasskey.clientDataJSON,
+      authenticatorData: p.userPasskey.authenticatorData,
+    });
+    return [precompileIx, closeIx];   // precompile immediately precedes the vault ix
+  }
+  // financier leg
+  if (p.programRoleId === undefined) throw new Error('closeStandby financier leg requires programRoleId');
+  const vaultIx = buildCloseStandbyInstruction({
+    closer: 'financier',
+    vaultPda: p.vaultPda,
+    financierSwig: p.financierSwig,
+    clientDataJSON: new Uint8Array(),     // financier leg: handler ignores these
+    authenticatorData: new Uint8Array(),
+  });
+  const assemble = p.assembleStandbyReserveSignV2 ?? defaultAssembleStandbyReserveSignV2;
+  return assemble({
+    connection: p.connection,
+    financierSwig: p.financierSwig,
+    feePayer: p.feePayer,
+    vaultIx,
+    programRoleId: p.programRoleId,
+  });
 }
