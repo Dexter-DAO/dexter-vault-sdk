@@ -17,6 +17,14 @@
  * the harness. The caller MUST confirm the add tx before relying on roleId, and MUST
  * NOT interleave other authority adds on the same swig concurrently (would shift the
  * index) — same constraint the harness documents.
+ *
+ * ⚠️ USAGE CONTRACT — the returned `roleId` is NOT safe to use until BOTH:
+ *   (1) the returned instructions have been submitted AND CONFIRMED, and
+ *   (2) `waitForRole({ connection, swig: financierSwig, roleId })` has resolved.
+ * Mainnet RPCs are multi-replica: a confirmed addAuthority is not instantly visible
+ * to the next fetchSwig, so using roleId immediately can throw "Role not found"
+ * even though the role exists on-chain. Always waitForRole before passing roleId to
+ * setStandbyReserve / closeStandby. (Proven on mainnet 2026-06-08.)
  */
 import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { fetchSwig, getAddAuthorityInstructions } from '@swig-wallet/kit';
@@ -91,4 +99,56 @@ async function fetchSwigOrThrow(fetchSwigFn: typeof fetchSwig, rpc: any, financi
     );
   }
   return swig;
+}
+
+export interface WaitForRoleParams {
+  connection: Connection;
+  swig: PublicKey;
+  /** The role index to wait for (e.g. the roleId returned by buildRegisterProgramAuthority). */
+  roleId: number;
+  /** Poll interval (ms). Default 1000. */
+  pollIntervalMs?: number;
+  /** Give up after this long (ms). Default 30_000. */
+  timeoutMs?: number;
+  /** test injection */
+  _fetchSwig?: typeof fetchSwig;
+}
+
+/**
+ * Poll fetchSwig until the swig has at least `roleId + 1` roles — i.e. until the
+ * role at index `roleId` is VISIBLE to a fresh fetch. Mainnet RPCs (Helius) are
+ * multi-replica: a confirmed addAuthority tx is not instantly visible to the next
+ * fetchSwig, so getSignInstructions(swig, roleId, ...) can throw "Role not found"
+ * even though the role exists on-chain. Call this AFTER confirming the add tx and
+ * BEFORE using the roleId (mirrors the harness sendAddAuthorityResilient poll).
+ * Throws on timeout.
+ */
+export async function waitForRole(p: WaitForRoleParams): Promise<void> {
+  const fetchSwigFn = p._fetchSwig ?? fetchSwig;
+  const pollIntervalMs = p.pollIntervalMs ?? 1000;
+  const timeoutMs = p.timeoutMs ?? 30_000;
+  const rpc = getRpc(p.connection);
+  const swigKitAddr = kitAddress(p.swig.toBase58());
+  const start = Date.now();
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const swig = await fetchSwigFn(rpc, swigKitAddr);
+    const roles: any[] = (swig as any)?.roles ?? (swig as any)?.authorities ?? [];
+    if (roles.length > p.roleId) return; // role at index roleId is now visible
+    // DELIBERATE ORDER: timeout check BEFORE the sleep. This guarantees we never
+    // sleep past the deadline (and that timeoutMs < pollIntervalMs still does one
+    // real fetch then throws, rather than oversleeping). Do NOT move `await sleep`
+    // above this check — that reintroduces an oversleep-past-deadline bug.
+    if (Date.now() - start >= timeoutMs) {
+      throw new Error(
+        `waitForRole: role ${p.roleId} on swig ${p.swig.toBase58()} not visible after ${timeoutMs}ms ` +
+        `(saw ${roles.length} roles). The add may not have confirmed, or RPC replica lag exceeded the timeout.`,
+      );
+    }
+    await sleep(pollIntervalMs);
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
