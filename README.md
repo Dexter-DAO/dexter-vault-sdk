@@ -21,8 +21,6 @@
 
 ---
 
-<!-- GTM-DRAFT: product framing/wording pending GTM agent review before publish -->
-
 ## Open a tab for your agent
 
 You open a tab with a hard limit. Your agent spends against it, charge by charge, with no signature prompt per charge. When the work is done you settle and the tab closes. The spending limit is enforced by the Solana program at consensus, not by this SDK and not by Dexter. The SDK never holds a key that can overspend it, and you can verify the cap on-chain yourself.
