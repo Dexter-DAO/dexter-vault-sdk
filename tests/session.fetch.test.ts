@@ -13,16 +13,10 @@ import {
   SESSION_ACCOUNT_SIZE,
   SESSION_VAULT_OFFSET,
 } from '../src/constants/index.js';
+import { rawSessionAccount } from './helpers/sessionFixture.js';
 
 function rawSession(vault: PublicKey, counterparty: PublicKey, version: number): Buffer {
-  const data = Buffer.alloc(SESSION_ACCOUNT_SIZE);
-  Buffer.from(SESSION_ACCOUNT_DISCRIMINATOR).copy(data, 0);
-  data.writeUInt8(version, 8);
-  data.writeUInt8(255, 9);
-  vault.toBuffer().copy(data, 10);
-  data.writeBigInt64LE(4_000_000_000n, 82);
-  counterparty.toBuffer().copy(data, 90);
-  return data;
+  return rawSessionAccount({ vault, counterparty, version });
 }
 
 describe('fetchSessionAccount', () => {

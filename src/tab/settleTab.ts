@@ -46,7 +46,7 @@ const defaultReadPriorSpent = async (
   // still carries the true spent odometer — the on-chain ix referees expiry.
   if (!s || s.version === 0) {
     throw new Error(
-      `settleTab: no live session for counterparty ${allowedCounterparty.toBase58()}`,
+      `settleTab: no session record (absent or cleared) for counterparty ${allowedCounterparty.toBase58()} on vault ${vaultPda.toBase58()}`,
     );
   }
   return s.session.spent; // VERIFIED native bigint, no .toString()

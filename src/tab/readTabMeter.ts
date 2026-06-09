@@ -10,10 +10,15 @@ import { fetchSessionAccount, isSessionLive } from '../session/index.js';
 import type { SessionAccountState } from '../types.js';
 
 export interface TabMeter {
+  /** Cumulative settled against the cap. */
   spent: bigint;
+  /** The session cap. */
   maxAmount: bigint;
-  remaining: bigint;          // max(0, maxAmount - spent)
-  currentOutstanding: bigint; // V6: the revolving meter
+  /** max(0, maxAmount - spent) */
+  remaining: bigint;
+  /** V6: the revolving meter. */
+  currentOutstanding: bigint;
+  /** Unix seconds. */
   expiresAt: number;
 }
 
@@ -21,12 +26,15 @@ export async function readTabMeter(
   connection: Connection,
   vaultPda: PublicKey,
   allowedCounterparty: PublicKey,
-  fetch: typeof fetchSessionAccount = fetchSessionAccount,
 ): Promise<TabMeter> {
-  const s: SessionAccountState | null = await fetch(connection, vaultPda, allowedCounterparty);
+  const s: SessionAccountState | null = await fetchSessionAccount(
+    connection,
+    vaultPda,
+    allowedCounterparty,
+  );
   if (!s || !isSessionLive(s)) {
     throw new Error(
-      `readTabMeter: no live session for counterparty ${allowedCounterparty.toBase58()}`,
+      `readTabMeter: no live session for counterparty ${allowedCounterparty.toBase58()} on vault ${vaultPda.toBase58()}`,
     );
   }
   const { spent, maxAmount, currentOutstanding, expiresAt } = s.session;

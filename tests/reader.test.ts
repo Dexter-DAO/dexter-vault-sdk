@@ -3,14 +3,12 @@ import { PublicKey } from '@solana/web3.js';
 import { readVaultOnchain, readVaultFull } from '../src/reader/index.js';
 
 /**
- * Build a synthetic vault account buffer that matches the v2 layout. The
+ * Build a synthetic vault account buffer over the shared prefix layout
+ * (V2+ through V6 — fields before the session region never moved). The
  * shape mirrors what dexter-vault writes; if any offset drifts, the
  * reader/decoder fails — and that's the point.
  */
-function makeVaultAccountData(opts: {
-  hasWithdrawal: boolean;
-  hasActiveSession: boolean;
-}): Buffer {
+function makeVaultAccountData(opts: { hasWithdrawal: boolean }): Buffer {
   const baseLen =
     8 +    // discriminator
     1 +    // version
@@ -23,13 +21,12 @@ function makeVaultAccountData(opts: {
     (opts.hasWithdrawal ? 48 : 0) +
     32 +   // identity_claim
     32 +   // dexter_authority
-    1 +    // active_session Option tag
-    (opts.hasActiveSession ? 92 : 0);
+    1;     // V6 live_session_count (was V5's active_session Option tag)
 
   const data = Buffer.alloc(baseLen);
   // discriminator: any 8 bytes
   Buffer.from([0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE]).copy(data, 0);
-  data.writeUInt8(2, 8);  // version
+  data.writeUInt8(6, 8);  // version (slim reader is version-agnostic; nothing here asserts it)
   data.writeUInt8(255, 9);  // bump
   // passkey_pubkey: 33 bytes of 0xAA
   Buffer.alloc(33, 0xAA).copy(data, 10);
@@ -51,16 +48,8 @@ function makeVaultAccountData(opts: {
   Buffer.alloc(32, 0xDD).copy(data, cursor); cursor += 32;
   // dexter_authority
   Buffer.alloc(32, 0xEE).copy(data, cursor); cursor += 32;
-  // active_session tag
-  data.writeUInt8(opts.hasActiveSession ? 1 : 0, cursor); cursor += 1;
-  if (opts.hasActiveSession) {
-    Buffer.alloc(32, 0xFF).copy(data, cursor); cursor += 32;          // session_pubkey
-    data.writeBigUInt64LE(1_000_000n, cursor); cursor += 8;            // max_amount
-    data.writeBigInt64LE(1735689999n, cursor); cursor += 8;            // expires_at
-    Buffer.alloc(32, 0x11).copy(data, cursor); cursor += 32;          // allowed_counterparty
-    data.writeUInt32LE(42, cursor); cursor += 4;                       // nonce
-    data.writeBigUInt64LE(50_000n, cursor); cursor += 8;               // spent
-  }
+  // live_session_count: 0
+  data.writeUInt8(0, cursor); cursor += 1;
   return data;
 }
 
@@ -80,13 +69,13 @@ describe('readVaultOnchain (slim)', () => {
   });
 
   test('no pending withdrawal → pendingWithdrawal=null', async () => {
-    const data = makeVaultAccountData({ hasWithdrawal: false, hasActiveSession: false });
+    const data = makeVaultAccountData({ hasWithdrawal: false });
     const result = await readVaultOnchain(makeConn(data), PDA);
     expect(result).toMatchSnapshot();
   });
 
   test('with pending withdrawal → decoded', async () => {
-    const data = makeVaultAccountData({ hasWithdrawal: true, hasActiveSession: false });
+    const data = makeVaultAccountData({ hasWithdrawal: true });
     const result = await readVaultOnchain(makeConn(data), PDA);
     expect(result).toMatchSnapshot();
   });

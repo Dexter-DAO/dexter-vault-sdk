@@ -2,14 +2,14 @@ import { describe, test, expect, vi } from 'vitest';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { readTabMeter } from '../src/tab/readTabMeter.js';
 import { deriveSessionPda } from '../src/session/index.js';
-import { SESSION_ACCOUNT_DISCRIMINATOR, SESSION_ACCOUNT_SIZE } from '../src/constants/index.js';
+import { rawSessionAccount } from './helpers/sessionFixture.js';
 
 const VAULT = new PublicKey('SysvarC1ock11111111111111111111111111111111');
 const COUNTERPARTY = new PublicKey('SysvarRent111111111111111111111111111111111');
 const FUTURE = 4_000_000_000; // ~2096, past any test clock
 const PAST = 1_000_000_000;   // 2001
 
-/** Real 162-byte SessionAccount fixture (same pattern as tests/session.fetch.test.ts). */
+/** This file's defaults over the shared 162-byte fixture (tests/helpers/sessionFixture.ts). */
 function rawSession(opts: {
   version?: number;
   maxAmount?: bigint;
@@ -17,19 +17,15 @@ function rawSession(opts: {
   spent?: bigint;
   currentOutstanding?: bigint;
 } = {}): Buffer {
-  const data = Buffer.alloc(SESSION_ACCOUNT_SIZE);
-  Buffer.from(SESSION_ACCOUNT_DISCRIMINATOR).copy(data, 0);
-  data.writeUInt8(opts.version ?? 1, 8);             // version
-  data.writeUInt8(255, 9);                           // bump
-  VAULT.toBuffer().copy(data, 10);                   // vault
-  Buffer.alloc(32, 0x07).copy(data, 42);             // session_pubkey
-  data.writeBigUInt64LE(opts.maxAmount ?? 5_000_000n, 74);
-  data.writeBigInt64LE(BigInt(opts.expiresAt ?? FUTURE), 82);
-  COUNTERPARTY.toBuffer().copy(data, 90);            // allowed_counterparty
-  data.writeUInt32LE(42, 122);                       // nonce
-  data.writeBigUInt64LE(opts.spent ?? 3_000_000n, 126);
-  data.writeBigUInt64LE(opts.currentOutstanding ?? 250_000n, 134);
-  return data;
+  return rawSessionAccount({
+    vault: VAULT,
+    counterparty: COUNTERPARTY,
+    version: opts.version,
+    maxAmount: opts.maxAmount ?? 5_000_000n,
+    expiresAt: BigInt(opts.expiresAt ?? FUTURE),
+    spent: opts.spent ?? 3_000_000n,
+    currentOutstanding: opts.currentOutstanding ?? 250_000n,
+  });
 }
 
 function connWith(data: Buffer | null): Connection {
@@ -61,7 +57,7 @@ describe('readTabMeter (V6: per-(vault, counterparty) session PDA)', () => {
 
   test('throws when the session PDA is absent', async () => {
     await expect(readTabMeter(connWith(null), VAULT, COUNTERPARTY)).rejects.toThrow(
-      new RegExp(`no live session for counterparty ${COUNTERPARTY.toBase58()}`),
+      `readTabMeter: no live session for counterparty ${COUNTERPARTY.toBase58()} on vault ${VAULT.toBase58()}`,
     );
   });
 

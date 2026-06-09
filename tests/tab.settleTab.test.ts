@@ -2,7 +2,7 @@ import { describe, test, expect, vi } from 'vitest';
 import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { settleTab } from '../src/tab/settleTab.js';
 import { deriveSessionPda } from '../src/session/index.js';
-import { SESSION_ACCOUNT_DISCRIMINATOR, SESSION_ACCOUNT_SIZE } from '../src/constants/index.js';
+import { rawSessionAccount } from './helpers/sessionFixture.js';
 
 const VAULT = new PublicKey('SysvarC1ock11111111111111111111111111111111');
 const SWIG = new PublicKey('SysvarRent111111111111111111111111111111111');
@@ -29,18 +29,16 @@ const baseParams = {
   allowedCounterparty: COUNTERPARTY,
 };
 
-/** Real 162-byte SessionAccount fixture (same pattern as tests/session.fetch.test.ts). */
+/** This file's defaults over the shared 162-byte fixture (tests/helpers/sessionFixture.ts). */
 function rawSession(opts: { version?: number; expiresAt?: number; spent?: bigint } = {}): Buffer {
-  const data = Buffer.alloc(SESSION_ACCOUNT_SIZE);
-  Buffer.from(SESSION_ACCOUNT_DISCRIMINATOR).copy(data, 0);
-  data.writeUInt8(opts.version ?? 1, 8);
-  data.writeUInt8(255, 9);
-  VAULT.toBuffer().copy(data, 10);
-  data.writeBigUInt64LE(50_000_000n, 74); // max_amount
-  data.writeBigInt64LE(BigInt(opts.expiresAt ?? FUTURE), 82);
-  COUNTERPARTY.toBuffer().copy(data, 90);
-  data.writeBigUInt64LE(opts.spent ?? 2_000_000n, 126);
-  return data;
+  return rawSessionAccount({
+    vault: VAULT,
+    counterparty: COUNTERPARTY,
+    version: opts.version,
+    maxAmount: 50_000_000n,
+    expiresAt: BigInt(opts.expiresAt ?? FUTURE),
+    spent: opts.spent ?? 2_000_000n,
+  });
 }
 
 function connWith(data: Buffer | null): Connection {
@@ -134,7 +132,9 @@ describe('settleTab', () => {
         cumulativeAmount: 5_000_000n,
         assembleSignV2: async () => [],
       }),
-    ).rejects.toThrow(new RegExp(`no live session for counterparty ${COUNTERPARTY.toBase58()}`));
+    ).rejects.toThrow(
+      `settleTab: no session record (absent or cleared) for counterparty ${COUNTERPARTY.toBase58()} on vault ${VAULT.toBase58()}`,
+    );
   });
 
   test('default prior-spent read throws on a cleared (version 0) session', async () => {
@@ -145,7 +145,7 @@ describe('settleTab', () => {
         cumulativeAmount: 5_000_000n,
         assembleSignV2: async () => [],
       }),
-    ).rejects.toThrow(/no live session/);
+    ).rejects.toThrow(/no session record \(absent or cleared\)/);
   });
 
   test('rejects a non-monotonic settle (cumulative <= priorSpent)', async () => {
