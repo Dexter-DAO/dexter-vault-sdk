@@ -5,6 +5,7 @@ import { buildRecoverAbandonedLockInstruction } from '../src/instructions/locked
 import { buildSettleLockedVoucherInstruction } from '../src/instructions/lockedClaim.js';
 import { buildLockVoucherInstruction, deriveLockedClaimPda } from '../src/instructions/lockedClaim.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
+import { deriveSessionPda } from '../src/session/index.js';
 import { DEXTER_VAULT_PROGRAM_ID, DISCRIMINATORS, INSTRUCTIONS_SYSVAR_ID } from '../src/constants/index.js';
 
 const CLAIM = new PublicKey('11111111111111111111111111111111');
@@ -95,11 +96,12 @@ describe('recoverAbandonedLock', () => {
 });
 
 describe('lockVoucher', () => {
-  it('emits 10 accounts in canonical order with the claim PDA derived, and correct arg layout', () => {
+  it('emits 11 accounts in canonical order with the session + claim PDAs derived, and correct arg layout', () => {
     const VAULT = new PublicKey('SysvarC1ock11111111111111111111111111111111');
     const USDC_ATA = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
     const SWIG = new PublicKey('SysvarRent111111111111111111111111111111111');
     const PAYER = new PublicKey('So11111111111111111111111111111111111111112');
+    const COUNTERPARTY = new PublicKey('Ed25519SigVerify111111111111111111111111111');
     const voucherHash = new Uint8Array(32).fill(9);
     const channelId = new Uint8Array(32).fill(1);
     const ix = buildLockVoucherInstruction({
@@ -109,6 +111,7 @@ describe('lockVoucher', () => {
       sellerHolder: HOLDER,
       dexterAuthority: NEW_HOLDER,
       payer: PAYER,
+      allowedCounterparty: COUNTERPARTY,
       channelId,
       cumulativeAmount: 1_000_000n,
       sequenceNumber: 1,
@@ -116,7 +119,8 @@ describe('lockVoucher', () => {
       maturityAt: null,
       holderRecoveryAt: 7_776_000n,
     });
-    expect(ix.keys.length).toBe(10);
+    expect(ix.keys.length).toBe(11);
+    const [expectedSession] = deriveSessionPda(VAULT, COUNTERPARTY);
     const expectedClaim = deriveLockedClaimPda(VAULT, voucherHash);
     expect(ix.keys[0].pubkey.equals(VAULT)).toBe(true);
     expect(ix.keys[0].isWritable).toBe(true);
@@ -124,20 +128,24 @@ describe('lockVoucher', () => {
     expect(ix.keys[1].isWritable).toBe(false);
     expect(ix.keys[2].pubkey.equals(SWIG)).toBe(true);
     expect(ix.keys[3].pubkey.equals(deriveSwigWalletAddress(SWIG))).toBe(true);
-    expect(ix.keys[4].pubkey.equals(expectedClaim)).toBe(true);
+    // V6: session PDA inserted at index 4 (writable)
+    expect(ix.keys[4].pubkey.equals(expectedSession)).toBe(true);
     expect(ix.keys[4].isWritable).toBe(true);
-    expect(ix.keys[5].pubkey.equals(HOLDER)).toBe(true);
-    expect(ix.keys[5].isSigner).toBe(true);
-    expect(ix.keys[6].pubkey.equals(NEW_HOLDER)).toBe(true);
+    expect(ix.keys[5].pubkey.equals(expectedClaim)).toBe(true);
+    expect(ix.keys[5].isWritable).toBe(true);
+    expect(ix.keys[6].pubkey.equals(HOLDER)).toBe(true);
     expect(ix.keys[6].isSigner).toBe(true);
-    expect(ix.keys[7].pubkey.equals(PAYER)).toBe(true);
+    expect(ix.keys[7].pubkey.equals(NEW_HOLDER)).toBe(true);
     expect(ix.keys[7].isSigner).toBe(true);
-    expect(ix.keys[7].isWritable).toBe(true);
-    expect(ix.keys[8].pubkey.equals(SystemProgram.programId)).toBe(true);
-    expect(ix.keys[9].pubkey.equals(INSTRUCTIONS_SYSVAR_ID)).toBe(true);
-    expect(ix.keys[9].isWritable).toBe(false);
+    expect(ix.keys[8].pubkey.equals(PAYER)).toBe(true);
+    expect(ix.keys[8].isSigner).toBe(true);
+    expect(ix.keys[8].isWritable).toBe(true);
+    expect(ix.keys[9].pubkey.equals(SystemProgram.programId)).toBe(true);
+    expect(ix.keys[10].pubkey.equals(INSTRUCTIONS_SYSVAR_ID)).toBe(true);
+    expect(ix.keys[10].isWritable).toBe(false);
     // data: disc(8)+channel(32)+cum(8)+seq(4)+hash(32)+optI64(maturity:None=1)+optI64(recovery:Some=9)
-    expect(ix.data.length).toBe(8 + 32 + 8 + 4 + 32 + 1 + 9);
+    //       +counterparty(32, V6, appended LAST)
+    expect(ix.data.length).toBe(8 + 32 + 8 + 4 + 32 + 1 + 9 + 32);
     expect(Buffer.from(ix.data.subarray(0, 8))).toEqual(Buffer.from(DISCRIMINATORS.lock_voucher));
     // channel_id at [8,40)
     expect(Array.from(ix.data.subarray(8, 40))).toEqual(Array(32).fill(1));
@@ -152,5 +160,7 @@ describe('lockVoucher', () => {
     // holder_recovery_at Some at [85]=0x01, i64 at [86,94)
     expect(ix.data[85]).toBe(1);
     expect(ix.data.readBigInt64LE(86)).toBe(7_776_000n);
+    // allowed_counterparty at [94,126) — the LAST 32 bytes (after variable-length options)
+    expect(Buffer.from(ix.data.subarray(94, 126))).toEqual(COUNTERPARTY.toBuffer());
   });
 });

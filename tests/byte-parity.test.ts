@@ -298,25 +298,47 @@ describe('instruction data layouts', () => {
     expect(ix.keys[7]).toEqual({ pubkey: SystemProgram.programId, isSigner: false, isWritable: false });
   });
 
-  test('revoke_session_key', () => {
+  test('revoke_session_key', async () => {
     const ix = buildRevokeSessionKeyInstruction({
       vaultPda: KNOWN_VAULT_PDA,
+      allowedCounterparty: KNOWN_COUNTERPARTY,
       clientDataJSON: KNOWN_CLIENT_DATA,
       authenticatorData: KNOWN_AUTH_DATA,
     });
+    // V6: allowed_counterparty(32) FIRST, then the two vecs.
+    expect(ix.data.length).toBe(8 + 32 + (4 + 4) + (4 + 4));
+    expect(Buffer.from(ix.data.subarray(8, 40))).toEqual(KNOWN_COUNTERPARTY.toBuffer());
     expect(new Uint8Array(ix.data)).toMatchSnapshot('revoke_session_key data');
+    // V6 accounts: vault(w), session PDA(w), instructions_sysvar(r).
+    const { deriveSessionPda } = await import('../src/session/index.js');
+    const { INSTRUCTIONS_SYSVAR_ID } = await import('../src/constants/index.js');
+    const [expectedSessionPda] = deriveSessionPda(KNOWN_VAULT_PDA, KNOWN_COUNTERPARTY);
+    expect(ix.keys).toEqual([
+      { pubkey: KNOWN_VAULT_PDA, isSigner: false, isWritable: true },
+      { pubkey: expectedSessionPda, isSigner: false, isWritable: true },
+      { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+    ]);
   });
 
-  test('settle_tab_voucher', () => {
+  test('settle_tab_voucher', async () => {
     const ix = buildSettleTabVoucherInstruction({
       vaultPda: KNOWN_VAULT_PDA,
       swigAddress: KNOWN_VAULT_PDA,
       dexterAuthority: KNOWN_COUNTERPARTY,
+      allowedCounterparty: KNOWN_COUNTERPARTY,
       channelId: KNOWN_CHANNEL_ID,
       cumulativeAmount: 12_345n,
       sequenceNumber: 7,
     });
+    // V6: allowed_counterparty(32) appended LAST after channel/cumulative/sequence.
+    expect(ix.data.length).toBe(8 + 32 + 8 + 4 + 32);
+    expect(Buffer.from(ix.data.subarray(52, 84))).toEqual(KNOWN_COUNTERPARTY.toBuffer());
     expect(new Uint8Array(ix.data)).toMatchSnapshot('settle_tab_voucher data');
+    // V6: session PDA inserted at index 3 (writable) — 6 accounts total.
+    const { deriveSessionPda } = await import('../src/session/index.js');
+    const [expectedSessionPda] = deriveSessionPda(KNOWN_VAULT_PDA, KNOWN_COUNTERPARTY);
+    expect(ix.keys).toHaveLength(6);
+    expect(ix.keys[3]).toEqual({ pubkey: expectedSessionPda, isSigner: false, isWritable: true });
     expect(ix.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable }))).toMatchSnapshot('settle_tab_voucher keys');
   });
 
@@ -425,15 +447,34 @@ describe('instruction data layouts', () => {
     expect(Buffer.from(ix.data.subarray(0, 8))).toEqual(Buffer.from(SET_SWIG_ATOMIC_DISCRIMINATOR));
   });
 
-  test('settle_voucher (legacy counter ix)', () => {
+  test('settle_voucher (counter ix)', async () => {
     const ix = buildSettleVoucherInstruction({
       vaultPda: KNOWN_VAULT_PDA,
       dexterAuthority: KNOWN_COUNTERPARTY,
+      allowedCounterparty: KNOWN_COUNTERPARTY,
       amount: 12_345n,
       increment: true,
     });
+    // V6: allowed_counterparty(32) appended LAST after amount(u64) + increment(bool).
+    expect(ix.data.length).toBe(8 + 8 + 1 + 32);
+    expect(Buffer.from(ix.data.subarray(17, 49))).toEqual(KNOWN_COUNTERPARTY.toBuffer());
     expect(new Uint8Array(ix.data)).toMatchSnapshot('settle_voucher data');
+    // V6: increment=true path carries the REAL session PDA at index 2 (writable).
+    const { deriveSessionPda } = await import('../src/session/index.js');
+    const [expectedSessionPda] = deriveSessionPda(KNOWN_VAULT_PDA, KNOWN_COUNTERPARTY);
+    expect(ix.keys).toHaveLength(3);
+    expect(ix.keys[2]).toEqual({ pubkey: expectedSessionPda, isSigner: false, isWritable: true });
     expect(ix.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable }))).toMatchSnapshot('settle_voucher keys');
+
+    // increment=false (close) path: Anchor optional-account None sentinel = program ID.
+    const closeIx = buildSettleVoucherInstruction({
+      vaultPda: KNOWN_VAULT_PDA,
+      dexterAuthority: KNOWN_COUNTERPARTY,
+      allowedCounterparty: KNOWN_COUNTERPARTY,
+      amount: 12_345n,
+      increment: false,
+    });
+    expect(closeIx.keys[2]).toEqual({ pubkey: KNOWN_PROGRAM_ID, isSigner: false, isWritable: false });
   });
 
   test('buildSetSwigAtomicFromIdentity — produces same bytes as low-level builder', async () => {

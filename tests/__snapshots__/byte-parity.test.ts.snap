@@ -71,7 +71,7 @@ exports[`instruction data layouts > register_session_key (V2 — carries max_rev
 
 exports[`instruction data layouts > request_withdrawal > request_withdrawal data 1`] = `Uint8Array(72) "fb5579cd38c90cb1a08601000000000006920dec2fea71b5b723814d742da9031c83e75fdb795d568e75478020000000808574670000000004000000010203040400000005060708"`;
 
-exports[`instruction data layouts > revoke_session_key > revoke_session_key data 1`] = `Uint8Array(24) "51c0206e6874909704000000010203040400000005060708"`;
+exports[`instruction data layouts > revoke_session_key > revoke_session_key data 1`] = `Uint8Array(56) "51c0206e68749097037d46d67c93fbbe12f9428f838d40ff0570744927f48a64fcca70448000000004000000010203040400000005060708"`;
 
 exports[`instruction data layouts > rotate_dexter_authority > rotate_dexter_authority data 1`] = `Uint8Array(40) "913c0477b4cdec8606920dec2fea71b5b723814d742da9031c83e75fdb795d568e75478020000000"`;
 
@@ -128,7 +128,7 @@ exports[`instruction data layouts > set_swig_atomic — instruction byte layout 
 ]
 `;
 
-exports[`instruction data layouts > settle_tab_voucher > settle_tab_voucher data 1`] = `Uint8Array(52) "ad16621f6e813ba1bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb393000000000000007000000"`;
+exports[`instruction data layouts > settle_tab_voucher > settle_tab_voucher data 1`] = `Uint8Array(84) "ad16621f6e813ba1bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb393000000000000007000000037d46d67c93fbbe12f9428f838d40ff0570744927f48a64fcca704480000000"`;
 
 exports[`instruction data layouts > settle_tab_voucher > settle_tab_voucher keys 1`] = `
 [
@@ -148,6 +148,11 @@ exports[`instruction data layouts > settle_tab_voucher > settle_tab_voucher keys
     "pubkey": "Sysvar1nstructions1111111111111111111111111",
   },
   {
+    "isSigner": false,
+    "isWritable": true,
+    "pubkey": "71vXSWf95fACkyqoC9p6R8PtqmTqT8s54pd2rKGP8gc8",
+  },
+  {
     "isSigner": true,
     "isWritable": false,
     "pubkey": "Ed25519SigVerify111111111111111111111111111",
@@ -160,9 +165,9 @@ exports[`instruction data layouts > settle_tab_voucher > settle_tab_voucher keys
 ]
 `;
 
-exports[`instruction data layouts > settle_voucher (legacy counter ix) > settle_voucher data 1`] = `Uint8Array(17) "90b080dc9c4f2936393000000000000001"`;
+exports[`instruction data layouts > settle_voucher (counter ix) > settle_voucher data 1`] = `Uint8Array(49) "90b080dc9c4f2936393000000000000001037d46d67c93fbbe12f9428f838d40ff0570744927f48a64fcca704480000000"`;
 
-exports[`instruction data layouts > settle_voucher (legacy counter ix) > settle_voucher keys 1`] = `
+exports[`instruction data layouts > settle_voucher (counter ix) > settle_voucher keys 1`] = `
 [
   {
     "isSigner": false,
@@ -173,6 +178,11 @@ exports[`instruction data layouts > settle_voucher (legacy counter ix) > settle_
     "isSigner": true,
     "isWritable": false,
     "pubkey": "Ed25519SigVerify111111111111111111111111111",
+  },
+  {
+    "isSigner": false,
+    "isWritable": true,
+    "pubkey": "71vXSWf95fACkyqoC9p6R8PtqmTqT8s54pd2rKGP8gc8",
   },
 ]
 `;
