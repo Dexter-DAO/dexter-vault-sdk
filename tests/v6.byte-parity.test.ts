@@ -14,6 +14,7 @@ import {
   buildSettleTabVoucherInstruction,
   buildSettleVoucherInstruction,
 } from '../src/instructions/index.js';
+import { buildLockVoucherInstruction, deriveLockedClaimPda } from '../src/instructions/lockedClaim.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
 import { deriveSessionPda, buildSiblingAccountMetas } from '../src/session/index.js';
 
@@ -308,5 +309,72 @@ describe('buildSettleVoucherInstruction (V6)', () => {
       expect(ix.data[16]).toBe(increment ? 1 : 0);
       expect(Buffer.from(ix.data.subarray(17, 49)).equals(counterparty.toBuffer())).toBe(true);
     }
+  });
+});
+
+describe('buildLockVoucherInstruction (V6)', () => {
+  const vaultPda = PublicKey.unique();
+  const vaultUsdcAta = PublicKey.unique();
+  const swigAddress = PublicKey.unique();
+  const sellerHolder = PublicKey.unique();
+  const dexterAuthority = PublicKey.unique();
+  const payer = PublicKey.unique();
+  const counterparty = PublicKey.unique();
+  const channelId = new Uint8Array(32).fill(2);
+  const voucherHash = new Uint8Array(32).fill(8);
+
+  const base = {
+    vaultPda,
+    vaultUsdcAta,
+    swigAddress,
+    sellerHolder,
+    dexterAuthority,
+    payer,
+    allowedCounterparty: counterparty,
+    channelId,
+    cumulativeAmount: 777n,
+    sequenceNumber: 9,
+    voucherHash,
+  };
+
+  test('accounts: 11 keys with session PDA inserted at index 4 (writable), claim at 5', () => {
+    const ix = buildLockVoucherInstruction({ ...base, maturityAt: null, holderRecoveryAt: null });
+    const [sessionPda] = deriveSessionPda(vaultPda, counterparty);
+    const claimPda = deriveLockedClaimPda(vaultPda, voucherHash);
+    expect(ix.keys).toEqual([
+      { pubkey: vaultPda, isSigner: false, isWritable: true },
+      { pubkey: vaultUsdcAta, isSigner: false, isWritable: false },
+      { pubkey: swigAddress, isSigner: false, isWritable: false },
+      { pubkey: deriveSwigWalletAddress(swigAddress), isSigner: false, isWritable: false },
+      { pubkey: sessionPda, isSigner: false, isWritable: true },
+      { pubkey: claimPda, isSigner: false, isWritable: true },
+      { pubkey: sellerHolder, isSigner: true, isWritable: false },
+      { pubkey: dexterAuthority, isSigner: true, isWritable: false },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+    ]);
+  });
+
+  test('args with both Options None: counterparty(32) LAST', () => {
+    const ix = buildLockVoucherInstruction({ ...base, maturityAt: null, holderRecoveryAt: null });
+    expect(ix.data.length).toBe(8 + 32 + 8 + 4 + 32 + 1 + 1 + 32);
+    expect(Array.from(ix.data.subarray(8, 40))).toEqual(Array(32).fill(2));
+    expect(ix.data.readBigUInt64LE(40)).toBe(777n);
+    expect(ix.data.readUInt32LE(48)).toBe(9);
+    expect(Array.from(ix.data.subarray(52, 84))).toEqual(Array(32).fill(8));
+    expect(ix.data[84]).toBe(0); // maturity_at None
+    expect(ix.data[85]).toBe(0); // holder_recovery_at None
+    expect(Buffer.from(ix.data.subarray(ix.data.length - 32)).equals(counterparty.toBuffer())).toBe(true);
+  });
+
+  test('args with both Options Some: counterparty still the LAST 32 bytes (after variable-length options)', () => {
+    const ix = buildLockVoucherInstruction({ ...base, maturityAt: 1n, holderRecoveryAt: 2n });
+    expect(ix.data.length).toBe(8 + 32 + 8 + 4 + 32 + 9 + 9 + 32);
+    expect(ix.data[84]).toBe(1); // maturity_at Some tag
+    expect(ix.data.readBigInt64LE(85)).toBe(1n);
+    expect(ix.data[93]).toBe(1); // holder_recovery_at Some tag
+    expect(ix.data.readBigInt64LE(94)).toBe(2n);
+    expect(Buffer.from(ix.data.subarray(ix.data.length - 32)).equals(counterparty.toBuffer())).toBe(true);
   });
 });

@@ -12,6 +12,7 @@ import {
   INSTRUCTIONS_SYSVAR_ID,
   LOCKED_CLAIM_SEED,
 } from '../constants/index.js';
+import { deriveSessionPda } from '../session/index.js';
 import { deriveSwigWalletAddress } from './withdraw.js';
 
 // ── local encoding helper (per-file convention, matches setSwig.ts) ──
@@ -165,6 +166,9 @@ export interface LockVoucherParams {
   sellerHolder: PublicKey;
   dexterAuthority: PublicKey;
   payer: PublicKey;
+  /** V6: the seller this voucher pays — names the session PDA (seed) and is
+   *  the LAST Borsh arg (after the variable-length Option<i64> fields). */
+  allowedCounterparty: PublicKey;
   channelId: Uint8Array;       // 32 bytes
   cumulativeAmount: bigint;
   sequenceNumber: number;
@@ -174,19 +178,21 @@ export interface LockVoucherParams {
 }
 
 /**
- * Account order MUST match the on-chain struct:
- *   [0] vault               (writable)
- *   [1] vault_usdc_ata      (readonly)
- *   [2] swig                (readonly)
- *   [3] swig_wallet_address (readonly, PDA)
- *   [4] claim               (writable, PDA [LOCKED_CLAIM_SEED, vault, voucher_hash])
- *   [5] seller_holder       (signer)
- *   [6] dexter_authority    (signer)
- *   [7] payer               (signer, writable)
- *   [8] system_program      (readonly)
- *   [9] instructions_sysvar (readonly)
+ * Account order MUST match the on-chain struct (V6, 11 accounts):
+ *   [0]  vault               (writable)
+ *   [1]  vault_usdc_ata      (readonly)
+ *   [2]  swig                (readonly)
+ *   [3]  swig_wallet_address (readonly, PDA)
+ *   [4]  session             (writable, PDA [b"session", vault, allowed_counterparty])
+ *   [5]  claim               (writable, PDA [LOCKED_CLAIM_SEED, vault, voucher_hash])
+ *   [6]  seller_holder       (signer)
+ *   [7]  dexter_authority    (signer)
+ *   [8]  payer               (signer, writable)
+ *   [9]  system_program      (readonly)
+ *   [10] instructions_sysvar (readonly)
  * Data: disc || channel_id(32) || cumulative(u64) || sequence(u32)
  *       || voucher_hash(32) || option_i64(maturity_at) || option_i64(holder_recovery_at)
+ *       || allowed_counterparty(32)
  */
 export function buildLockVoucherInstruction(p: LockVoucherParams): TransactionInstruction {
   const data = Buffer.concat([
@@ -197,8 +203,10 @@ export function buildLockVoucherInstruction(p: LockVoucherParams): TransactionIn
     Buffer.from(p.voucherHash),
     encodeOptionI64(p.maturityAt),
     encodeOptionI64(p.holderRecoveryAt),
+    p.allowedCounterparty.toBuffer(),
   ]);
   const swigWalletAddress = deriveSwigWalletAddress(p.swigAddress);
+  const [sessionPda] = deriveSessionPda(p.vaultPda, p.allowedCounterparty);
   const claimPda = deriveLockedClaimPda(p.vaultPda, p.voucherHash);
   return new TransactionInstruction({
     programId: DEXTER_VAULT_PROGRAM_ID,
@@ -207,6 +215,7 @@ export function buildLockVoucherInstruction(p: LockVoucherParams): TransactionIn
       { pubkey: p.vaultUsdcAta, isSigner: false, isWritable: false },
       { pubkey: p.swigAddress, isSigner: false, isWritable: false },
       { pubkey: swigWalletAddress, isSigner: false, isWritable: false },
+      { pubkey: sessionPda, isSigner: false, isWritable: true },
       { pubkey: claimPda, isSigner: false, isWritable: true },
       { pubkey: p.sellerHolder, isSigner: true, isWritable: false },
       { pubkey: p.dexterAuthority, isSigner: true, isWritable: false },
