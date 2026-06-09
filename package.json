@@ -1,7 +1,7 @@
 {
   "name": "@dexterai/vault",
   "version": "0.7.0",
-  "description": "Canonical off-chain mirror of the dexter-vault Solana Anchor program — Solana instruction builders, byte-precise message encoders, account decoders, secp256r1/Ed25519 precompile helpers, counterfactual Swig derivation, and signer interfaces. The single source of truth for any TypeScript code that produces bytes the on-chain program will verify.",
+  "description": "Canonical off-chain mirror of the dexter-vault Solana Anchor program \u2014 Solana instruction builders, byte-precise message encoders, account decoders, secp256r1/Ed25519 precompile helpers, counterfactual Swig derivation, and signer interfaces. The single source of truth for any TypeScript code that produces bytes the on-chain program will verify.",
   "author": "Dexter",
   "license": "MIT",
   "type": "module",
@@ -87,6 +87,55 @@
       "require": "./dist/connect/index.cjs"
     },
     "./idl/dexter_vault.json": "./dist/idl/dexter_vault.json"
+  },
+  "typesVersions": {
+    "*": {
+      "types": [
+        "./dist/types.d.ts"
+      ],
+      "constants": [
+        "./dist/constants/index.d.ts"
+      ],
+      "counterfactual": [
+        "./dist/counterfactual.d.ts"
+      ],
+      "factoring": [
+        "./dist/factoring/index.d.ts"
+      ],
+      "instructions": [
+        "./dist/instructions/index.d.ts"
+      ],
+      "kit": [
+        "./dist/kit/index.d.ts"
+      ],
+      "messages": [
+        "./dist/messages/index.d.ts"
+      ],
+      "reader": [
+        "./dist/reader/index.d.ts"
+      ],
+      "precompile": [
+        "./dist/precompile/index.d.ts"
+      ],
+      "session": [
+        "./dist/session/index.d.ts"
+      ],
+      "signers": [
+        "./dist/signers/types.d.ts"
+      ],
+      "signers/node": [
+        "./dist/signers/node/index.d.ts"
+      ],
+      "signers/browser": [
+        "./dist/signers/browser/index.d.ts"
+      ],
+      "tab": [
+        "./dist/tab/index.d.ts"
+      ],
+      "connect": [
+        "./dist/connect/index.d.ts"
+      ]
+    }
   },
   "files": [
     "dist",
