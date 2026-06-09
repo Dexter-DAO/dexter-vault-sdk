@@ -16,12 +16,13 @@
  *    siblings (decrementing live_session_count), so a stale list double-counts
  *    a since-swept sibling and fails the completeness equation.
  */
-import { Connection, PublicKey } from '@solana/web3.js';
+import { Connection, PublicKey, type AccountMeta } from '@solana/web3.js';
 import bs58 from 'bs58';
 import {
   DEXTER_VAULT_PROGRAM_ID,
   SESSION_ACCOUNT_DISCRIMINATOR,
   SESSION_ACCOUNT_SIZE,
+  SESSION_VAULT_OFFSET,
 } from '../constants/index.js';
 import { decodeSessionAccount } from './decode.js';
 import { deriveSessionPda } from './derive.js';
@@ -54,7 +55,7 @@ export async function fetchVaultSessionAccounts(
     filters: [
       { dataSize: SESSION_ACCOUNT_SIZE },
       { memcmp: { offset: 0, bytes: bs58.encode(SESSION_ACCOUNT_DISCRIMINATOR) } },
-      { memcmp: { offset: 10, bytes: vault.toBase58() } },
+      { memcmp: { offset: SESSION_VAULT_OFFSET, bytes: vault.toBase58() } },
     ],
   });
   return raw
@@ -67,7 +68,7 @@ export async function fetchVaultSessionAccounts(
 export function buildSiblingAccountMetas(
   siblingPdas: PublicKey[],
   targetSessionPda: PublicKey,
-): { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] {
+): AccountMeta[] {
   const seen = new Set<string>();
   const unique: PublicKey[] = [];
   for (const k of siblingPdas) {

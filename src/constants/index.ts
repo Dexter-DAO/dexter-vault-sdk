@@ -54,6 +54,10 @@ export const SESSION_ACCOUNT_DISCRIMINATOR = Uint8Array.from([74, 34, 65, 133, 9
 // Total SessionAccount size: 8 (discriminator) + 154 (INIT_SPACE). gPA dataSize filter.
 export const SESSION_ACCOUNT_SIZE = 162;
 
+// Byte offset of the `vault` field inside SessionAccount (8 disc + version u8 + bump u8).
+// The gPA memcmp filter keys on this; the full layout map lives in src/session/decode.ts.
+export const SESSION_VAULT_OFFSET = 10;
+
 // ── Anchor discriminators (8 bytes each, locked) ──────────────────────────
 // sha256("global:<ix_name>")[..8]. Cross-checked against IDL.
 

@@ -7,7 +7,11 @@ import {
   buildSiblingAccountMetas,
   deriveSessionPda,
 } from '../src/session/index.js';
-import { SESSION_ACCOUNT_DISCRIMINATOR, SESSION_ACCOUNT_SIZE } from '../src/constants/index.js';
+import {
+  SESSION_ACCOUNT_DISCRIMINATOR,
+  SESSION_ACCOUNT_SIZE,
+  SESSION_VAULT_OFFSET,
+} from '../src/constants/index.js';
 
 function rawSession(vault: PublicKey, counterparty: PublicKey, version: number): Buffer {
   const data = Buffer.alloc(SESSION_ACCOUNT_SIZE);
@@ -49,6 +53,18 @@ describe('fetchSessionAccount', () => {
     expect(out!.session.allowedCounterparty).toBe(cp.toBase58());
     expect(out!.version).toBe(1);
   });
+
+  test('returns a version-0 (cleared) account as-is, not null', async () => {
+    const vault = PublicKey.unique();
+    const cp = PublicKey.unique();
+    const conn = {
+      getAccountInfo: vi.fn().mockResolvedValue({ data: rawSession(vault, cp, 0) }),
+    } as unknown as Connection;
+
+    const out = await fetchSessionAccount(conn, vault, cp);
+    expect(out).not.toBeNull();
+    expect(out!.version).toBe(0);
+  });
 });
 
 describe('fetchVaultSessionAccounts', () => {
@@ -73,9 +89,35 @@ describe('fetchVaultSessionAccounts', () => {
     expect(cfg.filters).toEqual([
       { dataSize: SESSION_ACCOUNT_SIZE },
       { memcmp: { offset: 0, bytes: expect.any(String) } },
-      { memcmp: { offset: 10, bytes: vault.toBase58() } },
+      { memcmp: { offset: SESSION_VAULT_OFFSET, bytes: vault.toBase58() } },
     ]);
     expect(cfg.commitment).toBe('confirmed');
+  });
+
+  test('SESSION_VAULT_OFFSET is pinned to 10 (8 disc + version u8 + bump u8)', () => {
+    expect(SESSION_VAULT_OFFSET).toBe(10);
+  });
+
+  test('returns [] when gPA finds no session accounts', async () => {
+    const conn = {
+      getProgramAccounts: vi.fn().mockResolvedValue([]),
+    } as unknown as Connection;
+
+    const out = await fetchVaultSessionAccounts(conn, PublicKey.unique());
+    expect(out).toEqual([]);
+  });
+
+  test('throws (with the row pubkey) on a wrong-size account instead of skipping it', async () => {
+    const badKey = PublicKey.unique();
+    const conn = {
+      getProgramAccounts: vi.fn().mockResolvedValue([
+        { pubkey: badKey, account: { data: Buffer.alloc(161) } },
+      ]),
+    } as unknown as Connection;
+
+    const p = fetchVaultSessionAccounts(conn, PublicKey.unique());
+    await expect(p).rejects.toThrow(/size/);
+    await expect(p).rejects.toThrow(badKey.toBase58());
   });
 
   test('discriminator memcmp bytes are exactly bs58(SESSION_ACCOUNT_DISCRIMINATOR)', async () => {
@@ -111,5 +153,9 @@ describe('buildSiblingAccountMetas', () => {
     const k = PublicKey.unique();
     const metas = buildSiblingAccountMetas([k, k], PublicKey.unique());
     expect(metas).toHaveLength(1);
+  });
+
+  test('empty sibling list (first register) yields []', () => {
+    expect(buildSiblingAccountMetas([], PublicKey.unique())).toEqual([]);
   });
 });
