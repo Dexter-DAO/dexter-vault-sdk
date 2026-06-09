@@ -7,7 +7,10 @@ import {
   SESSION_ACCOUNT_DISCRIMINATOR,
   SESSION_ACCOUNT_SIZE,
 } from '../src/constants/index.js';
-import { buildRegisterSessionKeyInstruction } from '../src/instructions/index.js';
+import {
+  buildRegisterSessionKeyInstruction,
+  buildRevokeSessionKeyInstruction,
+} from '../src/instructions/index.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
 import { deriveSessionPda, buildSiblingAccountMetas } from '../src/session/index.js';
 
@@ -189,5 +192,31 @@ describe('buildRegisterSessionKeyInstruction (V6)', () => {
       siblingSessionPdas: [], clientDataJSON: new Uint8Array(1), authenticatorData: new Uint8Array(37),
     });
     expect(ix2.keys.length).toBe(8);
+  });
+});
+
+describe('buildRevokeSessionKeyInstruction (V6)', () => {
+  const vaultPda = PublicKey.unique();
+  const counterparty = PublicKey.unique();
+  const ix = buildRevokeSessionKeyInstruction({
+    vaultPda,
+    allowedCounterparty: counterparty,
+    clientDataJSON: new Uint8Array([9]),
+    authenticatorData: new Uint8Array(37),
+  });
+  test('accounts: [vault(w), session(w), instructions_sysvar(r)]', () => {
+    const [sessionPda] = deriveSessionPda(vaultPda, counterparty);
+    expect(ix.keys).toEqual([
+      { pubkey: vaultPda, isSigner: false, isWritable: true },
+      { pubkey: sessionPda, isSigner: false, isWritable: true },
+      { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+    ]);
+  });
+  test('args: counterparty(32) FIRST, then the two vecs', () => {
+    expect(ix.data.length).toBe(8 + 32 + (4 + 1) + (4 + 37));
+    expect(Buffer.from(ix.data.subarray(8, 40)).equals(counterparty.toBuffer())).toBe(true);
+    // vec length prefixes at the right offsets:
+    expect(new DataView(ix.data.buffer, ix.data.byteOffset).getUint32(40, true)).toBe(1);
+    expect(new DataView(ix.data.buffer, ix.data.byteOffset).getUint32(45, true)).toBe(37);
   });
 });
