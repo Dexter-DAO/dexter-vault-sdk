@@ -14,6 +14,7 @@ export default defineConfig({
     'messages/index': 'src/messages/index.ts',
     'reader/index': 'src/reader/index.ts',
     'precompile/index': 'src/precompile/index.ts',
+    'session/index': 'src/session/index.ts',
     'signers/types': 'src/signers/types.ts',
     'signers/node/index': 'src/signers/node/index.ts',
     'signers/browser/index': 'src/signers/browser/index.ts',

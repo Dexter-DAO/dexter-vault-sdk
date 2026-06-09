@@ -56,6 +56,11 @@
       "import": "./dist/precompile/index.js",
       "require": "./dist/precompile/index.cjs"
     },
+    "./session": {
+      "types": "./dist/session/index.d.ts",
+      "import": "./dist/session/index.js",
+      "require": "./dist/session/index.cjs"
+    },
     "./signers": {
       "types": "./dist/signers/types.d.ts",
       "import": "./dist/signers/types.js",
