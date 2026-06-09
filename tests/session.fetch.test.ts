@@ -5,6 +5,7 @@ import {
   fetchSessionAccount,
   fetchVaultSessionAccounts,
   buildSiblingAccountMetas,
+  sessionPdasOf,
   deriveSessionPda,
 } from '../src/session/index.js';
 import {
@@ -133,6 +134,33 @@ describe('fetchVaultSessionAccounts', () => {
       (f: { memcmp?: { offset: number } }) => f.memcmp?.offset === 0,
     );
     expect(discFilter.memcmp.bytes).toBe(bs58.encode(SESSION_ACCOUNT_DISCRIMINATOR));
+  });
+});
+
+describe('sessionPdasOf', () => {
+  test('round-trips fetched addresses back to PublicKeys in order', async () => {
+    const vault = PublicKey.unique();
+    const cpA = PublicKey.unique();
+    const cpB = PublicKey.unique();
+    const keyA = PublicKey.unique();
+    const keyB = PublicKey.unique();
+    const conn = {
+      getProgramAccounts: vi.fn().mockResolvedValue([
+        { pubkey: keyA, account: { data: rawSession(vault, cpA, 1) } },
+        { pubkey: keyB, account: { data: rawSession(vault, cpB, 1) } },
+      ]),
+    } as unknown as Connection;
+
+    const states = await fetchVaultSessionAccounts(conn, vault);
+    const pdas = sessionPdasOf(states);
+    expect(pdas).toHaveLength(2);
+    expect(pdas[0]).toBeInstanceOf(PublicKey);
+    expect(pdas[0].equals(keyA)).toBe(true);
+    expect(pdas[1].equals(keyB)).toBe(true);
+  });
+
+  test('empty in, empty out', () => {
+    expect(sessionPdasOf([])).toEqual([]);
   });
 });
 

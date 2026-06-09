@@ -14,8 +14,9 @@
  *                                                   [b"session", vault, allowed_counterparty]
  *   6. [signer, writable]    payer                — funds the session PDA rent
  *   7. [readonly]            system_program
- *   ... remaining accounts: every OTHER live/unswept SessionAccount PDA of this
- *       vault (target excluded), deduped, sorted strict-ascending by raw bytes,
+ *   ... remaining accounts: every OTHER SessionAccount PDA with version != 0
+ *       (live AND expired-unswept) of this vault (target excluded), deduped,
+ *       sorted strict-ascending by raw bytes,
  *       all writable — see src/session/fetch.ts for the full sibling contract.
  *
  * Args (Borsh-serialized after the 8-byte discriminator):
@@ -82,7 +83,7 @@ export interface BuildRegisterSessionKeyArgs {
   expiresAt: bigint;                 // i64 seconds
   allowedCounterparty: PublicKey;
   nonce: number;                     // u32
-  maxRevolvingCapacity: bigint;      // NEW — u64, must be > 0 (program enforces)
+  maxRevolvingCapacity: bigint;      // u64, must be > 0 (program enforces)
   /** The vault's swig account (== vault.swig_address). The builder derives
    *  swig_wallet_address from this via deriveSwigWalletAddress(). */
   swigAddress: PublicKey;
@@ -96,7 +97,8 @@ export interface BuildRegisterSessionKeyArgs {
    *  fetchVaultSessionAccounts immediately before building. The builder
    *  excludes/dedups/sorts and marks all writable. Wrong/stale set → the
    *  program reverts (IncompleteSessionSet / SessionAccountsNotSorted /
-   *  SessionWouldOvercommitVault…). See src/session/fetch.ts for the contract. */
+   *  SessionWouldOvercommitVault…). See src/session/fetch.ts for the contract.
+   *  Happy path: sessionPdasOf(await fetchVaultSessionAccounts(conn, vaultPda)). */
   siblingSessionPdas: PublicKey[];
   clientDataJSON: Uint8Array;        // WebAuthn ceremony output
   authenticatorData: Uint8Array;     // WebAuthn ceremony output

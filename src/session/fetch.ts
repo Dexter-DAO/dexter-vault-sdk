@@ -63,6 +63,13 @@ export async function fetchVaultSessionAccounts(
     .filter((s) => s.version !== 0);
 }
 
+/** Map fetched session states to their PDA pubkeys — the bridge from
+ *  fetchVaultSessionAccounts (returns base58 strings) to the register
+ *  builder's siblingSessionPdas (wants PublicKey[]). */
+export function sessionPdasOf(states: SessionAccountState[]): PublicKey[] {
+  return states.map((s) => new PublicKey(s.address));
+}
+
 /** Sibling AccountMeta[] for the register gate: target excluded, deduped,
  *  strict-ascending raw-byte order (== Rust Pubkey Ord), ALL writable. */
 export function buildSiblingAccountMetas(
