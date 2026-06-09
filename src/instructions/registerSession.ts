@@ -1,15 +1,22 @@
 /**
  * register_session_key — authorize a session ed25519 key under a vault.
  *
- * Verbatim port of dexter-x402-sdk/src/tab/instructions.ts:168-194.
+ * V6 multi-session layout (data encoding unchanged from V5).
  *
  * Accounts (in declaration order — Anchor is strict):
  *   0. [writable]            vault                — the Vault PDA being mutated
  *   1. [readonly]            vault_usdc_ata       — swig wallet's USDC ATA, read live
- *                                                   for the Phase 1 overcommit gate
+ *                                                   for the overcommit gate
  *   2. [readonly]            swig                 — the vault's swig account (== vault.swig_address)
  *   3. [readonly]            swig_wallet_address  — canonical PDA under the Swig program (derived)
  *   4. [readonly]            instructions_sysvar  — address-constrained
+ *   5. [writable]            session              — init_if_needed PDA
+ *                                                   [b"session", vault, allowed_counterparty]
+ *   6. [signer, writable]    payer                — funds the session PDA rent
+ *   7. [readonly]            system_program
+ *   ... remaining accounts: every OTHER live/unswept SessionAccount PDA of this
+ *       vault (target excluded), deduped, sorted strict-ascending by raw bytes,
+ *       all writable — see src/session/fetch.ts for the full sibling contract.
  *
  * Args (Borsh-serialized after the 8-byte discriminator):
  *   session_pubkey: [u8; 32]
@@ -22,13 +29,14 @@
  *   authenticator_data: Vec<u8>
  */
 
-import { PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 
 import {
   DEXTER_VAULT_PROGRAM_ID,
   INSTRUCTIONS_SYSVAR_ID,
   DISCRIMINATORS,
 } from '../constants/index.js';
+import { deriveSessionPda, buildSiblingAccountMetas } from '../session/index.js';
 import { deriveSwigWalletAddress } from './withdraw.js';
 
 function encodeU64LE(value: bigint): Uint8Array {
@@ -81,6 +89,15 @@ export interface BuildRegisterSessionKeyArgs {
   /** Swig wallet's USDC ATA — read live on-chain for the overcommit gate.
    *  Caller-supplied (the SDK cannot derive it without the USDC mint). */
   vaultUsdcAta: PublicKey;
+  /** V6: funds the session PDA rent on first creation (signer, writable). */
+  payer: PublicKey;
+  /** V6: EVERY OTHER version!=0 SessionAccount PDA of this vault (live AND
+   *  expired-unswept), target excluded — fetch FRESH via
+   *  fetchVaultSessionAccounts immediately before building. The builder
+   *  excludes/dedups/sorts and marks all writable. Wrong/stale set → the
+   *  program reverts (IncompleteSessionSet / SessionAccountsNotSorted /
+   *  SessionWouldOvercommitVault…). See src/session/fetch.ts for the contract. */
+  siblingSessionPdas: PublicKey[];
   clientDataJSON: Uint8Array;        // WebAuthn ceremony output
   authenticatorData: Uint8Array;     // WebAuthn ceremony output
 }
@@ -105,6 +122,8 @@ export function buildRegisterSessionKeyInstruction(
   );
 
   const swigWalletAddress = deriveSwigWalletAddress(args.swigAddress);
+  const [sessionPda] = deriveSessionPda(args.vaultPda, args.allowedCounterparty);
+  const siblingMetas = buildSiblingAccountMetas(args.siblingSessionPdas, sessionPda);
 
   return new TransactionInstruction({
     keys: [
@@ -113,6 +132,10 @@ export function buildRegisterSessionKeyInstruction(
       { pubkey: args.swigAddress, isSigner: false, isWritable: false },
       { pubkey: swigWalletAddress, isSigner: false, isWritable: false },
       { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+      { pubkey: sessionPda, isSigner: false, isWritable: true },
+      { pubkey: args.payer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ...siblingMetas,
     ],
     programId: DEXTER_VAULT_PROGRAM_ID,
     data: Buffer.from(data),

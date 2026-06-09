@@ -255,6 +255,8 @@ describe('instruction data layouts', () => {
       maxRevolvingCapacity: 2_000_000n,
       swigAddress: KNOWN_VAULT_PDA,
       vaultUsdcAta: KNOWN_VAULT_USDC_ATA,
+      payer: KNOWN_DESTINATION,
+      siblingSessionPdas: [],
       clientDataJSON: KNOWN_CLIENT_DATA,
       authenticatorData: KNOWN_AUTH_DATA,
     });
@@ -267,24 +269,33 @@ describe('instruction data layouts', () => {
     expect(view.getBigUint64(92, true)).toBe(2_000_000n);
     expect(data).toMatchSnapshot('register_session_key data');
 
-    // ── Phase 1 overcommit gate: 5-account layout ──
+    // ── V6 multi-session: 8-account layout (no siblings supplied here) ──
     //   [0] vault (writable)
-    //   [1] vault_usdc_ata        (NEW, read)
-    //   [2] swig                  (NEW, read)
-    //   [3] swig_wallet_address   (NEW, derived, read)
+    //   [1] vault_usdc_ata        (read)
+    //   [2] swig                  (read)
+    //   [3] swig_wallet_address   (derived, read)
     //   [4] instructions_sysvar   (read)
+    //   [5] session PDA           (writable, init_if_needed)
+    //   [6] payer                 (signer, writable)
+    //   [7] system_program        (read)
     const { SWIG_PROGRAM_ID, INSTRUCTIONS_SYSVAR_ID } = await import('../src/constants/index.js');
+    const { deriveSessionPda } = await import('../src/session/index.js');
+    const { SystemProgram } = await import('@solana/web3.js');
     const [expectedSwigWalletAddress] = PublicKey.findProgramAddressSync(
       [Buffer.from('swig-wallet-address'), KNOWN_VAULT_PDA.toBytes()],
       SWIG_PROGRAM_ID,
     );
+    const [expectedSessionPda] = deriveSessionPda(KNOWN_VAULT_PDA, KNOWN_COUNTERPARTY);
 
-    expect(ix.keys).toHaveLength(5);
+    expect(ix.keys).toHaveLength(8);
     expect(ix.keys[0]).toEqual({ pubkey: KNOWN_VAULT_PDA, isSigner: false, isWritable: true });
     expect(ix.keys[1]).toEqual({ pubkey: KNOWN_VAULT_USDC_ATA, isSigner: false, isWritable: false });
     expect(ix.keys[2]).toEqual({ pubkey: KNOWN_VAULT_PDA, isSigner: false, isWritable: false });
     expect(ix.keys[3]).toEqual({ pubkey: expectedSwigWalletAddress, isSigner: false, isWritable: false });
     expect(ix.keys[4]).toEqual({ pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false });
+    expect(ix.keys[5]).toEqual({ pubkey: expectedSessionPda, isSigner: false, isWritable: true });
+    expect(ix.keys[6]).toEqual({ pubkey: KNOWN_DESTINATION, isSigner: true, isWritable: true });
+    expect(ix.keys[7]).toEqual({ pubkey: SystemProgram.programId, isSigner: false, isWritable: false });
   });
 
   test('revoke_session_key', () => {
