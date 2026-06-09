@@ -40,6 +40,18 @@ export const VAULT_SEED_PREFIX = Buffer.from('vault');
 // LockedClaim PDA seed — matches programs/dexter-vault/src/state.rs (b"locked-claim").
 export const LOCKED_CLAIM_SEED = Buffer.from('locked-claim');
 
+// Session PDA seed — matches programs/dexter-vault/src/constants.rs (b"session").
+// PDA: [SESSION_SEED, vault, allowed_counterparty]. One per (vault, counterparty);
+// re-register REPLACES in place (same seed).
+export const SESSION_SEED = Buffer.from('session');
+
+// Anchor account discriminator for SessionAccount (sha256("account:SessionAccount")[..8],
+// cross-checked against the V6 IDL). Used as the gPA memcmp filter at offset 0.
+export const SESSION_ACCOUNT_DISCRIMINATOR = Uint8Array.from([74, 34, 65, 133, 96, 163, 80, 69]);
+
+// Total SessionAccount size: 8 (discriminator) + 154 (INIT_SPACE). gPA dataSize filter.
+export const SESSION_ACCOUNT_SIZE = 162;
+
 // ── Anchor discriminators (8 bytes each, locked) ──────────────────────────
 // sha256("global:<ix_name>")[..8]. Cross-checked against IDL.
 
@@ -67,6 +79,8 @@ export const DISCRIMINATORS = Object.freeze({
   repay_credit:            Uint8Array.from([38, 113, 240, 182, 109, 179, 154, 245]),
   seize_collateral:        Uint8Array.from([40, 250, 7, 243, 168, 184, 116, 154]),
   migrate_v4_to_v5:        Uint8Array.from([226, 105, 140, 184, 101, 39, 235, 116]),
+  migrate_v5_to_v6:        Uint8Array.from([25, 38, 151, 206, 59, 103, 141, 175]),
+  migrate_v5_to_v6_with_session: Uint8Array.from([225, 119, 165, 163, 251, 174, 42, 15]),
 });
 
 // ── Domain separators (32 bytes each, NUL-padded) ────────────────────────

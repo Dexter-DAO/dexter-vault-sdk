@@ -8,6 +8,313 @@
   },
   "instructions": [
     {
+      "name": "close_standby",
+      "discriminator": [
+        218,
+        35,
+        75,
+        51,
+        72,
+        244,
+        20,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "financier_swig",
+          "docs": [
+            "The FINANCIER's swig (identity + authority). On the FINANCIER leg the handler",
+            "requires this equals `vault.standby_backer` (the right financier). On the USER",
+            "leg it's harmless — the passkey verifier reads the instructions_sysvar, not",
+            "account positions, and the user knows the financier swig regardless (it's",
+            "recorded on their vault).",
+            "recorded backer is enforced in the handler."
+          ]
+        },
+        {
+          "name": "financier_swig_wallet_address",
+          "docs": [
+            "The financier's swig_wallet PDA, derived from `financier_swig`. On the",
+            "FINANCIER leg this PDA MUST SIGN (mechanism B consent — checked in-handler via",
+            "`is_signer`): the close runs only as the inner CPI of the financier's swig",
+            "SignV2, which invoke_signed's this PDA. It is NOT typed `Signer` at the struct",
+            "level because the USER leg shares this struct and does not sign it; the seeds",
+            "prove it's the right financier's wallet PDA when it IS the signer."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "financier_swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "The USER's vault — credit terms cleared here (standby_backer = None,",
+            "standby_cap = 0). Mutated."
+          ],
+          "writable": true
+        },
+        {
+          "name": "standby_backer",
+          "docs": [
+            "The financier's reserve ledger. `aggregate_promised` is decremented by this",
+            "vault's cap here. PDA-bound to `financier_swig`; the handler additionally",
+            "requires `standby_backer.financier_swig == vault.standby_backer` so the",
+            "ledger ties to the vault's recorded backer. Mutated."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  110,
+                  100,
+                  98,
+                  121,
+                  45,
+                  98,
+                  97,
+                  99,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "financier_swig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions_sysvar",
+          "docs": [
+            "`verify_passkey_signed` reads the PREVIOUS instruction (current_index - 1),",
+            "the secp256r1_verify carrying the user's passkey signature. The FINANCIER leg",
+            "does NOT read it — its consent is the swig_wallet signer (mechanism B), not an",
+            "adjacent instruction."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "CloseStandbyArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "draw_credit",
+      "discriminator": [
+        20,
+        84,
+        47,
+        211,
+        78,
+        117,
+        195,
+        210
+      ],
+      "accounts": [
+        {
+          "name": "financier_swig",
+          "docs": [
+            "Position 0 — required at this index by Swig's ProgramExec validator.",
+            "This is the FINANCIER's swig, NOT the user's `vault.swig_address`. It",
+            "must equal `vault.standby_backer`; because that field is `Option<Pubkey>`",
+            "the equality is enforced in the handler (an `#[account(address = ...)]`",
+            "constraint can't bind to an Option).",
+            "never deref."
+          ]
+        },
+        {
+          "name": "financier_swig_wallet_address",
+          "docs": [
+            "Position 1 — required by Swig's ProgramExec validator. Derives from the",
+            "FINANCIER's swig, so the following SignV2 spends the FINANCIER's",
+            "swig_wallet ATA."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "financier_swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "The USER's vault — borrowed accumulator rises here, recovery deadline is",
+            "armed here. Mutated."
+          ],
+          "writable": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "The orchestration authority driving the draw under the financier's",
+            "standing standby authorization. Matches settle_locked_voucher's fee gate."
+          ],
+          "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "docs": [
+            "instruction is the swig::SignV2 that introspects this one."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "DrawCreditArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "finalize_withdrawal",
       "discriminator": [
         178,
@@ -335,6 +642,41 @@
           }
         },
         {
+          "name": "session",
+          "docs": [
+            "V6: the per-counterparty SessionAccount PDA whose meter graduates. The",
+            "session moved OUT of `vault.active_session` into this PDA at",
+            "`[SESSION_SEED, vault, allowed_counterparty]`. `mut` — the graduation",
+            "mutates `current_outstanding`, `crystallized_cumulative`, and",
+            "`last_locked_sequence` in place."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "arg",
+                "path": "args.allowed_counterparty"
+              }
+            ]
+          }
+        },
+        {
           "name": "claim",
           "docs": [
             "Claim PDA created in this instruction."
@@ -501,6 +843,281 @@
           "type": {
             "defined": {
               "name": "MigrateV3ToV4Args"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "migrate_v4_to_v5",
+      "discriminator": [
+        226,
+        105,
+        140,
+        184,
+        101,
+        39,
+        235,
+        116
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "We deliberately do NOT load it as `Account<'info, Vault>`, because Anchor",
+            "would auto-deserialize it against the CURRENT (larger, V5) struct and",
+            "over-run the still-V4-sized buffer. We validate it by hand in the handler:",
+            "discriminator match, version == 4, and `dexter_authority` ownership. We",
+            "also require it be owned by this program before touching its bytes."
+          ],
+          "writable": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "Must equal the vault's recorded `dexter_authority`. Same authority that",
+            "gates `settle_voucher` / `rotate_dexter_authority`. Validated by hand",
+            "against the decoded V4 struct (no `has_one`, since the vault is untyped",
+            "here)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Funds the rent for the extra bytes the realloc adds. A separate signer so",
+            "the authority key need not hold lamports."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "MigrateV4ToV5Args"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "migrate_v5_to_v6",
+      "discriminator": [
+        25,
+        38,
+        151,
+        206,
+        59,
+        103,
+        141,
+        175
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "deserialized as the current (V6) Vault. owner-gated to this program."
+          ],
+          "writable": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "Authority gate — must equal the decoded vault.dexter_authority."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Receives the refunded rent (the Vault shrinks)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "MigrateV5ToV6Args"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "migrate_v5_to_v6_with_session",
+      "discriminator": [
+        225,
+        119,
+        165,
+        163,
+        251,
+        174,
+        42,
+        15
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "Authority gate — must equal the decoded vault.dexter_authority."
+          ],
+          "signer": true
+        },
+        {
+          "name": "session",
+          "docs": [
+            "The new session PDA, created here to hold the carried live session."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "arg",
+                "path": "args.live_counterparty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Funds the session PDA rent; receives the vault's freed (shrink) rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "MigrateV5ToV6WithSessionArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "open_standby",
+      "discriminator": [
+        234,
+        184,
+        232,
+        135,
+        246,
+        191,
+        90,
+        250
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "The USER's vault — receives `standby_backer` / `standby_cap`. Mutated, no",
+            "signer required: the user's passkey signature embedded in the args",
+            "(verified via the SIMD-0075 precompile sibling) is what authorizes the",
+            "mutation."
+          ],
+          "writable": true
+        },
+        {
+          "name": "financier_swig",
+          "docs": [
+            "`standby_backer`. Not deserialized — it is an identity, not an account we",
+            "read. The financier's authorization in v1 is represented by this account",
+            "+ their wallet-level co-signing of the transaction (see module docs)."
+          ]
+        },
+        {
+          "name": "standby_backer",
+          "docs": [
+            "The financier's reserve ledger — must exist (set via set_standby_reserve)",
+            "and match financier_swig. Mutated (aggregate_promised updated)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  110,
+                  100,
+                  98,
+                  121,
+                  45,
+                  98,
+                  97,
+                  99,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "financier_swig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions_sysvar",
+          "docs": [
+            "instruction in the transaction MUST be a secp256r1_verify call carrying",
+            "the USER's passkey signature over the op-message."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "OpenStandbyArgs"
             }
           }
         }
@@ -696,6 +1313,53 @@
             "whose `clientDataJSON.challenge` decodes to sha256(registration_message)."
           ],
           "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "session",
+          "docs": [
+            "The per-counterparty session PDA. init_if_needed: created on the first",
+            "register to this counterparty, OVERWRITTEN (replace-in-place) on a",
+            "subsequent register. The seed binds it to (vault, allowed_counterparty),",
+            "so it cannot be redirected. Re-init safety (SOL-010): the handler fully",
+            "overwrites every passkey-endorsed scope field (Task 5)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "arg",
+                "path": "args.allowed_counterparty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Funds the session PDA rent on first creation."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -704,6 +1368,139 @@
           "type": {
             "defined": {
               "name": "RegisterSessionKeyArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "repay_credit",
+      "discriminator": [
+        38,
+        113,
+        240,
+        182,
+        109,
+        179,
+        154,
+        245
+      ],
+      "accounts": [
+        {
+          "name": "swig",
+          "docs": [
+            "Position 0 — required at this index by Swig's ProgramExec validator.",
+            "This is the USER's swig, address-constrained to `vault.swig_address`",
+            "(the OPPOSITE of draw_credit's financier swig). The following SignV2",
+            "spends the USER's swig_wallet ATA to repay the financier."
+          ]
+        },
+        {
+          "name": "swig_wallet_address",
+          "docs": [
+            "Position 1 — required by Swig's ProgramExec validator. Derives from the",
+            "USER's swig, so the following SignV2 spends the USER's swig_wallet ATA."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "The USER's vault — borrowed accumulator falls here, recovery deadline is",
+            "cleared here when borrowed reaches 0. Mutated."
+          ],
+          "writable": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "The orchestration authority driving the paydown. Matches draw_credit's",
+            "fee gate exactly."
+          ],
+          "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "docs": [
+            "instruction is the swig::SignV2 that introspects this one."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RepayCreditArgs"
             }
           }
         }
@@ -758,10 +1555,43 @@
         {
           "name": "vault",
           "docs": [
-            "Mutated to clear `active_session`. No signer required; the passkey",
+            "Mutated to decrement `live_session_count`. No signer required; the passkey",
             "signature in the args is the authorization."
           ],
           "writable": true
+        },
+        {
+          "name": "session",
+          "docs": [
+            "The session PDA being revoked. mut (we clear it in place). bump from stored.",
+            "The seed binds it to (vault, allowed_counterparty), so it cannot be",
+            "redirected to a foreign counterparty's session."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "arg",
+                "path": "args.allowed_counterparty"
+              }
+            ]
+          }
         },
         {
           "name": "instructions_sysvar",
@@ -854,6 +1684,297 @@
           "type": {
             "defined": {
               "name": "RotatePasskeyArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "seize_collateral",
+      "discriminator": [
+        40,
+        250,
+        7,
+        243,
+        168,
+        184,
+        116,
+        154
+      ],
+      "accounts": [
+        {
+          "name": "swig",
+          "docs": [
+            "Position 0 — required at this index by Swig's ProgramExec validator.",
+            "This is the USER's swig, address-constrained to `vault.swig_address`",
+            "(same as repay_credit; the OPPOSITE of draw_credit's financier swig).",
+            "The following SignV2 spends the USER's swig_wallet ATA to pay the",
+            "financier the seized slice."
+          ]
+        },
+        {
+          "name": "swig_wallet_address",
+          "docs": [
+            "Position 1 — required by Swig's ProgramExec validator. Derives from the",
+            "USER's swig, so the following SignV2 spends the USER's swig_wallet ATA."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "The USER's vault — `borrowed` is zeroed here and the recovery deadline is",
+            "cleared here. Mutated."
+          ],
+          "writable": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "The orchestration authority driving the liquidation. Matches",
+            "repay_credit / draw_credit's gate exactly. The financier is NOT",
+            "passkey-verified in v1 — the deadline + dexter_authority are the gate."
+          ],
+          "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "docs": [
+            "instruction is the swig::SignV2 that introspects this one."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SeizeCollateralArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_standby_reserve",
+      "discriminator": [
+        198,
+        227,
+        172,
+        10,
+        133,
+        119,
+        213,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "financier_swig",
+          "docs": [
+            "The FINANCIER's swig (identity + authority). It is the seed source for",
+            "standby_backer and for the swig_wallet PDA below."
+          ]
+        },
+        {
+          "name": "financier_swig_wallet_address",
+          "docs": [
+            "The financier's swig_wallet PDA. A SIGNER: this instruction runs ONLY as",
+            "the inner CPI of the financier's swig SignV2, which signs with this PDA",
+            "(Swig invoke_signed). PDA-constrained so we KNOW the signer is the",
+            "financier's swig_wallet — that derivation + the signature together ARE the",
+            "financier's consent, bound to THIS exact call (mechanism B). No marker, no",
+            "sysvar adjacency."
+          ],
+          "signer": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "financier_swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "standby_backer",
+          "docs": [
+            "The financier's reserve ledger. Init on first call, mutated thereafter."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  110,
+                  100,
+                  98,
+                  121,
+                  45,
+                  98,
+                  97,
+                  99,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "financier_swig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SetStandbyReserveArgs"
             }
           }
         }
@@ -1223,6 +2344,42 @@
           "writable": true
         },
         {
+          "name": "session",
+          "docs": [
+            "V6: the per-counterparty SessionAccount PDA this voucher settles",
+            "against. The session moved OUT of `vault.active_session` into this",
+            "PDA at `[SESSION_SEED, vault, allowed_counterparty]`. The seed binds",
+            "it to (vault, the seller named in the voucher), so a caller cannot",
+            "settle against a foreign counterparty's session. `mut` — we advance",
+            "the `spent` odometer and release `current_outstanding` in place."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "arg",
+                "path": "args.allowed_counterparty"
+              }
+            ]
+          }
+        },
+        {
           "name": "dexter_authority",
           "docs": [
             "Must equal `vault.dexter_authority` — only the recorded authority",
@@ -1283,6 +2440,45 @@
           "relations": [
             "vault"
           ]
+        },
+        {
+          "name": "session",
+          "docs": [
+            "V6: the per-counterparty SessionAccount PDA whose revolving meter rises",
+            "at tab-open. OPTIONAL because only the `increment == true` (tab-open)",
+            "path touches a session — the `increment == false` (close) path is a",
+            "bare `pending_voucher_count` decrement that never reads a session, so a",
+            "caller closing a counter need not pass one. When present, the seed binds",
+            "it to (vault, allowed_counterparty); `mut` because the RISE seam writes",
+            "`current_outstanding`. The handler REQUIRES `Some(live)` on the",
+            "increment path (you cannot raise a meter that isn't there)."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "arg",
+                "path": "args.allowed_counterparty"
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -1347,6 +2543,32 @@
         82,
         6,
         245
+      ]
+    },
+    {
+      "name": "SessionAccount",
+      "discriminator": [
+        74,
+        34,
+        65,
+        133,
+        96,
+        163,
+        80,
+        69
+      ]
+    },
+    {
+      "name": "StandbyBacker",
+      "discriminator": [
+        91,
+        209,
+        78,
+        1,
+        228,
+        57,
+        152,
+        232
       ]
     },
     {
@@ -1461,11 +2683,183 @@
     },
     {
       "code": 6019,
+      "name": "SessionAccountsNotSorted",
+      "msg": "remaining_accounts not in strict ascending pubkey order (dedup/order)"
+    },
+    {
+      "code": 6020,
+      "name": "SessionAccountForeign",
+      "msg": "a passed session account belongs to a different vault"
+    },
+    {
+      "code": 6021,
+      "name": "SessionAccountMisderived",
+      "msg": "a passed account is not the canonical session PDA for its counterparty"
+    },
+    {
+      "code": 6022,
+      "name": "IncompleteSessionSet",
+      "msg": "live sibling sessions passed != live_session_count (incomplete set)"
+    },
+    {
+      "code": 6023,
+      "name": "SessionCountAtMax",
+      "msg": "vault already has 255 live sessions; revoke one before registering"
+    },
+    {
+      "code": 6024,
       "name": "RecoveryBeforeMaturity",
       "msg": "holder_recovery_at must be strictly greater than maturity_at when both are set"
+    },
+    {
+      "code": 6025,
+      "name": "StandbyCapZero",
+      "msg": "Standby cap must be greater than zero."
+    },
+    {
+      "code": 6026,
+      "name": "CreditWouldExceedStandbyCap",
+      "msg": "Draw would exceed the financier's committed standby cap."
+    },
+    {
+      "code": 6027,
+      "name": "WithdrawalWouldViolatePin",
+      "msg": "Withdrawal would violate the credit pin (borrowed amount is reserved)."
+    },
+    {
+      "code": 6028,
+      "name": "BorrowRecoveryTooEarly",
+      "msg": "Borrow recovery deadline has not passed yet."
+    },
+    {
+      "code": 6029,
+      "name": "NoStandbyBacker",
+      "msg": "No standby backer is configured for this vault."
+    },
+    {
+      "code": 6030,
+      "name": "NothingBorrowed",
+      "msg": "Nothing is borrowed on this vault."
+    },
+    {
+      "code": 6031,
+      "name": "StandbyWouldExceedReserve",
+      "msg": "Promising this standby would exceed the financier's committed reserve."
+    },
+    {
+      "code": 6032,
+      "name": "ReserveBelowPromised",
+      "msg": "Cannot lower committed reserve below the amount already promised."
+    },
+    {
+      "code": 6033,
+      "name": "ResizeBelowBorrowed",
+      "msg": "Cannot set a standby cap below the amount already borrowed."
+    },
+    {
+      "code": 6034,
+      "name": "StandbyStillBorrowed",
+      "msg": "Cannot close a standby while a balance is still borrowed against it."
+    },
+    {
+      "code": 6035,
+      "name": "NoStandbyBackerLedger",
+      "msg": "Financier StandbyBacker reserve ledger is missing or does not match."
+    },
+    {
+      "code": 6036,
+      "name": "StandbyBackerMismatch",
+      "msg": "A different financier already backs this vault; close the existing standby first."
+    },
+    {
+      "code": 6037,
+      "name": "FinancierConsentMissing",
+      "msg": "financier consent missing: set_standby_reserve / close_standby (financier) must run as the inner CPI of the financier's swig SignV2 (swig_wallet must sign)"
+    },
+    {
+      "code": 6038,
+      "name": "SessionAccountNotWritable",
+      "msg": "an expired sibling session must be passed WRITABLE so the register-time sweep can clear it"
     }
   ],
   "types": [
+    {
+      "name": "CloseStandbyArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "closer",
+            "docs": [
+              "Which party is consenting. Selects the consent leg in the handler."
+            ],
+            "type": {
+              "defined": {
+                "name": "Closer"
+              }
+            }
+          },
+          {
+            "name": "client_data_json",
+            "docs": [
+              "USER leg only: WebAuthn clientDataJSON; challenge must be sha256(op_message).",
+              "Ignored for the financier leg."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "authenticator_data",
+            "docs": [
+              "USER leg only: WebAuthn authenticatorData (37+ bytes). Ignored for the",
+              "financier leg."
+            ],
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Closer",
+      "docs": [
+        "Who is consenting to the close. The user leg proves a passkey signature; the",
+        "financier leg proves swig authority via the paired SignV2."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "User"
+          },
+          {
+            "name": "Financier"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DrawCreditArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "docs": [
+              "USDC drawn from the financier's vault to the seller. The following",
+              "SignV2 transfers exactly this amount."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "recovery_window_seconds",
+            "docs": [
+              "Seconds from now until the financier may `seize_collateral`. Used to set",
+              "`borrow_recovery_at` on the FIRST draw only."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "FinalizeWithdrawalArgs",
       "type": {
@@ -1612,6 +3006,17 @@
             "type": {
               "option": "i64"
             }
+          },
+          {
+            "name": "allowed_counterparty",
+            "docs": [
+              "V6: the seller this voucher's session is bound to — equals the session",
+              "PDA's `allowed_counterparty`. Carried in the args so the accounts",
+              "struct can re-derive the session PDA seed. Not part of the signed",
+              "voucher message (layout unchanged); the seed binding ties the lock to",
+              "the correct session."
+            ],
+            "type": "pubkey"
           }
         ]
       }
@@ -1622,7 +3027,7 @@
         "Crystallized claim against vault USDC. Created by `lock_voucher`,",
         "transferable via `transfer_lock_ownership`, settled by",
         "`settle_locked_voucher`, reclaimed by `recover_abandoned_lock`. Independent",
-        "of `active_session` after creation — see V0.3 Decision 7. State machine",
+        "of any `SessionAccount` after creation — see V0.3 Decision 7. State machine",
         "per V0.3 Decision 6: pending → {settled, abandoned}, both terminal one-way."
       ],
       "type": {
@@ -1784,6 +3189,66 @@
       }
     },
     {
+      "name": "MigrateV4ToV5Args",
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    },
+    {
+      "name": "MigrateV5ToV6Args",
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    },
+    {
+      "name": "MigrateV5ToV6WithSessionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "live_counterparty",
+            "docs": [
+              "The allowed_counterparty of the live active_session being carried. The",
+              "handler asserts this equals the decoded active_session.allowed_counterparty,",
+              "so the caller cannot redirect the created session PDA to another counterparty."
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OpenStandbyArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "cap",
+            "docs": [
+              "The credit ceiling the financier commits. `borrowed <= cap` always."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "client_data_json",
+            "docs": [
+              "WebAuthn clientDataJSON; challenge must be sha256(op_message)."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "authenticator_data",
+            "docs": [
+              "WebAuthn authenticatorData (37+ bytes)."
+            ],
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
       "name": "PendingWithdrawal",
       "type": {
         "kind": "struct",
@@ -1933,6 +3398,23 @@
       }
     },
     {
+      "name": "RepayCreditArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "docs": [
+              "USDC the caller intends to repay. Clamped to outstanding `borrowed` so an",
+              "over-repay never moves more than is owed. The following SignV2 transfers",
+              "exactly the CLAMPED value (`amount.min(vault.borrowed)`)."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "RequestWithdrawalArgs",
       "type": {
         "kind": "struct",
@@ -1968,10 +3450,35 @@
       }
     },
     {
+      "name": "ReserveKind",
+      "docs": [
+        "Whether `committed_reserve` is a declared number or a program-locked balance."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Declared"
+          },
+          {
+            "name": "Locked"
+          }
+        ]
+      }
+    },
+    {
       "name": "RevokeSessionKeyArgs",
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "allowed_counterparty",
+            "docs": [
+              "The counterparty whose session PDA is being revoked. Goes in the args so",
+              "the accounts struct can re-derive the PDA seed."
+            ],
+            "type": "pubkey"
+          },
           {
             "name": "client_data_json",
             "type": "bytes"
@@ -2019,6 +3526,70 @@
           {
             "name": "authenticator_data",
             "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeizeCollateralArgs",
+      "docs": [
+        "Empty by design. Unlike `recover_abandoned_lock` (which carries WebAuthn",
+        "ceremony bytes because the BUYER must passkey-sign their own recovery),",
+        "`seize_collateral` takes NO args: the financier is not passkey-verified in",
+        "v1, and the seized amount is the on-chain `vault.borrowed` snapshot — never a",
+        "caller-supplied value. The deadline + dexter_authority are the entire gate."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    },
+    {
+      "name": "SessionAccount",
+      "docs": [
+        "A single authorized session, now a standalone account instead of a Vault",
+        "field. PDA: seeds = [SESSION_SEED, vault.key(), session.allowed_counterparty].",
+        "One per (vault, counterparty); the seed binding gives \"one tab per app,",
+        "re-register replaces in place\". `version == 0` means freshly-created/cleared."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "First-touch / migration discriminator. 0 = never touched (or cleared by",
+              "revoke). SESSION_VERSION_V1 once written. NOT the Anchor discriminator",
+              "(Anchor sets that on init_if_needed before the handler runs) — this is a",
+              "program-controlled field, the only reliable new-vs-replace signal."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Stored canonical bump → create_program_address (one-shot, no ~1500 CU",
+              "find_program_address search) when re-deriving siblings in the gate."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "The vault this session authorizes spending FROM. Bound at first touch."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "session",
+            "docs": [
+              "The session registration scope — UNCHANGED struct, reused verbatim."
+            ],
+            "type": {
+              "defined": {
+                "name": "SessionRegistration"
+              }
+            }
           }
         ]
       }
@@ -2105,6 +3676,21 @@
               "out-of-order lock detection — NOT the XOR guard (the frontier is)."
             ],
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SetStandbyReserveArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_reserve",
+            "docs": [
+              "The committed reserve ceiling to set. Must be >= current aggregate_promised."
+            ],
+            "type": "u64"
           }
         ]
       }
@@ -2234,6 +3820,17 @@
               "out-of-order voucher detection."
             ],
             "type": "u32"
+          },
+          {
+            "name": "allowed_counterparty",
+            "docs": [
+              "V6: the seller this voucher pays — equals the session PDA's",
+              "`allowed_counterparty`. Carried in the args so the accounts struct can",
+              "re-derive the session PDA seed. Not part of the signed voucher message",
+              "(the message layout is unchanged); the PDA seed binding is what ties",
+              "the settle to the correct session."
+            ],
+            "type": "pubkey"
           }
         ]
       }
@@ -2250,6 +3847,79 @@
           {
             "name": "increment",
             "type": "bool"
+          },
+          {
+            "name": "allowed_counterparty",
+            "docs": [
+              "V6: the seller the tab is opened against — equals the session PDA's",
+              "`allowed_counterparty`. Carried so the accounts struct can re-derive the",
+              "(optional) session PDA seed. Only load-bearing on the increment path; on",
+              "the close path it's ignored (no session account is passed)."
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StandbyBacker",
+      "docs": [
+        "Financier reserve ledger (aggregate-reserve primitive). One per financier",
+        "swig identity. The program reads THIS (allowed) but never the financier's",
+        "Vault (forbidden — the rehypothecation firewall). Enforces",
+        "`aggregate_promised <= committed_reserve` so a financier cannot promise more",
+        "standby capacity across vaults than they have committed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version. v1 is the first version (byte 0 for future branching)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "financier_swig",
+            "docs": [
+              "The financier swig identity this ledger belongs to. Equals the PDA seed."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "committed_reserve",
+            "docs": [
+              "What the financier has committed as backable capacity. v1: a DECLARED",
+              "number (set via set_standby_reserve under the financier's swig authority).",
+              "The aggregate guard checks promises against this."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "aggregate_promised",
+            "docs": [
+              "Sum of `standby_cap` across all user vaults this financier currently backs.",
+              "Rises on open_standby (fresh/resize-up), falls on close_standby/resize-down.",
+              "Invariant: aggregate_promised <= committed_reserve always."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserve_kind",
+            "docs": [
+              "Declared vs Locked reserve. ALWAYS Declared in this version. Planting the",
+              "enum now means a future locked-reserve variant needs no account migration."
+            ],
+            "type": {
+              "defined": {
+                "name": "ReserveKind"
+              }
+            }
           }
         ]
       }
@@ -2344,21 +4014,15 @@
             "type": "pubkey"
           },
           {
-            "name": "active_session",
+            "name": "live_session_count",
             "docs": [
-              "Currently-authorized session key, if any. Written by `register_session_key`",
-              "(passkey-signed), cleared by `revoke_session_key` (passkey-signed) or by",
-              "the program when expiry is observed during a future read. v2 enforces",
-              "at most one active session per vault; multi-seller / multi-session is",
-              "future work (issue #5)."
+              "V6: number of LIVE session PDAs for this vault. Incremented by",
+              "register_session_key on first-touch (new counterparty), decremented by",
+              "revoke_session_key. The register-time overcommit gate requires the caller",
+              "to pass exactly this many live siblings (minus the target if it already",
+              "exists), so the summed-cap gate cannot be gamed low. Range 0..=255."
             ],
-            "type": {
-              "option": {
-                "defined": {
-                  "name": "SessionRegistration"
-                }
-              }
-            }
+            "type": "u8"
           },
           {
             "name": "outstanding_locked_amount",
@@ -2384,6 +4048,44 @@
               "Lifetime monotonic settled-from-claim odometer at vault scope. Never decremented."
             ],
             "type": "u64"
+          },
+          {
+            "name": "borrowed",
+            "docs": [
+              "V5: amount an external financier has fronted that the buyer has NOT",
+              "repaid. The credit (\"buyer is negative\") accumulator. Rises at",
+              "`draw_credit`, falls at `repay_credit` / `seize_collateral`. MUST never",
+              "exceed `standby_cap`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "standby_backer",
+            "docs": [
+              "V5: the financier's vault (swig_address) authorized to back this vault",
+              "past the user's own balance. `None` = no credit enabled. Set by",
+              "`open_standby`."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "standby_cap",
+            "docs": [
+              "V5: the ceiling the financier committed. `borrowed <= standby_cap` always."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "borrow_recovery_at",
+            "docs": [
+              "V5: deadline after which the financier may `seize_collateral`. Set on the",
+              "first draw, cleared when `borrowed` returns to 0. None = nothing borrowed."
+            ],
+            "type": {
+              "option": "i64"
+            }
           }
         ]
       }
