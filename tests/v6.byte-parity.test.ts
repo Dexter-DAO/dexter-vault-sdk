@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import {
+  DEXTER_VAULT_PROGRAM_ID,
   DISCRIMINATORS,
   INSTRUCTIONS_SYSVAR_ID,
   SESSION_ACCOUNT_DISCRIMINATOR,
@@ -11,6 +12,7 @@ import {
   buildRegisterSessionKeyInstruction,
   buildRevokeSessionKeyInstruction,
   buildSettleTabVoucherInstruction,
+  buildSettleVoucherInstruction,
 } from '../src/instructions/index.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
 import { deriveSessionPda, buildSiblingAccountMetas } from '../src/session/index.js';
@@ -253,5 +255,58 @@ describe('buildSettleTabVoucherInstruction (V6)', () => {
     expect(ix.data.readBigUInt64LE(40)).toBe(99_000n);
     expect(ix.data.readUInt32LE(48)).toBe(5);
     expect(Buffer.from(ix.data.subarray(52, 84)).equals(counterparty.toBuffer())).toBe(true);
+  });
+});
+
+describe('buildSettleVoucherInstruction (V6)', () => {
+  const vaultPda = PublicKey.unique();
+  const dexterAuthority = PublicKey.unique();
+  const counterparty = PublicKey.unique();
+
+  test('increment=true (tab-open): keys[2] = real session PDA, writable', () => {
+    const ix = buildSettleVoucherInstruction({
+      vaultPda,
+      dexterAuthority,
+      allowedCounterparty: counterparty,
+      amount: 1_234n,
+      increment: true,
+    });
+    const [sessionPda] = deriveSessionPda(vaultPda, counterparty);
+    expect(ix.keys).toEqual([
+      { pubkey: vaultPda, isSigner: false, isWritable: true },
+      { pubkey: dexterAuthority, isSigner: true, isWritable: false },
+      { pubkey: sessionPda, isSigner: false, isWritable: true },
+    ]);
+  });
+
+  test('increment=false (close): keys[2] = program-ID None sentinel, readonly', () => {
+    const ix = buildSettleVoucherInstruction({
+      vaultPda,
+      dexterAuthority,
+      allowedCounterparty: counterparty,
+      amount: 1_234n,
+      increment: false,
+    });
+    expect(ix.keys[2]).toEqual({
+      pubkey: DEXTER_VAULT_PROGRAM_ID,
+      isSigner: false,
+      isWritable: false,
+    });
+  });
+
+  test('args: amount(u64) + increment(bool) + counterparty(32) LAST, both paths', () => {
+    for (const increment of [true, false]) {
+      const ix = buildSettleVoucherInstruction({
+        vaultPda,
+        dexterAuthority,
+        allowedCounterparty: counterparty,
+        amount: 1_234n,
+        increment,
+      });
+      expect(ix.data.length).toBe(8 + 8 + 1 + 32);
+      expect(ix.data.readBigUInt64LE(8)).toBe(1_234n);
+      expect(ix.data[16]).toBe(increment ? 1 : 0);
+      expect(Buffer.from(ix.data.subarray(17, 49)).equals(counterparty.toBuffer())).toBe(true);
+    }
   });
 });
