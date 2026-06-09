@@ -1,7 +1,7 @@
 /**
  * Canonical on-chain constants. Every program ID, every discriminator.
- * If a value here changes, exactly one test snapshot in tests/byte-parity.test.ts
- * needs to update — that's the gate.
+ * If a value here changes, a test snapshot in tests/byte-parity.test.ts or
+ * tests/v6.byte-parity.test.ts needs to update — those are the gates.
  */
 
 import { PublicKey } from '@solana/web3.js';
@@ -39,6 +39,8 @@ export const VAULT_SEED_PREFIX = Buffer.from('vault');
 
 // LockedClaim PDA seed — matches programs/dexter-vault/src/state.rs (b"locked-claim").
 export const LOCKED_CLAIM_SEED = Buffer.from('locked-claim');
+
+// ── Session accounts (V6) ─────────────────────────────────────────────────
 
 // Session PDA seed — matches programs/dexter-vault/src/constants.rs (b"session").
 // PDA: [SESSION_SEED, vault, allowed_counterparty]. One per (vault, counterparty);
