@@ -11,6 +11,11 @@
  *    payer funds the PDA rent — up-front, init runs before the handler —
  *    and receives the vault's shrink rent)
  *
+ * Picking the wrong builder reverts deterministically: the plain instruction on
+ * a vault carrying a live session fails with SessionAlreadyActive, while the
+ * with_session instruction fails with NoActiveSession when the vault has no
+ * active_session (or SessionExpiryInPast when the session it carries is expired).
+ *
  * Both are dexter_authority-gated. SDK 0.8.x cannot DECODE a V5 vault to make
  * the live-vs-none choice (the V5 reader was removed); callers migrating wild
  * V5 vaults decide via their own records. No real V5 consumers exist as of

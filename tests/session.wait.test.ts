@@ -54,7 +54,7 @@ describe('waitForSession (register mode)', () => {
       .mockResolvedValue(sessionState({ sessionPubkey: NEW_PUBKEY }));
     const s = await waitForSession(connection, vault, counterparty, {
       expectedSessionPubkey: NEW_PUBKEY,
-      intervalMs: 1,
+      pollIntervalMs: 1,
       fetch,
     });
     expect(fetch).toHaveBeenCalledTimes(2);
@@ -70,7 +70,7 @@ describe('waitForSession (register mode)', () => {
     await expect(
       waitForSession(connection, vault, counterparty, {
         expectedSessionPubkey: NEW_PUBKEY,
-        intervalMs: 1,
+        pollIntervalMs: 1,
         timeoutMs: 5,
         fetch,
       }),
@@ -87,7 +87,24 @@ describe('waitForSession (cleared mode)', () => {
       .mockResolvedValue(sessionState({ version: 0 }));
     const s = await waitForSession(connection, vault, counterparty, {
       cleared: true,
-      intervalMs: 1,
+      pollIntervalMs: 1,
+      fetch,
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(s.version).toBe(0);
+  });
+
+  test('null read then version-0 state → keeps polling and resolves', async () => {
+    // Revoke clears version IN PLACE — the account still exists. A transient
+    // null (RPC lag / not-yet-visible account) must not satisfy cleared mode;
+    // only a real version-0 read does.
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(sessionState({ version: 0 }));
+    const s = await waitForSession(connection, vault, counterparty, {
+      cleared: true,
+      pollIntervalMs: 1,
       fetch,
     });
     expect(fetch).toHaveBeenCalledTimes(2);
@@ -99,8 +116,37 @@ describe('waitForSession (usage + timeout)', () => {
   test('neither expectedSessionPubkey nor cleared → usage error before any fetch', async () => {
     const fetch = vi.fn();
     await expect(
-      waitForSession(connection, vault, counterparty, { intervalMs: 1, fetch }),
-    ).rejects.toThrow(/pass expectedSessionPubkey \(register\) or cleared \(revoke\)/);
+      waitForSession(connection, vault, counterparty, { pollIntervalMs: 1, fetch }),
+    ).rejects.toThrow(
+      /pass exactly one of expectedSessionPubkey \(register\) or cleared \(revoke\)/,
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('BOTH expectedSessionPubkey and cleared → usage error before any fetch', async () => {
+    const fetch = vi.fn();
+    await expect(
+      waitForSession(connection, vault, counterparty, {
+        expectedSessionPubkey: NEW_PUBKEY,
+        cleared: true,
+        pollIntervalMs: 1,
+        fetch,
+      }),
+    ).rejects.toThrow(
+      /pass exactly one of expectedSessionPubkey \(register\) or cleared \(revoke\)/,
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('expectedSessionPubkey of wrong length → 32-byte guard before any fetch', async () => {
+    const fetch = vi.fn();
+    await expect(
+      waitForSession(connection, vault, counterparty, {
+        expectedSessionPubkey: new Uint8Array(33).fill(0x0b),
+        pollIntervalMs: 1,
+        fetch,
+      }),
+    ).rejects.toThrow(/expectedSessionPubkey must be 32 bytes, got 33/);
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -109,7 +155,7 @@ describe('waitForSession (usage + timeout)', () => {
     await expect(
       waitForSession(connection, vault, counterparty, {
         expectedSessionPubkey: NEW_PUBKEY,
-        intervalMs: 1,
+        pollIntervalMs: 1,
         timeoutMs: 5,
         fetch,
       }),

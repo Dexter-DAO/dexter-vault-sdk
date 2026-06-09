@@ -19,10 +19,13 @@ import type { SessionAccountState } from '../types.js';
 export interface WaitForSessionOpts {
   /** Register/replace mode: resolve when this exact pubkey is visible. */
   expectedSessionPubkey?: Uint8Array;
-  /** Revoke mode: resolve when version == 0. */
+  /**
+   * Revoke mode: resolve when version == 0. The account must exist (revoke
+   * clears version in place); waiting on a never-created account times out.
+   */
   cleared?: boolean;
-  intervalMs?: number;   // default 1000
-  timeoutMs?: number;    // default 30_000
+  pollIntervalMs?: number;   // default 1000
+  timeoutMs?: number;        // default 30_000
   fetch?: typeof fetchSessionAccount;
 }
 
@@ -32,9 +35,16 @@ export async function waitForSession(
   allowedCounterparty: PublicKey,
   opts: WaitForSessionOpts,
 ): Promise<SessionAccountState> {
-  const { expectedSessionPubkey, cleared, intervalMs = 1000, timeoutMs = 30_000 } = opts;
-  if (!expectedSessionPubkey && !cleared) {
-    throw new Error('waitForSession: pass expectedSessionPubkey (register) or cleared (revoke)');
+  const { expectedSessionPubkey, cleared, pollIntervalMs = 1000, timeoutMs = 30_000 } = opts;
+  if ((!expectedSessionPubkey && !cleared) || (expectedSessionPubkey && cleared)) {
+    throw new Error(
+      'waitForSession: pass exactly one of expectedSessionPubkey (register) or cleared (revoke)',
+    );
+  }
+  if (expectedSessionPubkey && expectedSessionPubkey.length !== 32) {
+    throw new Error(
+      `waitForSession: expectedSessionPubkey must be 32 bytes, got ${expectedSessionPubkey.length}`,
+    );
   }
   const fetch = opts.fetch ?? fetchSessionAccount;
   const deadline = Date.now() + timeoutMs;
@@ -58,6 +68,6 @@ export async function waitForSession(
         ` on vault ${vault.toBase58()} counterparty ${allowedCounterparty.toBase58()}`,
       );
     }
-    await new Promise((r) => setTimeout(r, intervalMs));
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
   }
 }
