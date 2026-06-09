@@ -82,4 +82,10 @@ describe('isSessionLive', () => {
   test('false for expired session', () => {
     expect(isSessionLive(decode({ expiresAt: 1000n }), 3_999_999_999)).toBe(false);
   });
+
+  test('expiry boundary: expires_at === now is NOT live (program gates expires_at > now)', () => {
+    const s = decode({ expiresAt: 2_000_000_000n });
+    expect(isSessionLive(s, 2_000_000_000)).toBe(false);
+    expect(isSessionLive(s, 1_999_999_999)).toBe(true);
+  });
 });

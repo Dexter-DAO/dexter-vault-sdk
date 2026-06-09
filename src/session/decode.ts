@@ -31,11 +31,11 @@ import type { SessionAccountState } from '../types.js';
 export function decodeSessionAccount(address: PublicKey, data: Buffer | Uint8Array): SessionAccountState {
   const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
   if (buf.length !== SESSION_ACCOUNT_SIZE) {
-    throw new Error(`SessionAccount wrong size: ${buf.length}, expected ${SESSION_ACCOUNT_SIZE}`);
+    throw new Error(`SessionAccount ${address.toBase58()} wrong size: ${buf.length}, expected ${SESSION_ACCOUNT_SIZE}`);
   }
   for (let i = 0; i < 8; i++) {
     if (buf[i] !== SESSION_ACCOUNT_DISCRIMINATOR[i]) {
-      throw new Error('SessionAccount wrong discriminator (not a SessionAccount)');
+      throw new Error(`SessionAccount ${address.toBase58()} wrong discriminator (not a SessionAccount)`);
     }
   }
   return {

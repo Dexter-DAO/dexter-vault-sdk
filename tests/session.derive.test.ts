@@ -16,6 +16,14 @@ describe('deriveSessionPda', () => {
     expect(bump).toBe(expectedBump);
   });
 
+  test('golden PDA: hardcoded literal pins SESSION_SEED + default program ID', () => {
+    const vault = new PublicKey('So11111111111111111111111111111111111111112');
+    const counterparty = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+    const [pda, bump] = deriveSessionPda(vault, counterparty);
+    expect(pda.toBase58()).toBe('9ZASMwmLokigsB5krjeFTmnRKxT73qL9y7xfgqk4o3YR');
+    expect(bump).toBe(252);
+  });
+
   test('different counterparty → different PDA', () => {
     const vault = new PublicKey('So11111111111111111111111111111111111111112');
     const a = deriveSessionPda(vault, PublicKey.unique())[0];
