@@ -10,6 +10,7 @@ import {
 import {
   buildRegisterSessionKeyInstruction,
   buildRevokeSessionKeyInstruction,
+  buildSettleTabVoucherInstruction,
 } from '../src/instructions/index.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
 import { deriveSessionPda, buildSiblingAccountMetas } from '../src/session/index.js';
@@ -218,5 +219,39 @@ describe('buildRevokeSessionKeyInstruction (V6)', () => {
     // vec length prefixes at the right offsets:
     expect(new DataView(ix.data.buffer, ix.data.byteOffset).getUint32(40, true)).toBe(1);
     expect(new DataView(ix.data.buffer, ix.data.byteOffset).getUint32(45, true)).toBe(37);
+  });
+});
+
+describe('buildSettleTabVoucherInstruction (V6)', () => {
+  const vaultPda = PublicKey.unique();
+  const swigAddress = PublicKey.unique();
+  const dexterAuthority = PublicKey.unique();
+  const counterparty = PublicKey.unique();
+  const ix = buildSettleTabVoucherInstruction({
+    vaultPda,
+    swigAddress,
+    dexterAuthority,
+    allowedCounterparty: counterparty,
+    channelId: new Uint8Array(32).fill(3),
+    cumulativeAmount: 99_000n,
+    sequenceNumber: 5,
+  });
+  test('accounts: 6 keys with session PDA inserted at index 3 (writable)', () => {
+    const [sessionPda] = deriveSessionPda(vaultPda, counterparty);
+    expect(ix.keys).toEqual([
+      { pubkey: swigAddress, isSigner: false, isWritable: false },
+      { pubkey: deriveSwigWalletAddress(swigAddress), isSigner: false, isWritable: false },
+      { pubkey: vaultPda, isSigner: false, isWritable: true },
+      { pubkey: sessionPda, isSigner: false, isWritable: true },
+      { pubkey: dexterAuthority, isSigner: true, isWritable: false },
+      { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+    ]);
+  });
+  test('args: channel(32) + cumulative(u64) + sequence(u32) + counterparty(32) LAST', () => {
+    expect(ix.data.length).toBe(8 + 32 + 8 + 4 + 32);
+    expect(Array.from(ix.data.subarray(8, 40))).toEqual(Array(32).fill(3));
+    expect(ix.data.readBigUInt64LE(40)).toBe(99_000n);
+    expect(ix.data.readUInt32LE(48)).toBe(5);
+    expect(Buffer.from(ix.data.subarray(52, 84)).equals(counterparty.toBuffer())).toBe(true);
   });
 });
