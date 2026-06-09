@@ -2,27 +2,34 @@
  * readTabMeter — READ-ONLY tab reporter. Reports remaining headroom under the
  * session cap; NEVER refuses. The on-chain cap guard is authoritative; a
  * client-side refuser would invite a stale-cache TOCTOU bug.
+ * V6: the session lives in a per-counterparty SessionAccount PDA, so the
+ * meter is per-(vault, counterparty).
  */
 import { Connection, PublicKey } from '@solana/web3.js';
-import { readVaultFull } from '../reader/index.js';
-import type { VaultStateFull } from '../types.js';
+import { fetchSessionAccount, isSessionLive } from '../session/index.js';
+import type { SessionAccountState } from '../types.js';
 
 export interface TabMeter {
-  spent: bigint;        // activeSession.spent
-  maxAmount: bigint;    // activeSession.maxAmount — the session cap
-  remaining: bigint;    // max(0, maxAmount - spent)
+  spent: bigint;
+  maxAmount: bigint;
+  remaining: bigint;          // max(0, maxAmount - spent)
+  currentOutstanding: bigint; // V6: the revolving meter
+  expiresAt: number;
 }
 
 export async function readTabMeter(
   connection: Connection,
   vaultPda: PublicKey,
-  read: (c: Connection, v: PublicKey) => Promise<VaultStateFull> = readVaultFull,
+  allowedCounterparty: PublicKey,
+  fetch: typeof fetchSessionAccount = fetchSessionAccount,
 ): Promise<TabMeter> {
-  const vault = await read(connection, vaultPda);
-  const session = vault.activeSession;
-  if (!session) throw new Error('readTabMeter: no active session on vault');
-  const { spent, maxAmount } = session;
+  const s: SessionAccountState | null = await fetch(connection, vaultPda, allowedCounterparty);
+  if (!s || !isSessionLive(s)) {
+    throw new Error(
+      `readTabMeter: no live session for counterparty ${allowedCounterparty.toBase58()}`,
+    );
+  }
+  const { spent, maxAmount, currentOutstanding, expiresAt } = s.session;
   const raw = maxAmount - spent;
-  const remaining = raw > 0n ? raw : 0n;
-  return { spent, maxAmount, remaining };
+  return { spent, maxAmount, remaining: raw > 0n ? raw : 0n, currentOutstanding, expiresAt };
 }

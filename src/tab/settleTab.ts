@@ -10,7 +10,7 @@ import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { voucherPayloadMessage } from '../messages/index.js';
 import { buildEd25519VerifyInstruction } from '../precompile/index.js';
 import { buildSettleTabVoucherInstruction } from '../instructions/index.js';
-import { readVaultFull } from '../reader/index.js';
+import { fetchSessionAccount } from '../session/index.js';
 import type { Ed25519Signer } from '../signers/types.js';
 import { defaultAssembleSignV2, type AssembleSignV2 } from './assembleSignV2.js';
 
@@ -18,6 +18,8 @@ export interface SettleTabParams {
   connection: Connection;
   vaultPda: PublicKey;
   swigAddress: PublicKey;        // the USER's swig — funds the tab payment
+  /** V6: the seller this tab pays — names the session PDA. */
+  allowedCounterparty: PublicKey;
   channelId: Uint8Array;         // 32 bytes
   cumulativeAmount: bigint;
   sequenceNumber: number;        // u32
@@ -27,22 +29,32 @@ export interface SettleTabParams {
   /** Must equal the vault's recorded dexter_authority; the settle_tab_voucher signer. */
   dexterAuthority: PublicKey;
   assembleSignV2?: AssembleSignV2;
-  readPriorSpent?: (connection: Connection, vaultPda: PublicKey) => Promise<bigint>;
+  readPriorSpent?: (
+    connection: Connection,
+    vaultPda: PublicKey,
+    allowedCounterparty: PublicKey,
+  ) => Promise<bigint>;
 }
 
 const defaultReadPriorSpent = async (
   connection: Connection,
   vaultPda: PublicKey,
+  allowedCounterparty: PublicKey,
 ): Promise<bigint> => {
-  const vault = await readVaultFull(connection, vaultPda);
-  const session = vault.activeSession;
-  if (!session) throw new Error('settleTab: no active session on vault');
-  return session.spent; // VERIFIED native bigint, no .toString()
+  const s = await fetchSessionAccount(connection, vaultPda, allowedCounterparty);
+  // version !== 0 only (NOT isSessionLive): an expired-but-unswept session
+  // still carries the true spent odometer — the on-chain ix referees expiry.
+  if (!s || s.version === 0) {
+    throw new Error(
+      `settleTab: no live session for counterparty ${allowedCounterparty.toBase58()}`,
+    );
+  }
+  return s.session.spent; // VERIFIED native bigint, no .toString()
 };
 
 export async function settleTab(p: SettleTabParams): Promise<TransactionInstruction[]> {
   const readPrior = p.readPriorSpent ?? defaultReadPriorSpent;
-  const priorSpent = await readPrior(p.connection, p.vaultPda);
+  const priorSpent = await readPrior(p.connection, p.vaultPda, p.allowedCounterparty);
 
   if (p.cumulativeAmount <= priorSpent) {
     throw new Error(
@@ -69,6 +81,7 @@ export async function settleTab(p: SettleTabParams): Promise<TransactionInstruct
     vaultPda: p.vaultPda,
     swigAddress: p.swigAddress,
     dexterAuthority: p.dexterAuthority,
+    allowedCounterparty: p.allowedCounterparty,
     channelId: p.channelId,
     cumulativeAmount: p.cumulativeAmount,
     sequenceNumber: p.sequenceNumber,
