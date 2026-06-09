@@ -92,22 +92,94 @@ describe('readVaultOnchain (slim)', () => {
   });
 });
 
-describe('readVaultFull (with active session)', () => {
-  test('no active session', async () => {
-    const data = makeVaultAccountData({ hasWithdrawal: false, hasActiveSession: false });
+/**
+ * V6 vault fixture. The byte that was V5's active_session Option tag is now
+ * live_session_count: u8 — the old reader mis-decoded that byte as an Option
+ * tag and "found" a session made of locked-claim odometer bytes. These cases
+ * pin the V6 read.
+ *
+ * Real V6 vaults carry more bytes after live_session_count (odometers/credit
+ * fields) — the reader doesn't decode those. `trailing` proves the reader
+ * tolerates them; the default (ending AT liveCount) also exercises the
+ * length guard.
+ */
+function v6VaultBytes(opts: {
+  liveSessionCount: number;
+  withdrawal?: boolean;
+  trailing?: number;
+}): { data: Buffer; swig: PublicKey; authority: PublicKey } {
+  const withdrawalBody = opts.withdrawal ? 48 : 0;
+  // disc(8) ver(1) bump(1) passkey(33) swig(32) cooling(4) pvc(4) wtag(1) [wbody] identity(32) authority(32) liveCount(1)
+  const len = 8 + 1 + 1 + 33 + 32 + 4 + 4 + 1 + withdrawalBody + 32 + 32 + 1 + (opts.trailing ?? 0);
+  const data = Buffer.alloc(len);
+  data.writeUInt8(6, 8); // version = 6
+  const swig = PublicKey.unique();
+  swig.toBuffer().copy(data, 43);
+  data.writeUInt32LE(2, 79); // pending_voucher_count
+  data.writeUInt8(opts.withdrawal ? 1 : 0, 83);
+  if (opts.withdrawal) {
+    data.writeBigUInt64LE(100_000n, 84);
+    Buffer.alloc(32, 0xCC).copy(data, 92);
+    data.writeBigInt64LE(1735689600n, 124);
+  }
+  const afterWithdrawal = 84 + withdrawalBody;
+  const authority = PublicKey.unique();
+  authority.toBuffer().copy(data, afterWithdrawal + 32); // dexter_authority
+  data.writeUInt8(opts.liveSessionCount, afterWithdrawal + 64); // live_session_count
+  return { data, swig, authority };
+}
+
+describe('readVaultFull (V6: live_session_count, NO activeSession)', () => {
+  test('liveSessionCount = 3 decoded; exact key set (no activeSession)', async () => {
+    const { data, swig, authority } = v6VaultBytes({ liveSessionCount: 3 });
     const result = await readVaultFull(makeConn(data), PDA);
-    expect(result).toMatchSnapshot();
+    expect(result).toEqual({
+      exists: true,
+      version: 6,
+      swigAddress: swig.toBase58(),
+      dexterAuthority: authority.toBase58(),
+      pendingVoucherCount: 2,
+      liveSessionCount: 3,
+    });
+    expect('activeSession' in result).toBe(false);
   });
 
-  test('with active session', async () => {
-    const data = makeVaultAccountData({ hasWithdrawal: false, hasActiveSession: true });
+  test('liveSessionCount = 0 decoded as 0', async () => {
+    const { data } = v6VaultBytes({ liveSessionCount: 0 });
     const result = await readVaultFull(makeConn(data), PDA);
-    expect(result).toMatchSnapshot();
+    expect(result.liveSessionCount).toBe(0);
   });
 
-  test('with both withdrawal and session (offsets shift +48)', async () => {
-    const data = makeVaultAccountData({ hasWithdrawal: true, hasActiveSession: true });
+  test('withdrawal present → liveSessionCount read at the +48-shifted offset', async () => {
+    const { data, swig, authority } = v6VaultBytes({ liveSessionCount: 5, withdrawal: true });
     const result = await readVaultFull(makeConn(data), PDA);
-    expect(result).toMatchSnapshot();
+    expect(result).toEqual({
+      exists: true,
+      version: 6,
+      swigAddress: swig.toBase58(),
+      dexterAuthority: authority.toBase58(),
+      pendingVoucherCount: 2,
+      liveSessionCount: 5,
+    });
+  });
+
+  test('trailing bytes after live_session_count (real V6 odometer region) → same result', async () => {
+    const { data } = v6VaultBytes({ liveSessionCount: 3, trailing: 50 });
+    const result = await readVaultFull(makeConn(data), PDA);
+    expect(result.liveSessionCount).toBe(3);
+    expect(result.version).toBe(6);
+    expect('activeSession' in result).toBe(false);
+  });
+
+  test('account absent → EMPTY_FULL with liveSessionCount 0', async () => {
+    const result = await readVaultFull(makeConn(null), PDA);
+    expect(result).toEqual({
+      exists: false,
+      version: 0,
+      swigAddress: null,
+      dexterAuthority: null,
+      pendingVoucherCount: 0,
+      liveSessionCount: 0,
+    });
   });
 });

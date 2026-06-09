@@ -1,13 +1,13 @@
 /**
- * Vault account decoders (Anchor v2 layout).
+ * Vault account decoders (Anchor layout, V6).
  *
  * Two entry points sharing one byte layout:
  *  - readVaultOnchain → slim {exists, pendingVoucherCount, pendingWithdrawal}
- *  - readVaultFull    → full incl. swigAddress + dexterAuthority + activeSession
+ *  - readVaultFull    → full incl. swigAddress + dexterAuthority + liveSessionCount
  *
- * v2 layout (programs/dexter-vault/src/state.rs::Vault):
+ * V6 layout (programs/dexter-vault/src/state.rs::Vault):
  *      0     8   discriminator
- *      8     1   version u8 (= 2)
+ *      8     1   version u8 (= 6)
  *      9     1   bump u8
  *     10    33   passkey_pubkey
  *     43    32   swig_address
@@ -20,20 +20,20 @@
  *                  8  requested_at i64
  *    132/84  32  identity_claim    (132 if withdrawal present, else 84)
  *    164/116 32  dexter_authority  (164 if withdrawal present, else 116)
- *    196/148  1  active_session Option tag
- *            92  session body (if tag==1):
- *                32 session_pubkey
- *                 8 max_amount u64
- *                 8 expires_at i64
- *                32 allowed_counterparty
- *                 4 nonce u32
- *                 8 spent u64
+ *    196/148  1  live_session_count u8
+ *            ... odometer/credit fields follow on-chain; not decoded here.
+ *
+ * V5→V6 change: the byte after dexter_authority WAS an active_session Option
+ * tag (+92-byte inline body); V6 replaced it with live_session_count u8 —
+ * sessions now live in per-counterparty SessionAccount PDAs (src/session/).
+ * HAZARD: the V5 reader mis-decoded V6 bytes as a session (the count byte
+ * read as an Option tag, odometers read as money fields) — never resurrect
+ * the Option-tag read.
  */
 
 import { Connection, PublicKey } from '@solana/web3.js';
 import type {
   PendingWithdrawal,
-  ActiveSession,
   VaultOnchainState,
   VaultStateFull,
 } from '../types.js';
@@ -50,7 +50,6 @@ const PENDING_WITHDRAWAL_BODY_LEN = 48;
 const PENDING_WITHDRAWAL_BODY_START = PENDING_WITHDRAWAL_TAG_OFFSET + 1;
 const IDENTITY_CLAIM_LEN = 32;
 const PUBKEY_LEN = 32;
-const ACTIVE_SESSION_BODY_LEN = 92;
 
 const EMPTY_FULL: VaultStateFull = {
   exists: false,
@@ -58,7 +57,7 @@ const EMPTY_FULL: VaultStateFull = {
   swigAddress: null,
   dexterAuthority: null,
   pendingVoucherCount: 0,
-  activeSession: null,
+  liveSessionCount: 0,
 };
 
 /** Slim read — the shape dexter-api's existing /status routes return. */
@@ -90,7 +89,7 @@ export async function readVaultOnchain(
   return { exists: true, pendingVoucherCount, pendingWithdrawal };
 }
 
-/** Full read — adds swigAddress, dexterAuthority, activeSession. The /tab/settle path. */
+/** Full read — adds swigAddress, dexterAuthority, liveSessionCount. The /tab/settle path. */
 export async function readVaultFull(
   conn: Connection,
   vaultPda: PublicKey,
@@ -119,26 +118,9 @@ export async function readVaultFull(
     data.subarray(dexterAuthorityOffset, dexterAuthorityOffset + PUBKEY_LEN),
   ).toBase58();
 
-  const activeSessionTagOffset = dexterAuthorityOffset + PUBKEY_LEN;
-  let activeSession: ActiveSession | null = null;
-  if (
-    data.length > activeSessionTagOffset &&
-    data[activeSessionTagOffset] === 1
-  ) {
-    const bodyStart = activeSessionTagOffset + 1;
-    if (data.length >= bodyStart + ACTIVE_SESSION_BODY_LEN) {
-      activeSession = {
-        sessionPubkey: new Uint8Array(data.subarray(bodyStart, bodyStart + 32)),
-        maxAmount: data.readBigUInt64LE(bodyStart + 32),
-        expiresAt: Number(data.readBigInt64LE(bodyStart + 40)),
-        allowedCounterparty: new PublicKey(
-          data.subarray(bodyStart + 48, bodyStart + 80),
-        ).toBase58(),
-        nonce: data.readUInt32LE(bodyStart + 80),
-        spent: data.readBigUInt64LE(bodyStart + 84),
-      };
-    }
-  }
+  const liveSessionCountOffset = dexterAuthorityOffset + PUBKEY_LEN;
+  const liveSessionCount =
+    data.length > liveSessionCountOffset ? data.readUInt8(liveSessionCountOffset) : 0;
 
   return {
     exists: true,
@@ -146,6 +128,6 @@ export async function readVaultFull(
     swigAddress,
     dexterAuthority,
     pendingVoucherCount,
-    activeSession,
+    liveSessionCount,
   };
 }
