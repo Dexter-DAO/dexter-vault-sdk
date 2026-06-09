@@ -10,6 +10,7 @@ import {
 } from '../src/session/index.js';
 import {
   SESSION_ACCOUNT_DISCRIMINATOR,
+  SESSION_ACCOUNT_DISCRIMINATOR_B58,
   SESSION_ACCOUNT_SIZE,
   SESSION_VAULT_OFFSET,
 } from '../src/constants/index.js';
@@ -128,6 +129,10 @@ describe('fetchVaultSessionAccounts', () => {
       (f: { memcmp?: { offset: number } }) => f.memcmp?.offset === 0,
     );
     expect(discFilter.memcmp.bytes).toBe(bs58.encode(SESSION_ACCOUNT_DISCRIMINATOR));
+    // and the precomputed constant the runtime actually uses must equal the same
+    // encoding — this is the pin that lets fetch.ts skip a runtime bs58 import
+    // (whose default-import interop breaks in the emitted .cjs bundle).
+    expect(SESSION_ACCOUNT_DISCRIMINATOR_B58).toBe(bs58.encode(SESSION_ACCOUNT_DISCRIMINATOR));
   });
 });
 

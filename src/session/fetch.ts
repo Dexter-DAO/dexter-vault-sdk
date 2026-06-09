@@ -17,10 +17,9 @@
  *    a since-swept sibling and fails the completeness equation.
  */
 import { Connection, PublicKey, type AccountMeta } from '@solana/web3.js';
-import bs58 from 'bs58';
 import {
   DEXTER_VAULT_PROGRAM_ID,
-  SESSION_ACCOUNT_DISCRIMINATOR,
+  SESSION_ACCOUNT_DISCRIMINATOR_B58,
   SESSION_ACCOUNT_SIZE,
   SESSION_VAULT_OFFSET,
 } from '../constants/index.js';
@@ -54,7 +53,7 @@ export async function fetchVaultSessionAccounts(
     commitment: 'confirmed',
     filters: [
       { dataSize: SESSION_ACCOUNT_SIZE },
-      { memcmp: { offset: 0, bytes: bs58.encode(SESSION_ACCOUNT_DISCRIMINATOR) } },
+      { memcmp: { offset: 0, bytes: SESSION_ACCOUNT_DISCRIMINATOR_B58 } },
       { memcmp: { offset: SESSION_VAULT_OFFSET, bytes: vault.toBase58() } },
     ],
   });

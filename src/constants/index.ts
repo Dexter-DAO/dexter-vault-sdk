@@ -54,6 +54,13 @@ export const SESSION_ACCOUNT_DISCRIMINATOR = Uint8Array.from([74, 34, 65, 133, 9
 // Total SessionAccount size: 8 (discriminator) + 154 (INIT_SPACE). gPA dataSize filter.
 export const SESSION_ACCOUNT_SIZE = 162;
 
+// Precomputed base58 of SESSION_ACCOUNT_DISCRIMINATOR — the gPA memcmp filter
+// value. Hardcoded so the fetch path needs NO runtime bs58 import (the naive
+// `import bs58 from 'bs58'` default-import breaks in the emitted .cjs bundle —
+// the mainnet proof run of 2026-06-09 caught exactly that). A unit test pins
+// this string against bs58.encode(SESSION_ACCOUNT_DISCRIMINATOR).
+export const SESSION_ACCOUNT_DISCRIMINATOR_B58 = 'DQC4ziybBxx';
+
 // Byte offset of the `vault` field inside SessionAccount (8 disc + version u8 + bump u8).
 // The gPA memcmp filter keys on this; the full layout map lives in src/session/decode.ts.
 export const SESSION_VAULT_OFFSET = 10;
