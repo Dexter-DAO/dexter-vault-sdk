@@ -12,3 +12,4 @@ export * from './swigBundle.js';
 export * from './lockedClaim.js';
 export * from './credit.js';
 export * from './registerProgramAuthority.js';
+export * from './migrateV5ToV6.js';

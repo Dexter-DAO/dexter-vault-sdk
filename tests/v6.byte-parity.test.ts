@@ -9,6 +9,8 @@ import {
   SESSION_ACCOUNT_SIZE,
 } from '../src/constants/index.js';
 import {
+  buildMigrateV5ToV6Instruction,
+  buildMigrateV5ToV6WithSessionInstruction,
   buildRegisterSessionKeyInstruction,
   buildRevokeSessionKeyInstruction,
   buildSettleTabVoucherInstruction,
@@ -376,5 +378,58 @@ describe('buildLockVoucherInstruction (V6)', () => {
     expect(ix.data[93]).toBe(1); // holder_recovery_at Some tag
     expect(ix.data.readBigInt64LE(94)).toBe(2n);
     expect(Buffer.from(ix.data.subarray(ix.data.length - 32)).equals(counterparty.toBuffer())).toBe(true);
+  });
+});
+
+describe('buildMigrateV5ToV6Instruction (V5 → V6, no live session)', () => {
+  const vaultPda = PublicKey.unique();
+  const dexterAuthority = PublicKey.unique();
+  const payer = PublicKey.unique();
+  const ix = buildMigrateV5ToV6Instruction({ vaultPda, dexterAuthority, payer });
+
+  test('accounts: [vault(w), dexter_authority(s), payer(s+w), system_program(r)]', () => {
+    expect(ix.keys).toEqual([
+      { pubkey: vaultPda, isSigner: false, isWritable: true },
+      { pubkey: dexterAuthority, isSigner: true, isWritable: false },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ]);
+  });
+
+  test('data: the 8-byte discriminator and nothing else', () => {
+    expect(ix.data.length).toBe(8);
+    expect(Array.from(ix.data)).toEqual(Array.from(DISCRIMINATORS.migrate_v5_to_v6));
+  });
+});
+
+describe('buildMigrateV5ToV6WithSessionInstruction (V5 → V6, live session carried out)', () => {
+  const vaultPda = PublicKey.unique();
+  const dexterAuthority = PublicKey.unique();
+  const payer = PublicKey.unique();
+  const liveCounterparty = PublicKey.unique();
+  const ix = buildMigrateV5ToV6WithSessionInstruction({
+    vaultPda,
+    dexterAuthority,
+    payer,
+    liveCounterparty,
+  });
+
+  test('accounts: 5 keys with derived session PDA writable at index 2', () => {
+    const [sessionPda] = deriveSessionPda(vaultPda, liveCounterparty);
+    expect(ix.keys).toEqual([
+      { pubkey: vaultPda, isSigner: false, isWritable: true },
+      { pubkey: dexterAuthority, isSigner: true, isWritable: false },
+      { pubkey: sessionPda, isSigner: false, isWritable: true },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ]);
+  });
+
+  test('args: disc(8) + live_counterparty(32), counterparty = bytes [8,40)', () => {
+    expect(ix.data.length).toBe(40);
+    expect(Array.from(ix.data.subarray(0, 8))).toEqual(
+      Array.from(DISCRIMINATORS.migrate_v5_to_v6_with_session),
+    );
+    expect(Buffer.from(ix.data.subarray(8, 40)).equals(liveCounterparty.toBuffer())).toBe(true);
   });
 });
