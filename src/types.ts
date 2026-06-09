@@ -4,7 +4,8 @@
  * This file merges three previously-separate type contracts:
  *  - dexter-api/src/vault/vaultState.types.ts
  *  - dexter-x402-sdk/src/tab/types.ts (the session/voucher half)
- *  - dexter-facilitator/src/vault/vaultReader.ts (the ActiveSession shape)
+ *  - dexter-facilitator/src/vault/vaultReader.ts (the session shape; now the
+ *    V6 per-counterparty SessionAccountState below)
  *
  * The on-chain program (dexter-vault v2) is the ultimate referee; these
  * types describe the off-chain mirror of its state.
@@ -16,15 +17,6 @@ export interface PendingWithdrawal {
   amount: string;          // atomic, u64 stringified (exceeds Number.MAX_SAFE_INTEGER)
   destination: string;     // base58
   requestedAt: number;     // unix seconds
-}
-
-export interface ActiveSession {
-  sessionPubkey: Uint8Array;  // 32 bytes
-  maxAmount: bigint;
-  expiresAt: number;
-  allowedCounterparty: string; // base58
-  nonce: number;
-  spent: bigint;
 }
 
 export interface VaultOnchainState {
@@ -39,7 +31,35 @@ export interface VaultStateFull {
   swigAddress: string | null;
   dexterAuthority: string | null;
   pendingVoucherCount: number;
-  activeSession: ActiveSession | null;
+  liveSessionCount: number;
+}
+
+// ── V6 SessionAccount (per-counterparty session PDA) ─────────────────────
+
+/** Decoded SessionRegistration — field-for-field mirror of the on-chain struct. */
+export interface SessionRegistrationState {
+  sessionPubkey: Uint8Array;        // 32 bytes, ed25519
+  maxAmount: bigint;                // lifetime cap, atomic units
+  expiresAt: number;                // unix seconds
+  allowedCounterparty: string;      // base58
+  nonce: number;
+  spent: bigint;                    // cumulative settled (terminal-settle odometer)
+  currentOutstanding: bigint;       // live unsettled exposure (the revolving meter)
+  maxRevolvingCapacity: bigint;     // admission cap for the revolving meter
+  crystallizedCumulative: bigint;   // lock-terminal odometer
+  lastLockedSequence: number;       // reserved; NOT the replay guard
+}
+
+/** Decoded SessionAccount PDA. `version === 0` = never-touched OR cleared (by
+ *  revoke or the register-time expiry sweep) — the authoritative "no live
+ *  session" signal. NOT the Anchor discriminator (which is set before the
+ *  handler runs and therefore proves nothing about liveness). */
+export interface SessionAccountState {
+  address: string;                  // base58 PDA
+  version: number;                  // 0 | 1
+  bump: number;
+  vault: string;                    // base58
+  session: SessionRegistrationState;
 }
 
 // ── Tab status (vault enrollment lifecycle) ──────────────────────────────
