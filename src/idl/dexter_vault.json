@@ -8,6 +8,101 @@
   },
   "instructions": [
     {
+      "name": "close_session",
+      "discriminator": [
+        68,
+        114,
+        178,
+        140,
+        222,
+        38,
+        248,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "Read-only: the version + authority gates read it, nothing mutates it.",
+            "`has_one` enforces vault.dexter_authority == dexter_authority.key()",
+            "(the same authority-gate shape settle_voucher uses, same error mapping)."
+          ]
+        },
+        {
+          "name": "session",
+          "docs": [
+            "The CLEARED session PDA being closed. A cleared session has every",
+            "SessionRegistration field zeroed (including `allowed_counterparty`), so",
+            "the binding to (vault, counterparty) cannot be read from the account",
+            "body — the PDA SEEDS are the proof: only the canonical PDA for",
+            "(vault, args.allowed_counterparty) satisfies this constraint. Bump from",
+            "stored (`session.bump`), matching revoke_session_key — register stamps",
+            "the canonical bump at first touch and neither revoke nor the register-",
+            "time expired-sibling sweep ever zeroes `bump` (or `vault`), so it is",
+            "valid on a cleared account.",
+            "",
+            "`close = dexter_authority` — Anchor 0.32.1 close semantics (verified in",
+            "anchor-lang 0.32.1 src/common.rs::close): drains ALL lamports to the",
+            "destination, reassigns the account to the System Program, and resizes",
+            "data to 0. No stale bytes survive and the account is no longer",
+            "program-owned, so a same-transaction revival (re-funding the emptied",
+            "account with stale state) is structurally impossible — there is no",
+            "state left to revive and `Account<SessionAccount>` deserialization",
+            "would fail the owner check anyway."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "arg",
+                "path": "args.allowed_counterparty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "The vault's recorded dexter_authority — must sign, and receives the",
+            "reclaimed rent (hence `mut`). Authority-only in v1 by design: the",
+            "authority operationally funds session-PDA rent in the hosted flow, so",
+            "the rent returns to the party that fronted it."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "CloseSessionArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "close_standby",
       "discriminator": [
         218,
@@ -725,6 +820,63 @@
           "type": {
             "defined": {
               "name": "LockVoucherArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "migrate_legacy_to_v6",
+      "discriminator": [
+        177,
+        247,
+        69,
+        24,
+        166,
+        147,
+        67,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "vault. It CANNOT be loaded as `Account<'info, Vault>` (no version byte,",
+            "different field shapes), so it is validated entirely by hand in",
+            "`decode_legacy_vault`: exact length 151 or 183, Vault discriminator,",
+            "full frozen-layout cursor decode. Owner-gated to this program."
+          ],
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "The gate signer. For a 183-byte vault: must equal the STORED",
+            "`dexter_authority` (which is preserved into V6). For a 151-byte vault",
+            "(no stored authority exists): must equal `LEGACY_MIGRATE_ADMIN`, and is",
+            "stamped as the new `dexter_authority`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Funds the rent top-up for the grow (151/183 → 279 bytes)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "MigrateLegacyToV6Args"
             }
           }
         }
@@ -2780,9 +2932,37 @@
       "code": 6038,
       "name": "SessionAccountNotWritable",
       "msg": "an expired sibling session must be passed WRITABLE so the register-time sweep can clear it"
+    },
+    {
+      "code": 6039,
+      "name": "SessionStillLive",
+      "msg": "session is still live (version != 0); revoke_session_key it before close_session can reclaim its rent"
+    },
+    {
+      "code": 6040,
+      "name": "NotALegacyVault",
+      "msg": "account is not a recognized pre-version-byte legacy vault (expected exactly 151-byte V1 or 183-byte V1.5 with the Vault discriminator)"
     }
   ],
   "types": [
+    {
+      "name": "CloseSessionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "allowed_counterparty",
+            "docs": [
+              "The counterparty whose CLEARED session PDA is being closed. Goes in the",
+              "args so the accounts struct can re-derive the PDA seed — the account",
+              "body's own copy of this field is zeroed on a cleared session, so the",
+              "seed derivation is the only binding."
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
     {
       "name": "CloseStandbyArgs",
       "type": {
@@ -3172,6 +3352,13 @@
             "name": "Abandoned"
           }
         ]
+      }
+    },
+    {
+      "name": "MigrateLegacyToV6Args",
+      "type": {
+        "kind": "struct",
+        "fields": []
       }
     },
     {
