@@ -8,3 +8,4 @@
 export * from './types.js';
 export * from './counterfactual.js';
 export * from './session/index.js';
+export * from './grant/index.js';

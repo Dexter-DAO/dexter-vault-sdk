@@ -210,6 +210,48 @@ await waitForSession(connection, vaultPda, allowedCounterparty, { cleared: true 
 
 ---
 
+## Spend grants (`@dexterai/vault/grant`)
+
+Step 2 of Connect-a-Tab: an app PROPOSES a bounded spend-tab; the user's
+passkey endorses the exact 188-byte registration scope. Two halves:
+
+```ts
+// App side — produce a self-contained request blob (no keys, signs nothing):
+import { requestSpendGrant, encodeSpendGrantRequest } from '@dexterai/vault/grant';
+
+const blob = requestSpendGrant({
+  app: { name: 'Acme Research', domain: 'acme.example' },
+  counterparty: SELLER_ADDRESS,        // the on-chain binding (session PDA seed)
+  capAtomic: '5000000',                // $5 — the user may only SHORTEN
+  expiresAtUnix: Math.floor(Date.now() / 1000) + 7 * 86400,
+  sessionPubkey: AGENT_SESSION_PUBKEY, // optional — see custody note
+});
+const consentUrl = `https://dexter.cash/grant?req=${encodeSpendGrantRequest(blob)}`;
+
+// Consent side — parse untrusted input, apply shorten-only edits, run the
+// passkey ceremony over the exact bytes, end at the SIGNED GRANT:
+import { parseSpendGrantRequest, approveSpendGrant } from '@dexterai/vault/grant';
+
+const request = parseSpendGrantRequest(rawBlob);
+const approved = await approveSpendGrant({
+  request,
+  vaultPda,                            // the USER's vault — never from the blob
+  edits: { capAtomic: '2000000' },     // shorten-only; raises throw
+  sign: (message) => myWebAuthnPipeline(message),
+});
+// approved.params + approved.ceremony → your sponsor/payer for the register tx.
+// Self-hosted? registerSessionWithRetry (./session) builds + retries the
+// register against the fresh-sibling contract with YOUR payer.
+```
+
+CUSTODY NOTE: if the blob carries `sessionPubkey`, the requesting app's agent
+holds the session secret and can drive spend to the consented cap on its own
+pacing. Omit it and `approveSpendGrant` generates the keypair caller-side —
+the requester never sees the secret. Either way exposure is bounded by
+cap × counterparty × expiry, enforced on-chain at settle.
+
+---
+
 ## Subpath exports
 
 Each subpath is a tree-shakeable entry point. Pull only what you need.
@@ -219,10 +261,11 @@ Each subpath is a tree-shakeable entry point. Pull only what you need.
 | `@dexterai/vault` | Re-exports `types` + `counterfactual` + `session` for convenience |
 | `@dexterai/vault/types` | `VaultState`, `VaultStateFull`, `SessionAccountState`, `SessionRegistrationState`, `PendingWithdrawal`, `SessionKey`, `SessionScope`, `SignedVoucher`, `VoucherPayload`, `AtomicAmount`, `HumanAmount`, `TabNetworkId` |
 | `@dexterai/vault/constants` | `DEXTER_VAULT_PROGRAM_ID`, `SWIG_PROGRAM_ID`, `USDC_MAINNET`/`USDC_DEVNET`, all 25 `DISCRIMINATORS`, `SESSION_SEED`, `LOCKED_CLAIM_SEED`, `OTS_SESSION_REGISTER_V1_DOMAIN`, `OTS_SESSION_REGISTER_V2_DOMAIN`, `OTS_SESSION_REVOKE_V1_DOMAIN` |
-| `@dexterai/vault/instructions` | Every builder: `buildInitializeVaultInstruction`, `buildSetSwigInstruction`, `buildRegisterSessionKeyInstruction`, `buildRevokeSessionKeyInstruction`, `buildSettleVoucherInstruction`, `buildSettleTabVoucherInstruction`, `buildRequestWithdrawalInstruction`, `buildFinalizeWithdrawalInstruction`, `buildForceReleaseInstruction`, `buildRotatePasskeyInstruction`, `buildRotateDexterAuthorityInstruction`, `buildProvePasskeyInstruction`, `buildMigrateV5ToV6Instruction` / `buildMigrateV5ToV6WithSessionInstruction`, and the canonical `buildSwigCreationBundle` + `expectedSwigAddressFor` + `verifySwigIsOurs` |
+| `@dexterai/vault/instructions` | Every builder: `buildInitializeVaultInstruction`, `buildSetSwigInstruction`, `buildRegisterSessionKeyInstruction`, `buildRevokeSessionKeyInstruction`, `buildSettleVoucherInstruction`, `buildSettleTabVoucherInstruction`, `buildRequestWithdrawalInstruction`, `buildFinalizeWithdrawalInstruction`, `buildForceReleaseInstruction`, `buildRotatePasskeyInstruction`, `buildRotateDexterAuthorityInstruction`, `buildProvePasskeyInstruction`, `buildMigrateV5ToV6Instruction` / `buildMigrateV5ToV6WithSessionInstruction`, `buildCloseSessionInstruction`, and the canonical `buildSwigCreationBundle` + `expectedSwigAddressFor` + `verifySwigIsOurs` |
 | `@dexterai/vault/messages` | `sessionRegisterMessage` (188 bytes, V2), `sessionRevokeMessage` (128 bytes), `voucherPayloadMessage` / `buildVoucherMessage` (44 bytes), `buildSetSwigOperationMessage` |
 | `@dexterai/vault/reader` | `readVaultOnchain` (slim), `readVaultFull` (adds `swigAddress`, `dexterAuthority`, `liveSessionCount`) |
-| `@dexterai/vault/session` | V6 per-counterparty sessions: `deriveSessionPda`, `decodeSessionAccount`, `isSessionLive`, `fetchSessionAccount`, `fetchVaultSessionAccounts`, `sessionPdasOf`, `buildSiblingAccountMetas`, `waitForSession` |
+| `@dexterai/vault/session` | V6 per-counterparty sessions: `deriveSessionPda`, `decodeSessionAccount`, `isSessionLive`, `fetchSessionAccount`, `fetchVaultSessionAccounts`, `sessionPdasOf`, `buildSiblingAccountMetas`, `waitForSession`, `registerSessionWithRetry` |
+| `@dexterai/vault/grant` | Spend-grant consent flow: `requestSpendGrant`, `encodeSpendGrantRequest` / `decodeSpendGrantRequest`, `parseSpendGrantRequest`, `approveSpendGrant` |
 | `@dexterai/vault/precompile` | `buildSecp256r1VerifyInstruction`, `buildPrecompileMessage`, `buildEd25519VerifyInstruction` |
 | `@dexterai/vault/counterfactual` | `deriveCounterfactualAddresses` |
 | `@dexterai/vault/signers` | `Ed25519Signer`, `PasskeySigner` interfaces |

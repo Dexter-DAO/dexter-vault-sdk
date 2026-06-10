@@ -1,6 +1,6 @@
 {
   "name": "@dexterai/vault",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Canonical off-chain mirror of the dexter-vault Solana Anchor program — Solana instruction builders, byte-precise message encoders, account decoders, secp256r1/Ed25519 precompile helpers, counterfactual Swig derivation, and signer interfaces. The single source of truth for any TypeScript code that produces bytes the on-chain program will verify.",
   "author": "Dexter",
   "license": "MIT",
@@ -86,6 +86,11 @@
       "import": "./dist/connect/index.js",
       "require": "./dist/connect/index.cjs"
     },
+    "./grant": {
+      "types": "./dist/grant/index.d.ts",
+      "import": "./dist/grant/index.js",
+      "require": "./dist/grant/index.cjs"
+    },
     "./idl/dexter_vault.json": "./dist/idl/dexter_vault.json"
   },
   "typesVersions": {
@@ -134,6 +139,9 @@
       ],
       "connect": [
         "./dist/connect/index.d.ts"
+      ],
+      "grant": [
+        "./dist/grant/index.d.ts"
       ]
     }
   },

@@ -20,6 +20,7 @@ export default defineConfig({
     'signers/browser/index': 'src/signers/browser/index.ts',
     'tab/index': 'src/tab/index.ts',
     'connect/index': 'src/connect/index.ts',
+    'grant/index': 'src/grant/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
