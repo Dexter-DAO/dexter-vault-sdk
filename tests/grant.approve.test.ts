@@ -192,6 +192,23 @@ describe('approveSpendGrant', () => {
     ).rejects.toThrow(GrantEditError);
   });
 
+  it('spliced secret (seedA || pubB) rejects — pubkey must DERIVE from the seed', async () => {
+    const { sign } = recordingSign();
+    const a = nacl.sign.keyPair();
+    const b = nacl.sign.keyPair();
+    const spliced = new Uint8Array(64);
+    spliced.set(a.secretKey.slice(0, 32), 0); // seed of A
+    spliced.set(b.publicKey, 32); // embedded pubkey of B
+    await expect(
+      approveSpendGrant({
+        request: blob(),
+        vaultPda: VAULT,
+        sessionKeypair: { publicKey: b.publicKey, privateKey: spliced },
+        sign,
+      }),
+    ).rejects.toThrow(GrantEditError);
+  });
+
   it('defaults nonce to unix seconds when omitted', async () => {
     const { sign } = recordingSign();
     const before = Math.floor(Date.now() / 1000);

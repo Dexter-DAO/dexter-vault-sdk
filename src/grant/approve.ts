@@ -146,14 +146,23 @@ export async function approveSpendGrant<TSig>(
   } else if (args.sessionKeypair !== undefined) {
     // The privateKey must actually correspond to the publicKey — otherwise the
     // user endorses a session key the agent can never sign with (or worse,
-    // a different one than it thinks it holds).
+    // a different one than it thinks it holds). Derive from the SEED
+    // (fromSecretKey merely copies bytes 32..64, so a spliced secret
+    // seedA||pubB would pass a fromSecretKey comparison while producing
+    // signatures that never verify).
+    if (args.sessionKeypair.privateKey.length !== 64) {
+      throw new GrantEditError('bad_session_key', 'sessionKeypair.privateKey must be a 64-byte ed25519 secret key');
+    }
     let derived: { publicKey: Uint8Array };
     try {
-      derived = nacl.sign.keyPair.fromSecretKey(args.sessionKeypair.privateKey);
+      derived = nacl.sign.keyPair.fromSeed(args.sessionKeypair.privateKey.slice(0, 32));
     } catch {
       throw new GrantEditError('bad_session_key', 'sessionKeypair.privateKey is not a valid ed25519 secret key');
     }
-    if (!bytesEqual(derived.publicKey, args.sessionKeypair.publicKey)) {
+    if (
+      !bytesEqual(derived.publicKey, args.sessionKeypair.publicKey) ||
+      !bytesEqual(derived.publicKey, args.sessionKeypair.privateKey.slice(32))
+    ) {
       throw new GrantEditError('bad_session_key', 'sessionKeypair publicKey does not match privateKey');
     }
     sessionPubkeyBytes = args.sessionKeypair.publicKey;
