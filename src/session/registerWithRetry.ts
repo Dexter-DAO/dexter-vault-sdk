@@ -6,8 +6,10 @@
  * SessionAccounts, fetched FRESH (src/session/fetch.ts). A sibling that
  * expires + gets swept between our fetch and our send makes the completeness
  * equation fail (`IncompleteSessionSet`); a malformed order fails
- * `SessionAccountsNotSorted` (6019). Both are cured by refetch + rebuild —
- * never by resending the same bytes. This wrapper owns that loop.
+ * `SessionAccountsNotSorted` (6019). A refetch + rebuild cures 6022; 6019 is
+ * included defensively (the builder sorts, so it would imply a builder bug a
+ * rebuild reproduces — the bounded attempts keep that cheap). Never cured by
+ * resending the same bytes. This wrapper owns that loop.
  *
  * Transport stays caller-owned (the injected `send`): the SDK never owns the
  * tx lifecycle — the sponsor signs as payer and has its own fee/confirm
@@ -70,7 +72,9 @@ export async function registerSessionWithRetry(
   args: RegisterSessionWithRetryArgs,
 ): Promise<RegisterSessionWithRetryResult> {
   const maxAttempts = args.maxAttempts ?? 3;
-  if (maxAttempts < 1) throw new Error('registerSessionWithRetry: maxAttempts must be >= 1');
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+    throw new Error('registerSessionWithRetry: maxAttempts must be an integer >= 1');
+  }
   const fetchSessions = args.fetchSessions ?? fetchVaultSessionAccounts;
   const fetchSession = args.fetchSession ?? fetchSessionAccount;
 

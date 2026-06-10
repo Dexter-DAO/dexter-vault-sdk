@@ -95,30 +95,41 @@ describe('registerSessionWithRetry', () => {
     expect(result.siblingCount).toBe(0); // target excluded from its own sibling set
   });
 
-  it('retries on IncompleteSessionSet with a REFETCHED sibling set', async () => {
+  it('retries on IncompleteSessionSet with a REFETCHED sibling set (preInstructions on every attempt)', async () => {
     const otherA = Keypair.generate().publicKey;
     const otherB = Keypair.generate().publicKey;
+    const pre = new TransactionInstruction({ keys: [], programId: Keypair.generate().publicKey, data: Buffer.from([7]) });
     let fetches = 0;
+    let replaceChecks = 0;
     let sends = 0;
     const result = await registerSessionWithRetry({
       ...baseArgs(),
+      fetchSession: async () => {
+        replaceChecks += 1;
+        return null;
+      },
       fetchSessions: async () => {
         fetches += 1;
         // first fetch: stale 2-sibling set; second: 1 sibling (one swept)
         return fetches === 1 ? [liveState(otherA), liveState(otherB)] : [liveState(otherA)];
       },
+      preInstructions: [pre],
       send: async (ixs: TransactionInstruction[]) => {
         sends += 1;
+        // preInstructions are prepended verbatim on EVERY attempt, retries included
+        expect(ixs.length).toBe(2);
+        expect(ixs[0].data.equals(Buffer.from([7]))).toBe(true);
         if (sends === 1) {
           throw new Error('Simulation failed: custom program error: 0x1786 IncompleteSessionSet');
         }
         // second attempt: 8 fixed accounts + 1 sibling
-        expect(ixs[0].keys.length).toBe(9);
+        expect(ixs[1].keys.length).toBe(9);
         return 'sig-3';
       },
     } as any);
     expect(result).toMatchObject({ signature: 'sig-3', attempts: 2, siblingCount: 1 });
     expect(fetches).toBe(2);
+    expect(replaceChecks).toBe(1); // replace check happens ONCE, pre-loop
   });
 
   it('retries on SessionAccountsNotSorted by name', async () => {
