@@ -146,6 +146,52 @@ describe('approveSpendGrant', () => {
     expect(nacl.sign.detached.verify(new Uint8Array([1, 2, 3]), sig, approved.sessionKeypair!.publicKey)).toBe(true);
   });
 
+  it('non-u32 nonce rejects (would silently truncate in the message bytes)', async () => {
+    const { sign } = recordingSign();
+    for (const nonce of [2 ** 32, -1, 1.5]) {
+      await expect(
+        approveSpendGrant({ request: blob(), vaultPda: VAULT, nonce, sign }),
+      ).rejects.toThrow(GrantEditError);
+    }
+  });
+
+  it('custody (ii): blob sessionPubkey lands byte-exact at message bytes 96..128', async () => {
+    const { calls, sign } = recordingSign();
+    const agentKp = nacl.sign.keyPair();
+    await approveSpendGrant({
+      request: blob({ sessionPubkey: bs58.encode(agentKp.publicKey) }),
+      vaultPda: VAULT,
+      nonce: 9,
+      sign,
+    });
+    expect(Buffer.from(calls[0].slice(96, 128)).equals(Buffer.from(agentKp.publicKey))).toBe(true);
+  });
+
+  it('revolving above cap clamps to cap even without edits', async () => {
+    const { sign } = recordingSign();
+    const approved = await approveSpendGrant({
+      request: blob({ revolvingCapacityAtomic: '9000000' }),
+      vaultPda: VAULT,
+      nonce: 4,
+      sign,
+    });
+    expect(approved.params.maxRevolvingCapacityAtomic).toBe('5000000');
+  });
+
+  it('mismatched sessionKeypair (pubkey A, privateKey B) rejects', async () => {
+    const { sign } = recordingSign();
+    const a = nacl.sign.keyPair();
+    const b = nacl.sign.keyPair();
+    await expect(
+      approveSpendGrant({
+        request: blob(),
+        vaultPda: VAULT,
+        sessionKeypair: { publicKey: a.publicKey, privateKey: b.secretKey },
+        sign,
+      }),
+    ).rejects.toThrow(GrantEditError);
+  });
+
   it('defaults nonce to unix seconds when omitted', async () => {
     const { sign } = recordingSign();
     const before = Math.floor(Date.now() / 1000);

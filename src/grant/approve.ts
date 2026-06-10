@@ -23,6 +23,16 @@ import { DEXTER_VAULT_PROGRAM_ID } from '../constants/index.js';
 import { sessionRegisterMessage } from '../messages/session.js';
 import type { SpendGrantRequest } from './types.js';
 
+const U64_MAX = 18446744073709551615n;
+
+/** Dependency-free constant-shape byte compare (browser-safe; no Buffer). */
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
+  return diff === 0;
+}
+
 export class GrantEditError extends Error {
   readonly code: string;
   constructor(code: string, detail: string) {
@@ -91,7 +101,10 @@ export async function approveSpendGrant<TSig>(
   let finalCap = proposedCap;
   if (edits?.capAtomic !== undefined) {
     if (!/^\d+$/.test(edits.capAtomic)) throw new GrantEditError('bad_cap', 'cap must be an integer string');
+    // u64::MAX is 20 digits; bound before BigInt to keep conversion cheap.
+    if (edits.capAtomic.length > 20) throw new GrantEditError('bad_cap', 'cap exceeds u64');
     finalCap = BigInt(edits.capAtomic);
+    if (finalCap > U64_MAX) throw new GrantEditError('bad_cap', 'cap exceeds u64');
     if (finalCap <= 0n) throw new GrantEditError('cap_zero', 'cap must be > 0');
     if (finalCap > proposedCap) {
       throw new GrantEditError('cap_raise', `cap ${finalCap} exceeds proposed ${proposedCap} — shorten only`);
@@ -131,6 +144,18 @@ export async function approveSpendGrant<TSig>(
     sessionPubkeyBytes = bs58.decode(request.sessionPubkey);
     sessionKeypair = null; // the requester's agent holds the secret
   } else if (args.sessionKeypair !== undefined) {
+    // The privateKey must actually correspond to the publicKey — otherwise the
+    // user endorses a session key the agent can never sign with (or worse,
+    // a different one than it thinks it holds).
+    let derived: { publicKey: Uint8Array };
+    try {
+      derived = nacl.sign.keyPair.fromSecretKey(args.sessionKeypair.privateKey);
+    } catch {
+      throw new GrantEditError('bad_session_key', 'sessionKeypair.privateKey is not a valid ed25519 secret key');
+    }
+    if (!bytesEqual(derived.publicKey, args.sessionKeypair.publicKey)) {
+      throw new GrantEditError('bad_session_key', 'sessionKeypair publicKey does not match privateKey');
+    }
     sessionPubkeyBytes = args.sessionKeypair.publicKey;
     sessionKeypair = args.sessionKeypair;
   } else {
@@ -143,6 +168,11 @@ export async function approveSpendGrant<TSig>(
   }
 
   const nonce = args.nonce ?? now;
+  // sessionRegisterMessage writes the nonce as a raw u32 (`>>> 0` truncates);
+  // gate here so params can never diverge from the bytes the user signs.
+  if (!Number.isInteger(nonce) || nonce < 0 || nonce > 0xffffffff) {
+    throw new GrantEditError('bad_nonce', 'nonce must be a u32');
+  }
   const counterparty = new PublicKey(request.counterparty);
 
   const message = sessionRegisterMessage({
