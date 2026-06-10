@@ -90,7 +90,10 @@ export async function buildInstantPayoutInstructions(
     transfers,
   });
 
-  return [settleIx, ...signV2Ixs];
+  // CONTRACT: signV2Ixs INCLUDES settleIx (the kit returns preInstructions in its
+  // ordered output — see assembleSignV2.ts). Re-adding it would run
+  // settle_locked_voucher twice and revert the whole payout.
+  return [...signV2Ixs];
 }
 
 /** Real SignV2 assembler — mirrors dexter-api buildFinalizeWithdrawExtra. */

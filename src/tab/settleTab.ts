@@ -87,7 +87,12 @@ export async function settleTab(p: SettleTabParams): Promise<TransactionInstruct
     sequenceNumber: p.sequenceNumber,
   });
 
-  // [3/3] Swig SignV2 transfer of the delta (vaultIx becomes the preInstruction).
+  // [3/3] Swig SignV2 transfer of the delta. CONTRACT: the assembler's returned
+  // list INCLUDES vaultIx — @swig-wallet/kit's getSignInstructions returns the
+  // preInstructions AND the SignV2 in one ordered array (see dexter-vault
+  // tests/helpers/settle.ts, proven on mainnet). Re-adding vaultIx here would
+  // execute settle_tab_voucher TWICE in one tx; the second replays the same
+  // cumulative and reverts with LockRangeAlreadyClaimed (caught live 2026-06-09).
   const assemble = p.assembleSignV2 ?? defaultAssembleSignV2;
   const signV2Ixs = await assemble({
     connection: p.connection,
@@ -97,5 +102,5 @@ export async function settleTab(p: SettleTabParams): Promise<TransactionInstruct
     transfers: [{ destinationAta: p.sellerAta, amount: delta }],
   });
 
-  return [precompileIx, vaultIx, ...signV2Ixs];
+  return [precompileIx, ...signV2Ixs];
 }

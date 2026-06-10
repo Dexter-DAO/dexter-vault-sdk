@@ -1,6 +1,7 @@
 import { describe, test, expect, vi } from 'vitest';
 import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { settleTab } from '../src/tab/settleTab.js';
+import { DISCRIMINATORS } from '../src/constants/index.js';
 import { deriveSessionPda } from '../src/session/index.js';
 import { rawSessionAccount } from './helpers/sessionFixture.js';
 
@@ -50,9 +51,12 @@ function connWith(data: Buffer | null): Connection {
 describe('settleTab', () => {
   test('reads prior-spent, computes the delta, composes precompile + vault ix + SignV2', async () => {
     let assemblerSawDelta: bigint | undefined;
+    // Kit-faithful fake: getSignInstructions returns its preInstructions IN the
+    // output list, so the fake echoes vaultIx first (mis-modeling this is how the
+    // double-include bug slipped past the suite — caught live on mainnet 2026-06-09).
     const fakeAssemble = async (a: any) => {
       assemblerSawDelta = a.transfers[0].amount;
-      return [new TransactionInstruction({ programId: SWIG, keys: [], data: Buffer.from([0x5a]) })];
+      return [a.vaultIx, new TransactionInstruction({ programId: SWIG, keys: [], data: Buffer.from([0x5a]) })];
     };
     const ixs = await settleTab({
       ...baseParams,
@@ -73,6 +77,13 @@ describe('settleTab', () => {
     expect(vaultIx.keys[3].pubkey.equals(sessionPda)).toBe(true);
     expect(vaultIx.keys[3].isWritable).toBe(true);
     expect(Buffer.from(vaultIx.data.subarray(vaultIx.data.length - 32)).equals(COUNTERPARTY.toBuffer())).toBe(true);
+
+    // REGRESSION PIN (mainnet 2026-06-09): settle_tab_voucher must appear EXACTLY
+    // once — a re-added vaultIx executes twice and reverts LockRangeAlreadyClaimed.
+    const settleCount = ixs.filter(
+      (ix) => ix.data.length >= 8 && DISCRIMINATORS.settle_tab_voucher.every((b, i) => ix.data[i] === b),
+    ).length;
+    expect(settleCount).toBe(1);
   });
 
   test('injected readPriorSpent receives the counterparty (per-session prior)', async () => {

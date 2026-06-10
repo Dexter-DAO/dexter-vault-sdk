@@ -25,6 +25,10 @@ export interface AssembleSignV2Args {
   transfers: TabTransfer[];
 }
 
+/** CONTRACT: the returned array must CONTAIN vaultIx (ordered before the SignV2).
+ *  The real kit assembler satisfies this automatically — getSignInstructions
+ *  returns its preInstructions in the output list. Injected fakes must echo
+ *  vaultIx the same way or the composed tx will be missing the vault leg. */
 export type AssembleSignV2 = (args: AssembleSignV2Args) => Promise<TransactionInstruction[]>;
 
 /** Real SignV2 assembler — mirrors factoring/instantPayout.ts defaultAssembleSignV2. */
