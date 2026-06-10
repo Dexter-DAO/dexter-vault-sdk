@@ -7,7 +7,18 @@
  * is rendered. Both functions funnel through the same validator so an app
  * cannot construct a blob the consent page would reject.
  */
-import bs58 from 'bs58';
+// bs58@6's CJS exports are `{ __esModule: true, default: <instance> }`, and
+// tsup/esbuild's node-mode `__toESM` re-wraps that whole object as `default`,
+// so in the emitted .cjs the instance sits TWO `.default` layers deep while
+// the ESM build needs only one (the 0.7.0 trap, same family as
+// src/instructions/swigBundle.ts). Peel layers until `.decode` exists —
+// proven against the real tsup CJS artifact, not just vitest's ESM path.
+import * as bs58Module from 'bs58';
+const bs58: { decode(s: string): Uint8Array } = (() => {
+  let m: any = bs58Module;
+  for (let i = 0; i < 3 && m && typeof m.decode !== 'function' && m.default; i += 1) m = m.default;
+  return m;
+})();
 import type {
   RequestSpendGrantArgs,
   SpendGrantAppMetadata,
@@ -33,10 +44,15 @@ function fail(code: string, detail: string): never {
 
 function requireBase58Pubkey(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.length === 0) fail('bad_pubkey', `${field} must be a base58 string`);
+  // A 32-byte key is <=44 base58 chars; unbounded bs58.decode is O(n^2) CPU.
+  if (value.length > 64) fail('bad_pubkey', `${field} is too long`);
   let decoded: Uint8Array;
   try {
     decoded = bs58.decode(value);
-  } catch {
+  } catch (err) {
+    // Only swallow decode rejections of bad input; a TypeError means the
+    // decoder itself is broken (e.g. CJS interop) and must surface.
+    if (err instanceof TypeError) throw err;
     fail('bad_pubkey', `${field} is not valid base58`);
   }
   if (decoded.length !== 32) fail('bad_pubkey', `${field} must decode to 32 bytes, got ${decoded.length}`);
@@ -47,6 +63,8 @@ function requireU64String(value: unknown, field: string, { min = 1n }: { min?: b
   if (typeof value !== 'string' || !/^\d+$/.test(value)) {
     fail('bad_amount', `${field} must be a base-10 integer string`);
   }
+  // u64::MAX is 20 digits; bound before BigInt to keep conversion cheap.
+  if (value.length > 20) fail('bad_amount', `${field} exceeds u64`);
   const n = BigInt(value);
   if (n < min) fail('bad_amount', `${field} must be >= ${min}`);
   if (n > U64_MAX) fail('bad_amount', `${field} exceeds u64`);
@@ -184,15 +202,22 @@ function bytesToBase64Url(bytes: Uint8Array): string {
 }
 
 function base64UrlToBytes(s: string): Uint8Array {
-  const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
-  if (typeof atob === 'function') {
-    const bin = atob(b64 + pad);
-    const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
-    return out;
+  // atob / Buffer throw raw InvalidCharacterError on charset-valid but
+  // length-invalid input (e.g. length % 4 === 1); keep every failure inside
+  // the SpendGrantValidationError contract.
+  try {
+    const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+    if (typeof atob === 'function') {
+      const bin = atob(b64 + pad);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    return new Uint8Array(Buffer.from(b64 + pad, 'base64'));
+  } catch {
+    fail('bad_encoding', 'encoded blob is not decodable base64url');
   }
-  return new Uint8Array(Buffer.from(b64 + pad, 'base64'));
 }
 
 /** Blob → `?req=` URL parameter value. */
@@ -205,5 +230,12 @@ export function decodeSpendGrantRequest(encoded: string): SpendGrantRequest {
   if (!/^[A-Za-z0-9_-]+$/.test(encoded)) {
     fail('bad_encoding', 'encoded blob must be base64url');
   }
-  return parseSpendGrantRequest(new TextDecoder().decode(base64UrlToBytes(encoded)));
+  const bytes = base64UrlToBytes(encoded);
+  let json: string;
+  try {
+    json = new TextDecoder().decode(bytes);
+  } catch {
+    fail('bad_encoding', 'encoded blob is not decodable base64url');
+  }
+  return parseSpendGrantRequest(json);
 }

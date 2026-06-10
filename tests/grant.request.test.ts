@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { Keypair } from '@solana/web3.js';
-import bs58 from 'bs58';
 import {
   requestSpendGrant,
   parseSpendGrantRequest,
@@ -112,5 +111,17 @@ describe('encode/decode (URL transport)', () => {
     const encoded = encodeSpendGrantRequest(blob);
     expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/); // no +, /, =
     expect(decodeSpendGrantRequest(encoded)).toEqual(blob);
+  });
+
+  it('throws SpendGrantValidationError on charset-valid but undecodable input', () => {
+    // length % 4 === 1 — passes the charset regex, raw atob/Buffer would throw
+    expect(() => decodeSpendGrantRequest('AAAAA')).toThrow(SpendGrantValidationError);
+  });
+
+  it('rejects oversized counterparty and cap strings (length bounds)', () => {
+    expect(() => requestSpendGrant({ ...baseArgs(), counterparty: '1'.repeat(100) }))
+      .toThrow(SpendGrantValidationError);
+    expect(() => requestSpendGrant({ ...baseArgs(), capAtomic: '9'.repeat(21) }))
+      .toThrow(SpendGrantValidationError);
   });
 });
