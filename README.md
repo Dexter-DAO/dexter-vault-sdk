@@ -28,17 +28,17 @@ You open a tab with a hard limit. Your agent spends against it, charge by charge
 ```ts
 import { openTab, settleTab, readTabMeter } from '@dexterai/vault/tab';
 
-// arm a tab with a chain-enforced cap
-const open = await openTab({ vaultPda, amount: 5_000_000n, dexterAuthority });
+// arm a tab with a chain-enforced cap — one tab per (vault, counterparty)
+const open = await openTab({ vaultPda, amount: 5_000_000n, dexterAuthority, allowedCounterparty });
 
 // settle a streamed micro-charge (composes precompile + settle + transfer)
 const settle = await settleTab({
-  connection, vaultPda, swigAddress, channelId,
+  connection, vaultPda, swigAddress, allowedCounterparty, channelId,
   cumulativeAmount, sequenceNumber, sessionSigner, sellerAta, feePayer, dexterAuthority,
 });
 
-// read remaining headroom (the chain is the real guard)
-const meter = await readTabMeter(connection, vaultPda);
+// read this counterparty's remaining headroom (the chain is the real guard)
+const meter = await readTabMeter(connection, vaultPda, allowedCounterparty);
 ```
 
 That is the whole product loop: `openTab` arms a capped tab, `settleTab` records each streamed charge against it, `readTabMeter` reports the headroom left. The buyer's USDC never leaves their wallet while the tab runs; the program gates their exit until the tab settles. The closest familiar shape is an auth-and-capture credit-card hold, except the hold is enforced on-chain instead of by a processor.
@@ -63,7 +63,7 @@ If the four `./tab` verbs are all you need, you can stop reading here. The rest 
 
 The `dexter-vault` Solana program is a non-custodial passkey-rooted vault: WebAuthn signs every spend, a programmatic Swig role makes the unruggable streaming channel possible, and the entire spend path goes through the vault program, with no master key, no escrow, and no trust.
 
-This package is the TypeScript that talks to it. Every byte the on-chain program checks lives here, in exactly one file each: instruction discriminators, the 188-byte V2 session-registration message, the 128-byte revocation message, the 44-byte voucher payload, and the vault account layout. Three repos used to hand-roll these primitives and one of them missed a role; that bug is now structurally impossible.
+This package is the TypeScript that talks to it. Every byte the on-chain program checks lives here, in exactly one file each: instruction discriminators, the 188-byte V2 session-registration message, the 128-byte revocation message, the 44-byte voucher payload, and the vault + SessionAccount account layouts. Three repos used to hand-roll these primitives and one of them missed a role; that bug is now structurally impossible.
 
 The `./tab` verbs above compose these primitives. The tiers stack on top of the same building blocks: the streaming tab (`settle_tab_voucher`), the credit tab (`draw_credit` / `repay_credit` / `seize_collateral`), the LockedClaim crystallized tier (`@dexterai/vault/instructions`), and factoring / instant payout (`@dexterai/vault/factoring`).
 
@@ -77,7 +77,7 @@ If you are about to hand-roll a vault instruction builder, a precompile message,
 npm install @dexterai/vault
 ```
 
-Targets the `dexter-vault` V5 program (21 Anchor discriminators including `prove_passkey`, `settle_tab_voucher`, the session-key register/revoke pair, the LockedClaim set, and the credit set `open_standby` / `draw_credit` / `repay_credit` / `seize_collateral`).
+Targets the `dexter-vault` V6 program (25 pinned Anchor discriminators including `prove_passkey`, `settle_tab_voucher`, the session-key register/revoke pair, the LockedClaim set, the credit set `open_standby` / `draw_credit` / `repay_credit` / `seize_collateral`, and the `migrate_v5_to_v6` pair). V6 moved sessions into per-counterparty SessionAccount PDAs; 0.8.x targets V6 vaults only.
 
 ---
 
@@ -120,10 +120,12 @@ const tx = new Transaction().add(
   // Ed25519 precompile verifies the session key signed the voucher bytes.
   buildEd25519VerifyInstruction(sessionPubkey, sessionSignature, voucherMessage),
   // settle_tab_voucher consumes the verified voucher; Swig role 3 drives the SPL transfer.
+  // allowedCounterparty names the per-counterparty session PDA being settled against.
   buildSettleTabVoucherInstruction({
     vaultPda,
     swigAddress: new PublicKey(vaultState.swigAddress!),
     dexterAuthority: sessionMaster.publicKey,
+    allowedCounterparty,
     channelId,
     cumulativeAmount,
     sequenceNumber,
@@ -137,14 +139,19 @@ The first mainnet settle: [`4VLDNUDt…RKL47QU89`](https://solscan.io/tx/4VLDNUD
 
 ```typescript
 import { readVaultOnchain, readVaultFull } from '@dexterai/vault/reader';
+import { fetchSessionAccount, isSessionLive } from '@dexterai/vault/session';
 
 // Slim shape: { exists, pendingVoucherCount, pendingWithdrawal }.
 const slim = await readVaultOnchain(connection, vaultPda);
 
-// Full shape adds: { version, swigAddress, dexterAuthority, activeSession }.
+// Full shape adds: { version, swigAddress, dexterAuthority, liveSessionCount }.
 const full = await readVaultFull(connection, vaultPda);
-if (full.activeSession) {
-  console.log(`tab open: ${full.activeSession.spent} / ${full.activeSession.maxAmount}`);
+console.log(`${full.liveSessionCount} live session(s)`);
+
+// V6: per-counterparty session state lives in its own PDA, not in the vault.
+const s = await fetchSessionAccount(connection, vaultPda, allowedCounterparty);
+if (s && isSessionLive(s)) {
+  console.log(`tab open: ${s.session.spent} / ${s.session.maxAmount}`);
 }
 ```
 
@@ -173,18 +180,49 @@ const sig = await signer.sign(messageBytes);       // 64-byte detached signature
 
 ---
 
+## V6 sessions: one tab per counterparty
+
+Each session lives in its own SessionAccount PDA, `[b"session", vault, allowed_counterparty]` — one tab per (vault, counterparty), many counterparties per vault. Registering against a counterparty that already has a session **replaces it in place** (same seed) and **resets the meters** (`spent`, `currentOutstanding`); anything building UX on top should warn before replacing.
+
+Registering requires the sibling contract: the program checks that the transaction names every other version≠0 session of the vault, so it can sweep expired ones and prove the new cap doesn't overcommit the vault's balance.
+
+```ts
+import { buildRegisterSessionKeyInstruction, buildRevokeSessionKeyInstruction } from '@dexterai/vault/instructions';
+import { fetchVaultSessionAccounts, sessionPdasOf, waitForSession } from '@dexterai/vault/session';
+
+// fetch siblings FRESH immediately before building (the gate sweeps expired
+// siblings; a stale list fails the on-chain completeness check)
+const siblings = sessionPdasOf(await fetchVaultSessionAccounts(connection, vaultPda));
+const ix = buildRegisterSessionKeyInstruction({ ...args, payer, siblingSessionPdas: siblings });
+// ... send [secp256r1Precompile, ix] ...
+await waitForSession(connection, vaultPda, allowedCounterparty, { expectedSessionPubkey });
+```
+
+The builder handles the fiddly parts of the sibling list (excludes the target, dedups, sorts strict-ascending by raw bytes, marks all writable); your only job is fetching it fresh. `waitForSession` is content-aware confirm-visibility: it waits for the **new** `session_pubkey`, because on a replace the old registration also passes existence and version checks under read-your-writes lag.
+
+Revoking takes the same counterparty (it names the PDA) and waits for the cleared state:
+
+```ts
+const ix = buildRevokeSessionKeyInstruction({ vaultPda, allowedCounterparty, clientDataJSON, authenticatorData });
+// ... send [secp256r1Precompile, ix] ...
+await waitForSession(connection, vaultPda, allowedCounterparty, { cleared: true });
+```
+
+---
+
 ## Subpath exports
 
 Each subpath is a tree-shakeable entry point. Pull only what you need.
 
 | Subpath | Contents |
 |---|---|
-| `@dexterai/vault` | Re-exports `types` + `counterfactual` for convenience |
-| `@dexterai/vault/types` | `VaultState`, `VaultStateFull`, `ActiveSession`, `PendingWithdrawal`, `SessionKey`, `SessionScope`, `SignedVoucher`, `VoucherPayload`, `AtomicAmount`, `HumanAmount`, `TabNetworkId` |
-| `@dexterai/vault/constants` | `DEXTER_VAULT_PROGRAM_ID`, `SWIG_PROGRAM_ID`, `USDC_MAINNET`/`USDC_DEVNET`, all 21 `DISCRIMINATORS`, `LOCKED_CLAIM_SEED`, `OTS_SESSION_REGISTER_V1_DOMAIN`, `OTS_SESSION_REGISTER_V2_DOMAIN`, `OTS_SESSION_REVOKE_V1_DOMAIN` |
-| `@dexterai/vault/instructions` | Every builder: `buildInitializeVaultInstruction`, `buildSetSwigInstruction`, `buildRegisterSessionKeyInstruction`, `buildRevokeSessionKeyInstruction`, `buildSettleVoucherInstruction`, `buildSettleTabVoucherInstruction`, `buildRequestWithdrawalInstruction`, `buildFinalizeWithdrawalInstruction`, `buildForceReleaseInstruction`, `buildRotatePasskeyInstruction`, `buildRotateDexterAuthorityInstruction`, `buildProvePasskeyInstruction`, and the canonical `buildSwigCreationBundle` + `expectedSwigAddressFor` + `verifySwigIsOurs` |
+| `@dexterai/vault` | Re-exports `types` + `counterfactual` + `session` for convenience |
+| `@dexterai/vault/types` | `VaultState`, `VaultStateFull`, `SessionAccountState`, `SessionRegistrationState`, `PendingWithdrawal`, `SessionKey`, `SessionScope`, `SignedVoucher`, `VoucherPayload`, `AtomicAmount`, `HumanAmount`, `TabNetworkId` |
+| `@dexterai/vault/constants` | `DEXTER_VAULT_PROGRAM_ID`, `SWIG_PROGRAM_ID`, `USDC_MAINNET`/`USDC_DEVNET`, all 25 `DISCRIMINATORS`, `SESSION_SEED`, `LOCKED_CLAIM_SEED`, `OTS_SESSION_REGISTER_V1_DOMAIN`, `OTS_SESSION_REGISTER_V2_DOMAIN`, `OTS_SESSION_REVOKE_V1_DOMAIN` |
+| `@dexterai/vault/instructions` | Every builder: `buildInitializeVaultInstruction`, `buildSetSwigInstruction`, `buildRegisterSessionKeyInstruction`, `buildRevokeSessionKeyInstruction`, `buildSettleVoucherInstruction`, `buildSettleTabVoucherInstruction`, `buildRequestWithdrawalInstruction`, `buildFinalizeWithdrawalInstruction`, `buildForceReleaseInstruction`, `buildRotatePasskeyInstruction`, `buildRotateDexterAuthorityInstruction`, `buildProvePasskeyInstruction`, `buildMigrateV5ToV6Instruction` / `buildMigrateV5ToV6WithSessionInstruction`, and the canonical `buildSwigCreationBundle` + `expectedSwigAddressFor` + `verifySwigIsOurs` |
 | `@dexterai/vault/messages` | `sessionRegisterMessage` (188 bytes, V2), `sessionRevokeMessage` (128 bytes), `voucherPayloadMessage` / `buildVoucherMessage` (44 bytes), `buildSetSwigOperationMessage` |
-| `@dexterai/vault/reader` | `readVaultOnchain` (slim), `readVaultFull` (with active session) |
+| `@dexterai/vault/reader` | `readVaultOnchain` (slim), `readVaultFull` (adds `swigAddress`, `dexterAuthority`, `liveSessionCount`) |
+| `@dexterai/vault/session` | V6 per-counterparty sessions: `deriveSessionPda`, `decodeSessionAccount`, `isSessionLive`, `fetchSessionAccount`, `fetchVaultSessionAccounts`, `sessionPdasOf`, `buildSiblingAccountMetas`, `waitForSession` |
 | `@dexterai/vault/precompile` | `buildSecp256r1VerifyInstruction`, `buildPrecompileMessage`, `buildEd25519VerifyInstruction` |
 | `@dexterai/vault/counterfactual` | `deriveCounterfactualAddresses` |
 | `@dexterai/vault/signers` | `Ed25519Signer`, `PasskeySigner` interfaces |
@@ -208,10 +246,10 @@ This package is the structural fix. The canonical 4-role Swig provisioner, every
 
 `tests/byte-parity.test.ts`, `tests/precompile.test.ts`, `tests/swigBundle.test.ts`, `tests/counterfactual.test.ts`, and `tests/reader.test.ts` together snapshot:
 
-- All **21 instruction discriminators**, derived from `sha256("global:<name>")` and checked against the pinned bytes, covering the vault core, the session-key pair, the LockedClaim set, and the credit set.
+- All **25 instruction discriminators**, derived from `sha256("global:<name>")` and checked against the pinned bytes, covering the vault core, the session-key pair, the LockedClaim set, the credit set, and the migrate pair.
 - All **3 message layouts**, byte-by-byte: 188-byte V2 session registration, 128-byte revocation, 44-byte voucher payload.
 - Both **precompile builders**, secp256r1 (SIMD-0075) and Ed25519, including the 14-byte offsets table.
-- The **vault account decoder** for every V5 layout combination (with/without pending withdrawal, with/without active session).
+- The **vault account decoder** for the V6 layout (with/without pending withdrawal, `liveSessionCount`) and the **162-byte SessionAccount decoder**.
 - The **`buildSwigCreationBundle` structural lock**: ≥4 instructions, idempotent for the same `(identitySeed, hmacKey)`, distinct outputs for different inputs, the `settle_tab_voucher` Swig exec marker bytes match the on-chain discriminator.
 - The **counterfactual derivation** for a known seed.
 
@@ -228,7 +266,7 @@ npm test
 ```
                 ┌─────────────────────────────────┐
                 │  dexter-vault (Anchor program)  │  ← source of truth
-                │  V5: 21 discriminators, 3 layouts│
+                │  V6: 25 discriminators, 3 layouts│
                 └────────────────┬────────────────┘
                                  │ defines bytes
                                  ▼
@@ -279,7 +317,7 @@ interface PasskeySigner {
 
 ## Versioning
 
-The current SDK targets the `dexter-vault` V5 program (21 Anchor instructions; role 3 `ProgramExec` for `settle_tab_voucher` registered on every new Swig).
+The current SDK targets the `dexter-vault` V6 program (25 pinned Anchor instructions; per-counterparty SessionAccount PDAs; role 3 `ProgramExec` for `settle_tab_voucher` registered on every new Swig). V5 vaults are not decodable by 0.8.x — migrate them with the `migrate_v5_to_v6` builders.
 
 Future program versions will bump the SDK major or document the delta in the CHANGELOG. The byte-parity tests are the structural lock: any layout change requires an explicit snapshot update.
 

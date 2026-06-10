@@ -2,6 +2,42 @@
 
 All notable changes to `@dexterai/vault`.
 
+## 0.8.0 — 2026-06-10
+
+**V6 multi-session (BREAKING).** The deployed program (`Hg3wRaydFtJhYrdvYrKECacpJYDsC9Px7yKmpncj2fhc`) moved sessions out of the single inline `active_session` vault field into per-counterparty SessionAccount PDAs (`[b"session", vault, allowed_counterparty]`) — one tab per (vault, counterparty), many counterparties per vault. 0.8.x targets V6 vaults only.
+
+### Breaking
+
+- **`buildRegisterSessionKeyInstruction`** — now 8 fixed accounts (vault, vault_usdc_ata, swig, swig_wallet_address, instructions_sysvar, session, payer, system_program; `payer` funds the session PDA rent) plus the sibling remaining-accounts contract: the new `siblingSessionPdas` param must carry every OTHER version≠0 SessionAccount of the vault, fetched FRESH via `fetchVaultSessionAccounts` immediately before building — the register gate sweeps expired siblings, so a stale list fails the on-chain completeness check. The builder excludes the target, dedups, sorts strict-ascending by raw bytes, and marks all siblings writable.
+- **`buildRevokeSessionKeyInstruction`** — takes `allowedCounterparty` (the Borsh arg, serialized FIRST) and carries the session PDA as an account.
+- **`buildSettleTabVoucherInstruction` / `buildSettleVoucherInstruction` / `buildLockVoucherInstruction`** — each gained the session PDA account and an `allowedCounterparty` arg. `settle_voucher`'s close path (`increment: false`) passes Anchor's optional-account None sentinel — the program ID — in the session slot.
+- **Vault reader** — `VaultStateFull.activeSession` and the `ActiveSession` type are REMOVED, not deprecated: the V5 decode silently mis-reads V6 bytes (the live-session count byte parses as an Option tag, and locked-claim odometers parse as session fields — corruption, not an error). `liveSessionCount` replaces it; per-counterparty session state is read via `fetchSessionAccount`.
+- **Tab layer** — `readTabMeter(connection, vault, allowedCounterparty)` is now per-counterparty; `openTab` / `settleTab` params gained `allowedCounterparty`. `TabMeter` gained `currentOutstanding` (the revolving meter) and `expiresAt`.
+
+### Added
+
+- **`@dexterai/vault/session`** — new subpath: `deriveSessionPda`, `decodeSessionAccount`, `isSessionLive`, `fetchSessionAccount`, `fetchVaultSessionAccounts`, `sessionPdasOf`, `buildSiblingAccountMetas`, and `waitForSession`. `waitForSession` is content-aware confirm-visibility for session writes: register/replace mode waits for the NEW `session_pubkey` to be visible, revoke mode waits for `version == 0`. Existence and version checks are blind to a REPLACE under read-your-writes lag — the old registration satisfies both — so content is the only reliable signal.
+- **`buildMigrateV5ToV6Instruction` / `buildMigrateV5ToV6WithSessionInstruction`** — V5 → V6 migration, picked by whether the V5 vault carries a live session.
+- **`typesVersions` map** — subpath types now resolve under classic node10 module resolution.
+
+### Fixed
+
+Both caught by the live mainnet proof, invisible to unit tests:
+
+- **CJS bundle of `fetchVaultSessionAccounts` crashed** on the bs58 default-import interop; the SessionAccount discriminator's base58 is now a precomputed pinned constant (`SESSION_ACCOUNT_DISCRIMINATOR_B58`) — no runtime bs58 in the fetch path.
+- **`settleTab` and `buildInstantPayoutInstructions` double-included the vault instruction** — the Swig kit returns its preInstructions inside its output list, so every default-assembler settle/payout would have executed the vault ix twice and reverted. Note this means 0.7.0's `buildInstantPayoutInstructions` was broken as shipped with the default assembler.
+
+### Proven on mainnet
+
+The full V6 lifecycle ran on mainnet via SDK builders alone (`dexter-vault` `tests/prove-sdk-v6.ts`, 9/9, vault `Ba2hNBC78BCAh9gVXgeiB6naR4sqqxZADF6RohtBrHpr`):
+
+- register(A): [`256z2jFj3mXdr3oi4YMBnmTGsM2Xy7cMHN4KiYjdA9j7SSLSURMVtWsVntXmqWDhzvY34jKMuMsm5NMChZRSinD3`](https://solscan.io/tx/256z2jFj3mXdr3oi4YMBnmTGsM2Xy7cMHN4KiYjdA9j7SSLSURMVtWsVntXmqWDhzvY34jKMuMsm5NMChZRSinD3)
+- register(B) + sibling contract: [`4waozQn58ixaG5aNiMRiaPct7C6b55WrfbRXzNkLLEsfiofawUAD2M2rE5hMPgM2qH3wYgzvH5yocCxRSYJpn2mJ`](https://solscan.io/tx/4waozQn58ixaG5aNiMRiaPct7C6b55WrfbRXzNkLLEsfiofawUAD2M2rE5hMPgM2qH3wYgzvH5yocCxRSYJpn2mJ)
+- openTab: [`3dTfWQjNvJXPAZBouobsZMyVgFCfZpdGQw4vLvNhvMeWV1Pn4vULa9CvK2jLf68GnqaPjiH4eAMejkANGy7PafgB`](https://solscan.io/tx/3dTfWQjNvJXPAZBouobsZMyVgFCfZpdGQw4vLvNhvMeWV1Pn4vULa9CvK2jLf68GnqaPjiH4eAMejkANGy7PafgB)
+- settleTab: [`MUruEgAC6vGPYuHT68i5SejTrzPKs7Xq7XSGCuA59PKntCg4and2FxGDY97dY8xpTXBUfuuqxk5B8Psc4esACRf`](https://solscan.io/tx/MUruEgAC6vGPYuHT68i5SejTrzPKs7Xq7XSGCuA59PKntCg4and2FxGDY97dY8xpTXBUfuuqxk5B8Psc4esACRf)
+- revoke(A): [`5FT4gVUPjitrgV2Eh9EECmGzdsjL4UrZkXsDtgrKxoUrrTsgzYEyZ321Qc2ZMD4PuNqECtSLMQeX55utLCJfixxm`](https://solscan.io/tx/5FT4gVUPjitrgV2Eh9EECmGzdsjL4UrZkXsDtgrKxoUrrTsgzYEyZ321Qc2ZMD4PuNqECtSLMQeX55utLCJfixxm)
+- replace(B→B2): [`4XfeehHnZKtfJqExrcsz7RZPYEQA7RSrs4GeV2igXA7jm2ZuuecoqL5vpdWBousRcwaQVdCm8Fz8thmbSypcV27W`](https://solscan.io/tx/4XfeehHnZKtfJqExrcsz7RZPYEQA7RSrs4GeV2igXA7jm2ZuuecoqL5vpdWBousRcwaQVdCm8Fz8thmbSypcV27W)
+
 ## 0.5.0 — 2026-06-07
 
 ### Added
