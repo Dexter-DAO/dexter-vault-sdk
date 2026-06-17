@@ -40,6 +40,21 @@ export const VAULT_SEED_PREFIX = Buffer.from('vault');
 // LockedClaim PDA seed — matches programs/dexter-vault/src/state.rs (b"locked-claim").
 export const LOCKED_CLAIM_SEED = Buffer.from('locked-claim');
 
+// Anchor account discriminator for LockedClaim (from target/idl/dexter_vault.json).
+// Used as the gPA memcmp filter at offset 0.
+export const LOCKED_CLAIM_DISCRIMINATOR = Uint8Array.from([146, 227, 254, 205, 9, 82, 6, 245]);
+
+// Precomputed base58 of LOCKED_CLAIM_DISCRIMINATOR — the gPA memcmp filter value
+// (same no-runtime-bs58-import rationale as SESSION_ACCOUNT_DISCRIMINATOR_B58).
+// A unit test pins this against bs58.encode(LOCKED_CLAIM_DISCRIMINATOR).
+export const LOCKED_CLAIM_DISCRIMINATOR_B58 = 'Ra2KzfH1LnQ';
+
+// Byte offset of the `vault` field inside LockedClaim (8 disc + version u8 + bump u8).
+// The gPA memcmp filter keys on this; full layout map lives in src/reader/lockedClaimReader.ts.
+// NOTE: LockedClaim is VARIABLE-LENGTH (Option<i64> fields), so there is no
+// fixed size constant and no dataSize gPA filter — see lockedClaimReader.ts.
+export const LOCKED_CLAIM_VAULT_OFFSET = 10;
+
 // ── Session accounts (V6) ─────────────────────────────────────────────────
 
 // Session PDA seed — matches programs/dexter-vault/src/constants.rs (b"session").

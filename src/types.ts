@@ -32,6 +32,33 @@ export interface VaultStateFull {
   dexterAuthority: string | null;
   pendingVoucherCount: number;
   liveSessionCount: number;
+  outstandingLockedAmount: string;  // atomic, u64 stringified (sum of unsettled LockedClaim amounts)
+}
+
+// ── LockedClaim (crystallized, buyer-irrevocable reservation tier) ────────
+
+/** On-chain LockedClaimStatus enum (programs/dexter-vault/src/state.rs). */
+export type LockedClaimStatus = 'Pending' | 'Settled' | 'Abandoned';
+
+/** Decoded LockedClaim PDA — field-for-field mirror of the on-chain struct.
+ *  Pubkeys as base58, u64 as string (exceeds Number.MAX_SAFE_INTEGER), i64 as
+ *  number (unix seconds). `maturity_at`/`holder_recovery_at`/`settled_at`/
+ *  `recovered_at` are on-chain Option<i64> → number | null here. */
+export interface LockedClaimState {
+  address: string;                  // base58 PDA
+  version: number;
+  bump: number;
+  vault: string;                    // base58
+  sessionPubkeyAtLock: string;      // base58 (32-byte ed25519 session pubkey)
+  voucherHash: string;              // base58 (sha256 of canonical voucher msg)
+  amount: string;                   // atomic, u64 stringified
+  createdAt: number;                // unix seconds
+  maturityAt: number | null;        // unix seconds | null (None = instantly settleable)
+  holderRecoveryAt: number | null;  // unix seconds | null
+  currentHolder: string;            // base58
+  status: LockedClaimStatus;
+  settledAt: number | null;         // unix seconds | null
+  recoveredAt: number | null;       // unix seconds | null
 }
 
 // ── V6 SessionAccount (per-counterparty session PDA) ─────────────────────

@@ -96,10 +96,11 @@ function v6VaultBytes(opts: {
   liveSessionCount: number;
   withdrawal?: boolean;
   trailing?: number;
+  outstandingLocked?: bigint;
 }): { data: Buffer; swig: PublicKey; authority: PublicKey } {
   const withdrawalBody = opts.withdrawal ? 48 : 0;
-  // disc(8) ver(1) bump(1) passkey(33) swig(32) cooling(4) pvc(4) wtag(1) [wbody] identity(32) authority(32) liveCount(1)
-  const len = 8 + 1 + 1 + 33 + 32 + 4 + 4 + 1 + withdrawalBody + 32 + 32 + 1 + (opts.trailing ?? 0);
+  // disc(8) ver(1) bump(1) passkey(33) swig(32) cooling(4) pvc(4) wtag(1) [wbody] identity(32) authority(32) liveCount(1) outstandingLocked(8)
+  const len = 8 + 1 + 1 + 33 + 32 + 4 + 4 + 1 + withdrawalBody + 32 + 32 + 1 + 8 + (opts.trailing ?? 0);
   const data = Buffer.alloc(len);
   data.writeUInt8(6, 8); // version = 6
   const swig = PublicKey.unique();
@@ -115,12 +116,13 @@ function v6VaultBytes(opts: {
   const authority = PublicKey.unique();
   authority.toBuffer().copy(data, afterWithdrawal + 32); // dexter_authority
   data.writeUInt8(opts.liveSessionCount, afterWithdrawal + 64); // live_session_count
+  data.writeBigUInt64LE(opts.outstandingLocked ?? 0n, afterWithdrawal + 65); // outstanding_locked_amount
   return { data, swig, authority };
 }
 
 describe('readVaultFull (V6: live_session_count, NO activeSession)', () => {
   test('liveSessionCount = 3 decoded; exact key set (no activeSession)', async () => {
-    const { data, swig, authority } = v6VaultBytes({ liveSessionCount: 3 });
+    const { data, swig, authority } = v6VaultBytes({ liveSessionCount: 3, outstandingLocked: 250_000n });
     const result = await readVaultFull(makeConn(data), PDA);
     expect(result).toEqual({
       exists: true,
@@ -129,6 +131,7 @@ describe('readVaultFull (V6: live_session_count, NO activeSession)', () => {
       dexterAuthority: authority.toBase58(),
       pendingVoucherCount: 2,
       liveSessionCount: 3,
+      outstandingLockedAmount: '250000',
     });
     expect('activeSession' in result).toBe(false);
   });
@@ -140,7 +143,7 @@ describe('readVaultFull (V6: live_session_count, NO activeSession)', () => {
   });
 
   test('withdrawal present → liveSessionCount read at the +48-shifted offset', async () => {
-    const { data, swig, authority } = v6VaultBytes({ liveSessionCount: 5, withdrawal: true });
+    const { data, swig, authority } = v6VaultBytes({ liveSessionCount: 5, withdrawal: true, outstandingLocked: 999n });
     const result = await readVaultFull(makeConn(data), PDA);
     expect(result).toEqual({
       exists: true,
@@ -149,6 +152,7 @@ describe('readVaultFull (V6: live_session_count, NO activeSession)', () => {
       dexterAuthority: authority.toBase58(),
       pendingVoucherCount: 2,
       liveSessionCount: 5,
+      outstandingLockedAmount: '999',
     });
   });
 
@@ -169,6 +173,7 @@ describe('readVaultFull (V6: live_session_count, NO activeSession)', () => {
       dexterAuthority: null,
       pendingVoucherCount: 0,
       liveSessionCount: 0,
+      outstandingLockedAmount: '0',
     });
   });
 });

@@ -21,7 +21,8 @@
  *    132/84  32  identity_claim    (132 if withdrawal present, else 84)
  *    164/116 32  dexter_authority  (164 if withdrawal present, else 116)
  *    196/148  1  live_session_count u8
- *            ... odometer/credit fields follow on-chain; not decoded here.
+ *    197/149  8  outstanding_locked_amount u64 (sum of unsettled LockedClaims)
+ *            ... further odometer/credit fields follow on-chain; not decoded here.
  *
  * V5→V6 change: the byte after dexter_authority WAS an active_session Option
  * tag (+92-byte inline body); V6 replaced it with live_session_count u8 —
@@ -58,6 +59,7 @@ const EMPTY_FULL: VaultStateFull = {
   dexterAuthority: null,
   pendingVoucherCount: 0,
   liveSessionCount: 0,
+  outstandingLockedAmount: '0',
 };
 
 /** Slim read — the shape dexter-api's existing /status routes return. */
@@ -122,6 +124,13 @@ export async function readVaultFull(
   const liveSessionCount =
     data.length > liveSessionCountOffset ? data.readUInt8(liveSessionCountOffset) : 0;
 
+  // outstanding_locked_amount: u64 sits immediately after live_session_count.
+  const outstandingLockedOffset = liveSessionCountOffset + 1;
+  const outstandingLockedAmount =
+    data.length >= outstandingLockedOffset + 8
+      ? data.readBigUInt64LE(outstandingLockedOffset).toString()
+      : '0';
+
   return {
     exists: true,
     version,
@@ -129,5 +138,6 @@ export async function readVaultFull(
     dexterAuthority,
     pendingVoucherCount,
     liveSessionCount,
+    outstandingLockedAmount,
   };
 }
