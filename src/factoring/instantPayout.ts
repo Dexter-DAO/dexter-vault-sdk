@@ -11,14 +11,17 @@
  * composition is unit-testable without live swig state.
  */
 import { PublicKey, TransactionInstruction, Connection } from '@solana/web3.js';
+import { fetchSwig, getSignInstructions, getSwigWalletAddress } from '@swig-wallet/kit';
+// NOTE: import these from @swig-wallet/lib (where they are DEFINED), NOT
+// @swig-wallet/kit. kit re-exports them via `export *`, which Node's ESM↔CJS
+// interop (cjs-module-lexer) cannot see — importing them from kit yields
+// `undefined` and the built ESM dist throws "Named export not found" at load.
+// (Caught by the T10 harness preflight; vitest's resolver had masked it.)
 import {
-  fetchSwig,
-  getSignInstructions,
-  getSwigWalletAddress,
   isProgramExecAuthority,
   getProgramExecBasedAuthority,
   uint8ArraysEqual,
-} from '@swig-wallet/kit';
+} from '@swig-wallet/lib';
 import { address as kitAddress } from '@solana/kit';
 import { getTransferCheckedInstruction } from '@solana-program/token';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
