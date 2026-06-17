@@ -225,6 +225,48 @@ describe('decodeLockedClaim (moving-cursor Option layout)', () => {
     expect(out.recoveredAt).toBe(999);
   });
 
+  test('throws a clean addressed "truncated" error for a short fixed prefix (not a raw RangeError)', () => {
+    const addr = PublicKey.unique().toBase58();
+    // Valid discriminator but only ~100 bytes — short of the 122-byte fixed prefix.
+    const data = Buffer.alloc(100);
+    Buffer.from(LOCKED_CLAIM_DISCRIMINATOR).copy(data, 0);
+    let caught: unknown;
+    try {
+      decodeLockedClaim(addr, data);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).name).toBe('Error'); // NOT a RangeError [ERR_OUT_OF_RANGE]
+    expect((caught as Error).message).toContain(addr);
+    expect((caught as Error).message).toContain('truncated');
+  });
+
+  test('throws a clean addressed "truncated" error when cut mid-Option / before current_holder', () => {
+    const vault = PublicKey.unique();
+    const addr = PublicKey.unique().toBase58();
+    const full = rawLockedClaim({
+      vault,
+      currentHolder: PublicKey.unique(),
+      maturityAt: 5n,
+      holderRecoveryAt: null,
+      status: 0,
+    });
+    // Keep the full 122-byte fixed prefix + a couple Option bytes, then cut
+    // before current_holder lands.
+    const data = full.subarray(0, 125);
+    let caught: unknown;
+    try {
+      decodeLockedClaim(addr, data);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).name).toBe('Error'); // NOT a RangeError
+    expect((caught as Error).message).toContain(addr);
+    expect((caught as Error).message).toContain('truncated');
+  });
+
   test('rejects a buffer whose discriminator is not a LockedClaim', () => {
     const data = rawLockedClaim({
       vault: PublicKey.unique(),

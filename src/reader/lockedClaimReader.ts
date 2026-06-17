@@ -51,6 +51,16 @@ export function decodeLockedClaim(
     }
   }
 
+  // Fixed prefix runs through created_at (offset 114 + 8 = 122 bytes). Guard the
+  // whole prefix up front so a truncated body throws a clean, addressed error
+  // instead of an opaque Node RangeError from readBigInt64LE / new PublicKey().
+  const FIXED_PREFIX_LEN = 122;
+  if (buf.length < FIXED_PREFIX_LEN) {
+    throw new Error(
+      `LockedClaim ${address} truncated: expected >=${FIXED_PREFIX_LEN} bytes for fixed prefix, got ${buf.length}`,
+    );
+  }
+
   const version = buf.readUInt8(8);
   const bump = buf.readUInt8(9);
   const vault = new PublicKey(buf.subarray(10, 42)).toBase58();
@@ -61,10 +71,19 @@ export function decodeLockedClaim(
 
   // Moving cursor from the first Option field onward.
   let cursor = 122;
+  const requireBytes = (n: number): void => {
+    if (cursor + n > buf.length) {
+      throw new Error(
+        `LockedClaim ${address} truncated at offset ${cursor}: expected ${n} more byte(s), buffer is ${buf.length}`,
+      );
+    }
+  };
   const readOptionI64 = (): number | null => {
+    requireBytes(1);
     const tag = buf.readUInt8(cursor);
     cursor += 1;
     if (tag === 0) return null;
+    requireBytes(8);
     const v = Number(buf.readBigInt64LE(cursor));
     cursor += 8;
     return v;
@@ -72,8 +91,10 @@ export function decodeLockedClaim(
 
   const maturityAt = readOptionI64();
   const holderRecoveryAt = readOptionI64();
+  requireBytes(32);
   const currentHolder = new PublicKey(buf.subarray(cursor, cursor + 32)).toBase58();
   cursor += 32;
+  requireBytes(1);
   const statusByte = buf.readUInt8(cursor);
   cursor += 1;
   const status = STATUS_BY_BYTE[statusByte];

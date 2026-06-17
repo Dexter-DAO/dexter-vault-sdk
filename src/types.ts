@@ -50,7 +50,8 @@ export interface LockedClaimState {
   bump: number;
   vault: string;                    // base58
   sessionPubkeyAtLock: string;      // base58 (32-byte ed25519 session pubkey)
-  voucherHash: string;              // base58 (sha256 of canonical voucher msg)
+  voucherHash: string;              // base58 of the raw 32 bytes; bs58.decode() to recover the Uint8Array for deriveLockedClaimPda
+
   amount: string;                   // atomic, u64 stringified
   createdAt: number;                // unix seconds
   maturityAt: number | null;        // unix seconds | null (None = instantly settleable)
