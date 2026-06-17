@@ -1,0 +1,85 @@
+{
+  "startedAt": "2026-06-17T17:51:53.297Z",
+  "txSignatures": {
+    "initialize": "PdApDdpBxvJzJaHA64udsvRQMdUHjQSqYYtY96prEHEazRSFJtDUhyzveAmuvADk7k14NrkvZZJHPQdas5GDYsF",
+    "swigCreate": "5Y4wYKM3QrVdnyt9y6VgYr2z68jzxcQksLe3Gf6msuVumqMA7aw73Wyx5THtvYnu7kRH2iCa5guiVNX42N2qyuxd",
+    "fund": "26CZXRkNLgvnmugA9ykC24UqDmytTs8j22qK5RtG8B2H5i3rgsRyQKUKtUHf7NH3coDjmTzRqJ6hpuWvGTE71es6",
+    "setSwig": "4dVCy3BXYemB7Rv2NXx1DkcuMHBcyJo75TP1icgEiZwvjaRDvUyVyLTsagG61DAr3HdxUNQeSpfH37zovm9MJ74K",
+    "registerSession": "jLoZxWRk5ePNNnnFEnyijQFZb917dVXRd5Qwm4uTV1cbqTgiFfG2oBPhbn79CREGgzSYxXep2r6gX2oyfDEkaJ6",
+    "lockVoucher": "3RM1DgzDgDy8xjknRBCSUc6WYMuNdXjLpNAYzL42D4ykckhnqvcqSL8sioB5hrokBoXRXco7FNFxnKNb9HqDKour",
+    "requestWithdrawal": "2pBNsGqMszkjLs3HkCTNoTFe36vKGcMMMfty52AfieFnwYj9KGzYuv5AgiQ9w2g4gyrooW6TXL1Po7oZPCYni6qY",
+    "settle": "3ZiKJHkaTCPthfanaXMk9cmBzBohYEb8Pz6dLMYQMFARuEmcmcwZvshaqwaUrLUjk12XgwVjqdyLYJh5Cyx9q3Dc"
+  },
+  "rpc": "https://mainnet.helius-rpc.com/?api-key=REDACTED",
+  "feePayer": "X4o2kSLzqEQjnAzhq3L3BW92aawMV2n2F37EXd2GMpy",
+  "master": "3SWJTQ4FBDveFQGQbqd8pxyBxa2PKqkega4QzxgPMWMG",
+  "holder": "8Z5mvzJs1F7Bj1YgH2Y3hnxwyzLwfpVRzybYXHW2nnQF",
+  "seller": "AnKLpfjWAN1eFsE46QNJ5MK2kwa4ghM1216TnG49YRKU",
+  "vaultPda": "EYkwiuK3sXosYdZ86Ee7cMDBcsB5zv7Nf6RQpKyP6bSD",
+  "fundAmountAtomic": "20000",
+  "lockAmountAtomic": "10000",
+  "swigAddress": "HRgdEfcoATyrVBShsWXu5QnQm7BCYQc4beW8z76xGYae",
+  "vaultUsdcBalance": "20000",
+  "sessionPda": "8ZTxpDxwukJ7u6x5t45ZjVnmBpUkEsmiceoEB8DMDHdd",
+  "claimPda": "8jxt1TesriKVu35DEPRvGqSa7oZzYUGSd3yzJqhSp8fz",
+  "reservationRejection": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 1: custom program error: 0x1781. \nLogs: \n[\n  \"Program Hg3wRaydFtJhYrdvYrKECacpJYDsC9Px7yKmpncj2fhc invoke [1]\",\n  \"Program log: Instruction: FinalizeWithdrawal\",\n  \"Program log: AnchorError thrown in programs/de",
+  "result": "PASS",
+  "finishedAt": "2026-06-17T17:52:05.238Z",
+  "assertions": [
+    {
+      "label": "vault USDC funded",
+      "ok": true,
+      "detail": "20000 ≥ 20000"
+    },
+    {
+      "label": "vault activated + swig bound",
+      "ok": true,
+      "detail": "swig=HRgdEfcoATyrVBShsWXu5QnQm7BCYQc4beW8z76xGYae"
+    },
+    {
+      "label": "dexter_authority == master",
+      "ok": true,
+      "detail": "3SWJTQ4FBDveFQGQbqd8pxyBxa2PKqkega4QzxgPMWMG"
+    },
+    {
+      "label": "claim is Pending in fetchVaultLockedClaims",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "label": "claim amount == locked delta",
+      "ok": true,
+      "detail": "10000"
+    },
+    {
+      "label": "outstandingLockedAmount rose by crystallized delta",
+      "ok": true,
+      "detail": "0 → 10000"
+    },
+    {
+      "label": "sum(Pending) === outstandingLockedAmount",
+      "ok": true,
+      "detail": "10000 == 10000"
+    },
+    {
+      "label": "finalize_withdrawal REJECTED by reservation guard (expected = PASS)",
+      "ok": true,
+      "detail": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 1: custom program error: 0x1781. \nLogs: \n[\n  \"Program Hg3wRaydFtJhYrdvYrKECacpJYDsC9Px7yKmpncj2fhc invoke [1]\","
+    },
+    {
+      "label": "seller ATA rose by claim amount",
+      "ok": true,
+      "detail": "0 → 10000"
+    },
+    {
+      "label": "claim flipped to Settled (gone from Pending)",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "label": "outstandingLockedAmount returned to pre-lock",
+      "ok": true,
+      "detail": "0 == 0"
+    }
+  ]
+}

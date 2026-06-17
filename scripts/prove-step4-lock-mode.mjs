@@ -92,7 +92,7 @@
  * The harness body is NEVER executed against mainnet here.
  */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import crypto from 'node:crypto';
 
 import {
@@ -131,6 +131,7 @@ import { buildVoucherMessage, sessionRegisterMessage, buildSetSwigOperationMessa
 import { buildEd25519VerifyInstruction, buildSecp256r1VerifyInstruction } from '../dist/precompile/index.js';
 import { readVaultFull, fetchVaultLockedClaims } from '../dist/reader/index.js';
 import { deriveSessionPda } from '../dist/session/index.js';
+import { kitInstructionsToWeb3 } from '../dist/kit/index.js';
 import { DEXTER_VAULT_PROGRAM_ID, USDC_MAINNET } from '../dist/constants/index.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -415,7 +416,7 @@ async function main() {
   //     fee payer signs (role-0 bootstrap). It is the canonical kit output.
   receipts.txSignatures.swigCreate = await sendAndConfirm(
     conn,
-    [ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 }), ...bundle.instructions],
+    [ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 }), ...kitInstructionsToWeb3(bundle.instructions)],
     feePayer,
     [],
   );
@@ -475,8 +476,11 @@ async function main() {
   log('set_swig tx    :', receipts.txSignatures.setSwig);
 
   // Assert the vault is bound + reports the marker-enrolled swig + the master.
+  // Poll for the TARGET binding, not mere truthiness: an unbound vault reports
+  // the default pubkey "1111..1111" (a truthy string), so we must wait until the
+  // swig matches the expected address (multi-replica read lag, cf. waitForRole).
   let vaultFull = await readVaultFull(conn, vaultPda);
-  for (let i = 0; i < 20 && (!vaultFull.exists || !vaultFull.swigAddress); i++) {
+  for (let i = 0; i < 20 && (!vaultFull.exists || vaultFull.swigAddress !== swigAddress.toBase58()); i++) {
     await sleep(1500);
     vaultFull = await readVaultFull(conn, vaultPda);
   }
@@ -533,20 +537,18 @@ async function main() {
   log('session pda    :', sessionPda.toBase58());
   receipts.sessionPda = sessionPda.toBase58();
 
-  // ── STEP 3 — open the tab (settle_voucher increment) + sign the voucher ────
-  STEP = 'STEP 3 (open tab + sign voucher)';
-  log('═══ STEP 3 — open the tab meter, then session-sign the voucher ═══');
-  // open: settle_voucher(increment=true, amount=LOCK) seeds session.current_outstanding
-  // so lock_voucher has a meter to graduate (mirrors lock-voucher.ts::openTab).
-  const openTabIx = buildSettleVoucherInstruction({
-    vaultPda,
-    dexterAuthority: master.publicKey,
-    allowedCounterparty: seller,
-    amount: LOCK_AMOUNT_ATOMIC,
-    increment: true,
-  });
-  receipts.txSignatures.openTab = await sendAndConfirm(conn, [openTabIx], feePayer, [master]);
-  log('open tab tx    :', receipts.txSignatures.openTab);
+  // ── STEP 3 — sign the voucher (LOCK-MODE: no freeze / no pending_voucher bump) ──
+  STEP = 'STEP 3 (sign voucher)';
+  log('═══ STEP 3 — session-sign the voucher (lock-mode: no freeze open) ═══');
+  // Lock-mode deliberately does NOT open a freeze tab. We skip the
+  // settle_voucher(increment=true) bump on purpose: it would raise
+  // pending_voucher_count, and finalize_withdrawal checks the freeze
+  // (PendingVouchersExist = 0x1771) BEFORE the reservation guard — which would
+  // mask the Step-4 reservation proof at STEP 5. lock_voucher works on the
+  // freshly-registered session directly: current_outstanding uses
+  // saturating_sub (0 is fine), the XOR frontier max(spent=0, crystallized=0)=0
+  // < cumulative, and the cap (cumulative ≤ session.max_amount=20000) holds. The
+  // reservation tier is exactly what we are here to prove, in isolation.
 
   // Voucher: channelId == vaultPda (the seam convention). Session ed25519-signs
   // the canonical 44-byte message.
@@ -723,8 +725,18 @@ async function main() {
   receipts.result = 'PASS';
   receipts.finishedAt = new Date().toISOString();
   receipts.assertions = assertions;
+  // Scrub the RPC api-key before persisting/printing the receipt.
+  if (receipts.rpc) receipts.rpc = receipts.rpc.replace(/api-key=[^&\s]+/i, 'api-key=REDACTED');
+  // Persist a durable, committable receipt (mirrors the canary receipts).
+  try {
+    const dir = `${process.cwd()}/scripts/receipts`;
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(`${dir}/step4-lock-mode-proof.json`, JSON.stringify(receipts, null, 2));
+  } catch (e) {
+    console.error('[step4] receipt write failed (non-fatal):', e?.message ?? e);
+  }
   console.log('\n===== STEP-4 LOCK-MODE PROOF RESULT =====');
-  console.log('Full lock-mode lifecycle (create→activate→register→open→sign→lock→');
+  console.log('Full lock-mode lifecycle (create→activate→register→sign→lock→');
   console.log('reservation-guard→settle) proven SDK-direct on mainnet.\n');
   console.log(JSON.stringify(receipts, null, 2));
   process.exit(0);
