@@ -5,3 +5,6 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Internal agent-workflow docs (plans/specs/research) — private, not for the public SDK
+docs/superpowers/
