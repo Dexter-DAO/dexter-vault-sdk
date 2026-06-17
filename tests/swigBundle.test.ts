@@ -8,10 +8,13 @@
  * ProgramExec marker). After the extract, the role list lives in exactly one
  * file (src/instructions/swigBundle.ts). This test pins:
  *
- *   1. The bundle produces ≥4 instructions (Swig CreateV1 + role 1 + role 2 + role 3).
- *   2. The settle_tab_voucher discriminator is registered as a Swig exec marker.
+ *   1. The bundle produces ≥5 instructions (Swig CreateV1 + role 1 + role 2 + role 3 + role 4).
+ *   2. The settle_tab_voucher + settle_locked_voucher discriminators are registered as Swig exec markers.
  *   3. Same inputs → same Swig PDA (idempotent).
  *   4. expectedSwigAddressFor returns a valid base58 PublicKey.
+ *
+ * Role 4 (settle_locked_voucher ProgramExec marker) was added in Step-4 so a
+ * vault's swig can authorize the locked-claim payout transfer.
  *
  * No on-chain interaction. Pure structural assertions against the in-memory
  * instruction list the bundle returns.
@@ -23,6 +26,7 @@ import {
   expectedSwigAddressFor,
   SWIG_PROGRAM_EXEC_PREFIX,
   SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB,
+  SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED,
   SWIG_PROGRAM_EXEC_MARKERS,
 } from '../src/instructions/index.js';
 
@@ -34,14 +38,14 @@ const KNOWN_IDENTITY_SEED   = new Uint8Array(16).fill(0x42);
 const KNOWN_HMAC_KEY        = new Uint8Array(32).fill(0x9F);
 
 describe('buildSwigCreationBundle structural lock', () => {
-  test('bundle produces ≥4 instructions (CreateV1 + role 1 + role 2 + role 3)', async () => {
+  test('bundle produces ≥5 instructions (CreateV1 + role 1 + role 2 + role 3 + role 4)', async () => {
     const bundle = await buildSwigCreationBundle({
       feePayer: KNOWN_FEE_PAYER,
       dexterMasterPubkey: KNOWN_DEXTER_MASTER,
       identitySeed: KNOWN_IDENTITY_SEED,
       hmacKey: KNOWN_HMAC_KEY,
     });
-    expect(bundle.instructions.length).toBeGreaterThanOrEqual(4);
+    expect(bundle.instructions.length).toBeGreaterThanOrEqual(5);
   });
 
   test('returns a valid base58 Swig PDA', async () => {
@@ -121,10 +125,20 @@ describe('buildSwigCreationBundle structural lock', () => {
     );
   });
 
-  test('SWIG_PROGRAM_EXEC_MARKERS exports both markers in declared order', () => {
-    expect(SWIG_PROGRAM_EXEC_MARKERS.length).toBe(2);
+  test('SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED matches the on-chain settle_locked_voucher discriminator', () => {
+    // Same drift guard as settle_tab: if the program's settle_locked_voucher
+    // discriminator changes, this marker drifts and the locked-claim payout
+    // goes to "Role not found".
+    expect(SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED).toEqual(
+      new Uint8Array([44, 80, 216, 43, 247, 253, 101, 45]),
+    );
+  });
+
+  test('SWIG_PROGRAM_EXEC_MARKERS exports all three markers in declared order', () => {
+    expect(SWIG_PROGRAM_EXEC_MARKERS.length).toBe(3);
     expect(SWIG_PROGRAM_EXEC_MARKERS[0]).toBe(SWIG_PROGRAM_EXEC_PREFIX);
     expect(SWIG_PROGRAM_EXEC_MARKERS[1]).toBe(SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB);
+    expect(SWIG_PROGRAM_EXEC_MARKERS[2]).toBe(SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED);
   });
 
   test('expectedSwigAddressFor matches the bundle output', async () => {
