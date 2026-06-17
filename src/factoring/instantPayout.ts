@@ -11,17 +11,71 @@
  * composition is unit-testable without live swig state.
  */
 import { PublicKey, TransactionInstruction, Connection } from '@solana/web3.js';
-import { fetchSwig, getSignInstructions, getSwigWalletAddress } from '@swig-wallet/kit';
+import {
+  fetchSwig,
+  getSignInstructions,
+  getSwigWalletAddress,
+  isProgramExecAuthority,
+  getProgramExecBasedAuthority,
+  uint8ArraysEqual,
+} from '@swig-wallet/kit';
 import { address as kitAddress } from '@solana/kit';
 import { getTransferCheckedInstruction } from '@solana-program/token';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { buildSettleLockedVoucherInstruction } from '../instructions/lockedClaim.js';
-import { USDC_MAINNET } from '../constants/index.js';
+import { DEXTER_VAULT_PROGRAM_ID, USDC_MAINNET } from '../constants/index.js';
+import { SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED } from '../instructions/swigBundle.js';
 import { computeFactoringSplit } from './split.js';
 import { kitInstructionsToWeb3, getRpc } from './kitBridge.js';
 
-const VAULT_PROGRAM_EXEC_ROLE_ID = 1; // swig role index for ProgramExec (see dexter-api)
 const USDC_DECIMALS = 6;
+
+/**
+ * Minimal structural view of a fetched swig — just enough for role selection.
+ * Lets unit tests pass a fake `{ roles }` without standing up real swig state.
+ */
+export interface RoleLike {
+  /** Numeric role id passed to getSignInstructions (Role.id). */
+  id: number;
+  /** The role's authority (Role.authority). */
+  authority: unknown;
+}
+export interface SwigRolesLike {
+  roles: RoleLike[];
+}
+
+/**
+ * Find the swig role id whose ProgramExec authority matches BOTH the given
+ * program id and instruction marker (discriminator prefix).
+ *
+ * Robust to role ordering: fresh bundle-enrolled vaults carry settle_locked at
+ * role 4, but vaults backfilled via registerProgramAuthority/the T2 script
+ * append the marker at a variable index. We match by program-id + marker bytes,
+ * never by a hardcoded index.
+ */
+export function findProgramExecRoleId(
+  swig: SwigRolesLike,
+  programIdBytes: Uint8Array,
+  marker: Uint8Array,
+): number {
+  for (const role of swig.roles) {
+    const authority = role.authority as any;
+    if (!isProgramExecAuthority(authority)) continue;
+    const pe = getProgramExecBasedAuthority(authority);
+    if (!pe) continue;
+    // programId is a SolPublicKey (32 bytes); instructionPrefix is up to 40
+    // bytes, with instructionPrefixLen meaningful leading bytes.
+    if (!uint8ArraysEqual(pe.programId.toBytes(), programIdBytes)) continue;
+    const meaningful = pe.instructionPrefix.slice(0, pe.instructionPrefixLen);
+    if (uint8ArraysEqual(meaningful, marker)) {
+      return role.id;
+    }
+  }
+  throw new Error(
+    `factoring: swig has no settle_locked_voucher ProgramExec role — ` +
+      `vault not enrolled/backfilled with the settle_locked marker`,
+  );
+}
 
 export interface InstantTransfer {
   destinationAta: PublicKey;
@@ -102,6 +156,12 @@ const defaultAssembleSignV2: AssembleSignV2 = async (a) => {
   const swig = await fetchSwig(rpc, kitAddress(a.swigAddress.toBase58()));
   if (!swig) throw new Error(`factoring: swig not found on-chain: ${a.swigAddress.toBase58()}`);
 
+  const roleId = findProgramExecRoleId(
+    swig as unknown as SwigRolesLike,
+    Uint8Array.from(DEXTER_VAULT_PROGRAM_ID.toBytes()),
+    SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED,
+  );
+
   const swigWalletKitAddr = await getSwigWalletAddress(swig);
   const swigWalletPda = new PublicKey(String(swigWalletKitAddr));
   const usdcMint = new PublicKey(USDC_MAINNET);
@@ -120,7 +180,7 @@ const defaultAssembleSignV2: AssembleSignV2 = async (a) => {
 
   const signIx = await getSignInstructions(
     swig,
-    VAULT_PROGRAM_EXEC_ROLE_ID,
+    roleId,
     transferIxs as any,
     false,
     { payer: kitAddress(a.feePayer.toBase58()), preInstructions: [a.settleIx] } as any,
