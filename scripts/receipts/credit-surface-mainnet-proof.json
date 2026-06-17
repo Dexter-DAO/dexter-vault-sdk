@@ -1,0 +1,25 @@
+{
+  "proof": "SDK credit surface — Solana mainnet, real submits",
+  "result": "PASS (3 SDK submits landed)",
+  "stampedAt": "2026-06-17T20:00:56Z",
+  "generatedBy": "dexter-vault/tests/prove-sdk-credit.ts",
+  "sdk": "@dexterai/vault@0.10.0 (local build)",
+  "program": "Hg3wRaydFtJhYrdvYrKECacpJYDsC9Px7yKmpncj2fhc",
+  "financierSwig": "65vYPGj7H9ZuoMiY21ErEzwHtuFo9DAz8jUBae2QBDqu",
+  "financierMint": "DNKSP17EGSY2ZAx1L1WWzhpHdMySaZf2ZADKdgBDoKV9",
+  "txSignatures": {
+    "registerProgramAuthority": "5eY5XgJaVQX6LuHppjEPUjSw1wrLmnfoBRU1EjrRuFinjZAUBUDKY4apassiCbd1C8Ae7ymELcRs1NncdszCfpH8",
+    "setStandbyReserve": "iYb2Y4MNrsSRvFPgRXmuizWjppZJTgMPGZ1dpnUwtGPANKUNY9zBU2GHRCwzKSSPyMkBJqLYKorv33giu45b9TG",
+    "closeStandby": "4By9XLJaGJD5GC51PNQ9hycDddM8accZF7oLtTdVvzrpyrnS7CC3VUXgXcCTEE6pmj1jfmx1rTgGTthM6NpcAtr7"
+  },
+  "onChainConfirmations": {
+    "committed_reserve_after_setStandbyReserve": "5000000",
+    "standby_backer_after_close": null
+  },
+  "proven": [
+    "buildRegisterProgramAuthority — real mainnet submit (SDK-assembled)",
+    "setStandbyReserve mechanism-B SignV2 — real submit; committed_reserve=5000000 confirmed on-chain",
+    "closeStandby mechanism-B SignV2 — real submit; standby_backer=null confirmed on-chain"
+  ],
+  "scope": "Proves the productized @dexterai/vault credit/standby surface lands against the live mainnet program. Covers register-program-authority + set-standby-reserve + close-standby. Does NOT cover draw/repay/seize (separate proof)."
+}
