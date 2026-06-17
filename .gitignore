@@ -8,3 +8,6 @@ dist/
 
 # Internal agent-workflow docs (plans/specs/research) — private, not for the public SDK
 docs/superpowers/
+
+# Internal/working docs — private (kept locally)
+docs/
