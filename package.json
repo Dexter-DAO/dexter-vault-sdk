@@ -1,6 +1,6 @@
 {
   "name": "@dexterai/vault",
-  "version": "0.9.0",
+  "version": "0.10.0-step4.0",
   "description": "Canonical off-chain mirror of the dexter-vault Solana Anchor program — Solana instruction builders, byte-precise message encoders, account decoders, secp256r1/Ed25519 precompile helpers, counterfactual Swig derivation, and signer interfaces. The single source of truth for any TypeScript code that produces bytes the on-chain program will verify.",
   "author": "Dexter",
   "license": "MIT",
@@ -9,72 +9,174 @@
   "types": "./dist/index.d.cts",
   "exports": {
     ".": {
-      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./types": {
-      "import": { "types": "./dist/types.d.ts", "default": "./dist/types.js" },
-      "require": { "types": "./dist/types.d.cts", "default": "./dist/types.cjs" }
+      "import": {
+        "types": "./dist/types.d.ts",
+        "default": "./dist/types.js"
+      },
+      "require": {
+        "types": "./dist/types.d.cts",
+        "default": "./dist/types.cjs"
+      }
     },
     "./constants": {
-      "import": { "types": "./dist/constants/index.d.ts", "default": "./dist/constants/index.js" },
-      "require": { "types": "./dist/constants/index.d.cts", "default": "./dist/constants/index.cjs" }
+      "import": {
+        "types": "./dist/constants/index.d.ts",
+        "default": "./dist/constants/index.js"
+      },
+      "require": {
+        "types": "./dist/constants/index.d.cts",
+        "default": "./dist/constants/index.cjs"
+      }
     },
     "./counterfactual": {
-      "import": { "types": "./dist/counterfactual.d.ts", "default": "./dist/counterfactual.js" },
-      "require": { "types": "./dist/counterfactual.d.cts", "default": "./dist/counterfactual.cjs" }
+      "import": {
+        "types": "./dist/counterfactual.d.ts",
+        "default": "./dist/counterfactual.js"
+      },
+      "require": {
+        "types": "./dist/counterfactual.d.cts",
+        "default": "./dist/counterfactual.cjs"
+      }
     },
     "./factoring": {
-      "import": { "types": "./dist/factoring/index.d.ts", "default": "./dist/factoring/index.js" },
-      "require": { "types": "./dist/factoring/index.d.cts", "default": "./dist/factoring/index.cjs" }
+      "import": {
+        "types": "./dist/factoring/index.d.ts",
+        "default": "./dist/factoring/index.js"
+      },
+      "require": {
+        "types": "./dist/factoring/index.d.cts",
+        "default": "./dist/factoring/index.cjs"
+      }
     },
     "./instructions": {
-      "import": { "types": "./dist/instructions/index.d.ts", "default": "./dist/instructions/index.js" },
-      "require": { "types": "./dist/instructions/index.d.cts", "default": "./dist/instructions/index.cjs" }
+      "import": {
+        "types": "./dist/instructions/index.d.ts",
+        "default": "./dist/instructions/index.js"
+      },
+      "require": {
+        "types": "./dist/instructions/index.d.cts",
+        "default": "./dist/instructions/index.cjs"
+      }
     },
     "./kit": {
-      "import": { "types": "./dist/kit/index.d.ts", "default": "./dist/kit/index.js" },
-      "require": { "types": "./dist/kit/index.d.cts", "default": "./dist/kit/index.cjs" }
+      "import": {
+        "types": "./dist/kit/index.d.ts",
+        "default": "./dist/kit/index.js"
+      },
+      "require": {
+        "types": "./dist/kit/index.d.cts",
+        "default": "./dist/kit/index.cjs"
+      }
     },
     "./messages": {
-      "import": { "types": "./dist/messages/index.d.ts", "default": "./dist/messages/index.js" },
-      "require": { "types": "./dist/messages/index.d.cts", "default": "./dist/messages/index.cjs" }
+      "import": {
+        "types": "./dist/messages/index.d.ts",
+        "default": "./dist/messages/index.js"
+      },
+      "require": {
+        "types": "./dist/messages/index.d.cts",
+        "default": "./dist/messages/index.cjs"
+      }
     },
     "./reader": {
-      "import": { "types": "./dist/reader/index.d.ts", "default": "./dist/reader/index.js" },
-      "require": { "types": "./dist/reader/index.d.cts", "default": "./dist/reader/index.cjs" }
+      "import": {
+        "types": "./dist/reader/index.d.ts",
+        "default": "./dist/reader/index.js"
+      },
+      "require": {
+        "types": "./dist/reader/index.d.cts",
+        "default": "./dist/reader/index.cjs"
+      }
     },
     "./precompile": {
-      "import": { "types": "./dist/precompile/index.d.ts", "default": "./dist/precompile/index.js" },
-      "require": { "types": "./dist/precompile/index.d.cts", "default": "./dist/precompile/index.cjs" }
+      "import": {
+        "types": "./dist/precompile/index.d.ts",
+        "default": "./dist/precompile/index.js"
+      },
+      "require": {
+        "types": "./dist/precompile/index.d.cts",
+        "default": "./dist/precompile/index.cjs"
+      }
     },
     "./session": {
-      "import": { "types": "./dist/session/index.d.ts", "default": "./dist/session/index.js" },
-      "require": { "types": "./dist/session/index.d.cts", "default": "./dist/session/index.cjs" }
+      "import": {
+        "types": "./dist/session/index.d.ts",
+        "default": "./dist/session/index.js"
+      },
+      "require": {
+        "types": "./dist/session/index.d.cts",
+        "default": "./dist/session/index.cjs"
+      }
     },
     "./signers": {
-      "import": { "types": "./dist/signers/types.d.ts", "default": "./dist/signers/types.js" },
-      "require": { "types": "./dist/signers/types.d.cts", "default": "./dist/signers/types.cjs" }
+      "import": {
+        "types": "./dist/signers/types.d.ts",
+        "default": "./dist/signers/types.js"
+      },
+      "require": {
+        "types": "./dist/signers/types.d.cts",
+        "default": "./dist/signers/types.cjs"
+      }
     },
     "./signers/node": {
-      "import": { "types": "./dist/signers/node/index.d.ts", "default": "./dist/signers/node/index.js" },
-      "require": { "types": "./dist/signers/node/index.d.cts", "default": "./dist/signers/node/index.cjs" }
+      "import": {
+        "types": "./dist/signers/node/index.d.ts",
+        "default": "./dist/signers/node/index.js"
+      },
+      "require": {
+        "types": "./dist/signers/node/index.d.cts",
+        "default": "./dist/signers/node/index.cjs"
+      }
     },
     "./signers/browser": {
-      "import": { "types": "./dist/signers/browser/index.d.ts", "default": "./dist/signers/browser/index.js" },
-      "require": { "types": "./dist/signers/browser/index.d.cts", "default": "./dist/signers/browser/index.cjs" }
+      "import": {
+        "types": "./dist/signers/browser/index.d.ts",
+        "default": "./dist/signers/browser/index.js"
+      },
+      "require": {
+        "types": "./dist/signers/browser/index.d.cts",
+        "default": "./dist/signers/browser/index.cjs"
+      }
     },
     "./tab": {
-      "import": { "types": "./dist/tab/index.d.ts", "default": "./dist/tab/index.js" },
-      "require": { "types": "./dist/tab/index.d.cts", "default": "./dist/tab/index.cjs" }
+      "import": {
+        "types": "./dist/tab/index.d.ts",
+        "default": "./dist/tab/index.js"
+      },
+      "require": {
+        "types": "./dist/tab/index.d.cts",
+        "default": "./dist/tab/index.cjs"
+      }
     },
     "./connect": {
-      "import": { "types": "./dist/connect/index.d.ts", "default": "./dist/connect/index.js" },
-      "require": { "types": "./dist/connect/index.d.cts", "default": "./dist/connect/index.cjs" }
+      "import": {
+        "types": "./dist/connect/index.d.ts",
+        "default": "./dist/connect/index.js"
+      },
+      "require": {
+        "types": "./dist/connect/index.d.cts",
+        "default": "./dist/connect/index.cjs"
+      }
     },
     "./grant": {
-      "import": { "types": "./dist/grant/index.d.ts", "default": "./dist/grant/index.js" },
-      "require": { "types": "./dist/grant/index.d.cts", "default": "./dist/grant/index.cjs" }
+      "import": {
+        "types": "./dist/grant/index.d.ts",
+        "default": "./dist/grant/index.js"
+      },
+      "require": {
+        "types": "./dist/grant/index.d.cts",
+        "default": "./dist/grant/index.cjs"
+      }
     },
     "./idl/dexter_vault.json": "./dist/idl/dexter_vault.json"
   },
