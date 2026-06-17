@@ -1525,7 +1525,7 @@ Run command:
 
 ```bash
 cd ~/websites/dexter-vault
-ANCHOR_PROVIDER_URL="https://mainnet.helius-rpc.com/?api-key=8fd1a2cd-76e7-4462-b38b-1026960edd40" \
+ANCHOR_PROVIDER_URL="$SOLANA_RPC_URL" \
 ANCHOR_WALLET="$HOME/.config/solana/dexter-vault/upgrade-authority.json" \
 npx ts-mocha -p ./tsconfig.json -t 600000 tests/prove-sdk-v6.ts 2>&1 | tee /tmp/prove-sdk-v6.log
 ```
