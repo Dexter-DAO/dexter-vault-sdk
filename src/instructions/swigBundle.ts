@@ -41,7 +41,7 @@ const bs58: { decode(s: string): Uint8Array; encode(b: Uint8Array): string } =
   (bs58Module as any).default ?? bs58Module;
 import { PublicKey } from '@solana/web3.js';
 
-import { DEXTER_VAULT_PROGRAM_ID, USDC_MAINNET } from '../constants/index.js';
+import { DEXTER_VAULT_PROGRAM_ID, USDC_MAINNET, DISCRIMINATORS } from '../constants/index.js';
 
 const SWIG_ID_DOMAIN = 'dexter-swig-id:v1:';
 const DEFAULT_SESSION_TTL_SECONDS = BigInt(30 * 24 * 60 * 60);
@@ -53,9 +53,13 @@ export const SWIG_PROGRAM_EXEC_PREFIX = new Uint8Array([
 export const SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB = new Uint8Array([
   173, 22, 98, 31, 110, 129, 59, 161,
 ]);
+export const SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED = new Uint8Array(
+  DISCRIMINATORS.settle_locked_voucher,
+);
 export const SWIG_PROGRAM_EXEC_MARKERS: readonly Uint8Array[] = [
   SWIG_PROGRAM_EXEC_PREFIX,
   SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB,
+  SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED,
 ];
 
 /**
@@ -127,6 +131,12 @@ export async function buildSwigCreationBundle(
   );
   const vaultTabSettleActions = Actions.set().all().get();
 
+  const vaultSettleLockedAuthorityInfo = createProgramExecAuthorityInfo(
+    vaultProgramIdBytes,
+    SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED,
+  );
+  const vaultSettleLockedActions = Actions.set().all().get();
+
   const sessionAuthorityInfo = createEd25519SessionAuthorityInfo(
     dexterPubkeyBytes,
     sessionTtlSeconds,
@@ -146,7 +156,8 @@ export async function buildSwigCreationBundle(
   })
     .addAuthority(vaultAuthorityInfo, vaultActions)
     .addAuthority(sessionAuthorityInfo, sessionActions)
-    .addAuthority(vaultTabSettleAuthorityInfo, vaultTabSettleActions);
+    .addAuthority(vaultTabSettleAuthorityInfo, vaultTabSettleActions)
+    .addAuthority(vaultSettleLockedAuthorityInfo, vaultSettleLockedActions);
 
   const contexts = await builder.getInstructionContexts();
   const instructions = contexts.flatMap((ctx) => getInstructionsFromContext(ctx));
