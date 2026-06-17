@@ -34,7 +34,7 @@ If you are about to hand-roll a vault instruction builder, a precompile message,
 npm install @dexterai/vault
 ```
 
-Targets the `dexter-vault` V6 program: 26 pinned Anchor discriminators (`prove_passkey`, `settle_tab_voucher`, the session register/revoke pair, the LockedClaim set, the credit set `open_standby` / `draw_credit` / `repay_credit` / `seize_collateral`, and the `migrate_v5_to_v6` pair), with per-counterparty SessionAccount PDAs. V5 vaults are not decodable by 0.9.x; migrate them with the `migrate_v5_to_v6` builders.
+Targets the `dexter-vault` V6 program: 26 pinned Anchor discriminators (`prove_passkey`, `settle_tab_voucher`, the session register/revoke pair, the LockedClaim set, the credit set `open_standby` / `draw_credit` / `repay_credit` / `seize_collateral`, and the `migrate_v5_to_v6` pair), with per-counterparty SessionAccount PDAs. V5 vaults are not decodable by 0.10.x; migrate them with the `migrate_v5_to_v6` builders.
 
 ## The byte contract
 
@@ -107,6 +107,28 @@ const s = await fetchSessionAccount(connection, vaultPda, allowedCounterparty);
 if (s && isSessionLive(s)) {
   console.log(`tab open: ${s.session.spent} / ${s.session.maxAmount}`);
 }
+```
+
+## Read crystallized claims (the reservation tier)
+
+A voucher can be **crystallized** into a `LockedClaim`: an irreversible, buyer-unwithdrawable reservation of the spent amount. The vault tracks the running sum in `outstanding_locked_amount`, surfaced by `readVaultFull` as `outstandingLockedAmount`. This is the reservation that backs lock-mode tabs — the standard tab protection as shipped, surgically reserving only the accrued amount rather than freezing the whole wallet.
+
+```typescript
+import { readVaultFull, fetchVaultLockedClaims, decodeLockedClaim } from '@dexterai/vault/reader';
+
+// Vault-level total: the sum the withdrawal gate reserves out of the balance.
+const { outstandingLockedAmount } = await readVaultFull(connection, vaultPda);
+
+// Per-claim detail. Each claim is a terminal state machine: Pending → Settled
+// or Pending → Abandoned. Filter to the live (unsettled) reservations.
+const pending = await fetchVaultLockedClaims(connection, vaultPda, { status: 'Pending' });
+// reconciliation invariant: sum(pending.amount) === outstandingLockedAmount
+for (const c of pending) {
+  console.log(`${c.voucherHash}: ${c.amount} held by ${c.currentHolder} (${c.status})`);
+}
+
+// decodeLockedClaim(address, accountData) decodes a single account you already
+// hold — the same moving-cursor decoder fetchVaultLockedClaims uses internally.
 ```
 
 ## Derive the counterfactual Swig address
@@ -249,7 +271,7 @@ Each subpath is a tree-shakeable entry point. Pull only what you need.
 | `@dexterai/vault/constants` | `DEXTER_VAULT_PROGRAM_ID`, `SWIG_PROGRAM_ID`, `USDC_MAINNET`/`USDC_DEVNET`, all 26 `DISCRIMINATORS`, `SESSION_SEED`, `LOCKED_CLAIM_SEED`, the OTS domain tags |
 | `@dexterai/vault/instructions` | Every builder, including `buildSwigCreationBundle`, the session register/revoke pair, `buildSettleTabVoucherInstruction`, the withdrawal pair, `buildForceReleaseInstruction`, the rotate pair, `buildProvePasskeyInstruction`, the migrate pair |
 | `@dexterai/vault/messages` | `sessionRegisterMessage` (188 bytes), `sessionRevokeMessage` (128 bytes), `buildVoucherMessage` (44 bytes), `buildSetSwigOperationMessage` |
-| `@dexterai/vault/reader` | `readVaultOnchain` (slim), `readVaultFull` (adds `swigAddress`, `dexterAuthority`, `liveSessionCount`) |
+| `@dexterai/vault/reader` | `readVaultOnchain` (slim), `readVaultFull` (adds `swigAddress`, `dexterAuthority`, `liveSessionCount`, `outstandingLockedAmount`), `decodeLockedClaim`, `fetchVaultLockedClaims` |
 | `@dexterai/vault/session` | V6 per-counterparty sessions: `deriveSessionPda`, `fetchSessionAccount`, `fetchVaultSessionAccounts`, `sessionPdasOf`, `waitForSession`, `registerSessionWithRetry`, and the rest |
 | `@dexterai/vault/grant` | Spend-grant consent flow: `requestSpendGrant`, `parseSpendGrantRequest`, `approveSpendGrant`, encode/decode |
 | `@dexterai/vault/connect` | Relying-app "Connect a Tab" auth: `verifyConnectProof`, `connectTab`, `decodeChallengeTo32Bytes`, `ConnectProof`, `ConnectVerifyResult` |
@@ -284,7 +306,7 @@ interface PasskeySigner {
 
 ## Versioning
 
-The current SDK targets the `dexter-vault` V6 program (26 pinned instructions; per-counterparty SessionAccount PDAs; role 3 `ProgramExec` for `settle_tab_voucher` on every new Swig). V5 vaults are not decodable by 0.9.x; migrate them with the `migrate_v5_to_v6` builders. Future program versions bump the SDK major or document the delta in the CHANGELOG. The byte-parity tests are the structural lock: any layout change requires an explicit snapshot update.
+The current SDK targets the `dexter-vault` V6 program (26 pinned instructions; per-counterparty SessionAccount PDAs; role 3 `ProgramExec` for `settle_tab_voucher` on every new Swig). V5 vaults are not decodable by 0.10.x; migrate them with the `migrate_v5_to_v6` builders. The crystallized-claim reader (`outstandingLockedAmount`, `fetchVaultLockedClaims`, `decodeLockedClaim`) and the `settle_locked_voucher` Swig marker arrived in 0.10.0. Future program versions bump the SDK major or document the delta in the CHANGELOG. The byte-parity tests are the structural lock: any layout change requires an explicit snapshot update.
 
 ## License
 
