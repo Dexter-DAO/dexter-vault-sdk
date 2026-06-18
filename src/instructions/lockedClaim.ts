@@ -148,6 +148,36 @@ export function buildRecoverAbandonedLockInstruction(
   });
 }
 
+// ── close_locked_claim ─────────────────────────────────────────────────────
+
+export interface CloseLockedClaimParams {
+  vaultPda: PublicKey;
+  claimPda: PublicKey;
+  dexterAuthority: PublicKey;
+}
+
+/**
+ * Account order MUST match the on-chain struct (CloseLockedClaim):
+ *   [0] vault            (readonly — has_one dexter_authority)
+ *   [1] claim            (writable — closed, rent drained to dexter_authority)
+ *   [2] dexter_authority (signer, writable — receives reclaimed rent)
+ * Data: discriminator only (CloseLockedClaimArgs is empty).
+ */
+export function buildCloseLockedClaimInstruction(
+  p: CloseLockedClaimParams,
+): TransactionInstruction {
+  const data = Buffer.from(DISCRIMINATORS.close_locked_claim);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: p.vaultPda, isSigner: false, isWritable: false },
+      { pubkey: p.claimPda, isSigner: false, isWritable: true },
+      { pubkey: p.dexterAuthority, isSigner: true, isWritable: true },
+    ],
+    data,
+  });
+}
+
 /** LockedClaim PDA: [LOCKED_CLAIM_SEED, vault, voucher_hash] under the vault program. */
 export function deriveLockedClaimPda(vaultPda: PublicKey, voucherHash: Uint8Array): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(

@@ -3,6 +3,7 @@ import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { buildTransferLockOwnershipInstruction } from '../src/instructions/lockedClaim.js';
 import { buildRecoverAbandonedLockInstruction } from '../src/instructions/lockedClaim.js';
 import { buildSettleLockedVoucherInstruction } from '../src/instructions/lockedClaim.js';
+import { buildCloseLockedClaimInstruction } from '../src/instructions/lockedClaim.js';
 import { buildLockVoucherInstruction, deriveLockedClaimPda } from '../src/instructions/lockedClaim.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
 import { deriveSessionPda } from '../src/session/index.js';
@@ -92,6 +93,36 @@ describe('recoverAbandonedLock', () => {
     // authenticator_data vec: length prefix 4, then [4,5,6,7]
     expect(ix.data.readUInt32LE(15)).toBe(4);
     expect(Array.from(ix.data.subarray(19, 23))).toEqual([4, 5, 6, 7]);
+  });
+});
+
+describe('closeLockedClaim', () => {
+  it('is a function and emits 3 accounts in canonical order, empty args (discriminator only)', () => {
+    expect(typeof buildCloseLockedClaimInstruction).toBe('function');
+    const VAULT = new PublicKey('SysvarC1ock11111111111111111111111111111111');
+    const DEXTER_AUTH = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+    const ix = buildCloseLockedClaimInstruction({
+      vaultPda: VAULT,
+      claimPda: CLAIM,
+      dexterAuthority: DEXTER_AUTH,
+    });
+    expect(ix.programId.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);
+    expect(ix.keys.length).toBe(3);
+    // [0] vault — readonly
+    expect(ix.keys[0].pubkey.equals(VAULT)).toBe(true);
+    expect(ix.keys[0].isSigner).toBe(false);
+    expect(ix.keys[0].isWritable).toBe(false);
+    // [1] claim — writable, will be closed
+    expect(ix.keys[1].pubkey.equals(CLAIM)).toBe(true);
+    expect(ix.keys[1].isSigner).toBe(false);
+    expect(ix.keys[1].isWritable).toBe(true);
+    // [2] dexter_authority — signer + writable (receives rent)
+    expect(ix.keys[2].pubkey.equals(DEXTER_AUTH)).toBe(true);
+    expect(ix.keys[2].isSigner).toBe(true);
+    expect(ix.keys[2].isWritable).toBe(true);
+    // data: discriminator only
+    expect(ix.data.length).toBe(8);
+    expect(Buffer.from(ix.data)).toEqual(Buffer.from(DISCRIMINATORS.close_locked_claim));
   });
 });
 

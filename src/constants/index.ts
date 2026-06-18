@@ -110,6 +110,7 @@ export const DISCRIMINATORS = Object.freeze({
   migrate_v5_to_v6:        Uint8Array.from([25, 38, 151, 206, 59, 103, 141, 175]),
   migrate_v5_to_v6_with_session: Uint8Array.from([225, 119, 165, 163, 251, 174, 42, 15]),
   close_session:           Uint8Array.from([68, 114, 178, 140, 222, 38, 248, 211]),
+  close_locked_claim:      Uint8Array.from([231, 142, 174, 161, 156, 183, 26, 60]),
 });
 
 // ── Domain separators (32 bytes each, NUL-padded) ────────────────────────
