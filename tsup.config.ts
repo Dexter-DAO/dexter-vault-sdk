@@ -21,6 +21,7 @@ export default defineConfig({
     'tab/index': 'src/tab/index.ts',
     'connect/index': 'src/connect/index.ts',
     'grant/index': 'src/grant/index.ts',
+    'create/index': 'src/create/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

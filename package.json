@@ -178,6 +178,16 @@
         "default": "./dist/grant/index.cjs"
       }
     },
+    "./create": {
+      "import": {
+        "types": "./dist/create/index.d.ts",
+        "default": "./dist/create/index.js"
+      },
+      "require": {
+        "types": "./dist/create/index.d.cts",
+        "default": "./dist/create/index.cjs"
+      }
+    },
     "./idl/dexter_vault.json": "./dist/idl/dexter_vault.json"
   },
   "typesVersions": {
@@ -229,6 +239,9 @@
       ],
       "grant": [
         "./dist/grant/index.d.ts"
+      ],
+      "create": [
+        "./dist/create/index.d.ts"
       ]
     }
   },
