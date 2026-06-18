@@ -21,7 +21,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseAttestationToSec1 } from '../enroll.js';
 
-// ── Known test vector ──────────────────────────────────────────────────────────
+// ── Known test vector (even y, scalar=42) ─────────────────────────────────────
 //
 // attestationObject = CBOR { "fmt":"none", "attStmt":{}, "authData": bstr }
 // authData contains a COSE_Key built from P-256 key with scalar=42.
@@ -53,6 +53,40 @@ const EXPECTED_SEC1_HEX =
   '026780c5fc70275e2c7061a0e7877bb174deadeb9887027f3fa83654158ba7f50c';
 const EXPECTED_SEC1_BASE64 = 'AmeAxfxwJ14scGGg54d7sXTereuYhwJ/P6g2VBWLp/UM';
 
+// ── Known test vector (odd y, scalar=1) ───────────────────────────────────────
+//
+// Private scalar = 1 (the P-256 generator point G itself).
+// Iterated small scalars 1..N to find the first with y[31] & 1 === 1; scalar=1
+// is the first hit.
+//
+//   x = 6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296
+//   y = 4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5
+//   y[31] = 0xf5 (ODD) → prefix = 0x03
+//   SEC1 = 036b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296
+//
+// To verify independently:
+//   node --input-type=module << 'EOF'
+//   import { p256 } from '@noble/curves/p256';
+//   const priv = new Uint8Array(32); priv[31] = 1;
+//   console.log(Buffer.from(p256.getPublicKey(priv, true)).toString('hex'));
+//   EOF
+
+const ODD_Y_ATTESTATION_OBJECT_HEX =
+  'a363666d74646e6f6e656761747453746d74a06861757468446174615888' +
+  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' +
+  '45' +                              // flags: UP | UV | AT
+  '00000001' +                        // counter = 1
+  '00000000000000000000000000000000' + // aaguid (16 zero bytes)
+  '0004' +                            // credentialIdLength = 4
+  '01020304' +                        // credentialId
+  'a50102032620012158206b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296' +
+  '2258204fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5';
+
+const ODD_Y_EXPECTED_SEC1_HEX =
+  '036b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296';
+const ODD_Y_EXPECTED_X_HEX =
+  '6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296';
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('parseAttestationToSec1', () => {
@@ -78,6 +112,32 @@ describe('parseAttestationToSec1', () => {
     const attestationObject = Buffer.from(ATTESTATION_OBJECT_HEX, 'hex');
     const result = parseAttestationToSec1(attestationObject);
     expect(result[0]).toBe(0x02);
+  });
+
+  // ── Odd-y (0x03 prefix) branch — scalar=1 (P-256 generator point G) ──────────
+
+  it('odd-y vector: returns exactly 33 bytes', () => {
+    const attestationObject = Buffer.from(ODD_Y_ATTESTATION_OBJECT_HEX, 'hex');
+    const result = parseAttestationToSec1(attestationObject);
+    expect(result).toHaveLength(33);
+  });
+
+  it('odd-y vector: prefix is 0x03', () => {
+    const attestationObject = Buffer.from(ODD_Y_ATTESTATION_OBJECT_HEX, 'hex');
+    const result = parseAttestationToSec1(attestationObject);
+    expect(result[0]).toBe(0x03);
+  });
+
+  it('odd-y vector: bytes 1..32 equal the noble x-coordinate', () => {
+    const attestationObject = Buffer.from(ODD_Y_ATTESTATION_OBJECT_HEX, 'hex');
+    const result = parseAttestationToSec1(attestationObject);
+    expect(Buffer.from(result.slice(1)).toString('hex')).toBe(ODD_Y_EXPECTED_X_HEX);
+  });
+
+  it('odd-y vector: produces the exact SEC1 bytes', () => {
+    const attestationObject = Buffer.from(ODD_Y_ATTESTATION_OBJECT_HEX, 'hex');
+    const result = parseAttestationToSec1(attestationObject);
+    expect(Buffer.from(result).toString('hex')).toBe(ODD_Y_EXPECTED_SEC1_HEX);
   });
 
   it('throws EnrollError when attestationObject is not a CBOR map', () => {
