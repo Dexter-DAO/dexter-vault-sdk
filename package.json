@@ -262,7 +262,9 @@
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.3",
     "@types/node": "^22.10.0",
+    "jsdom": "^29.1.1",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^4.1.8"
