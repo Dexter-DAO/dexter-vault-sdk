@@ -1,0 +1,45 @@
+{
+  "proof": "SDK closable LockedClaims — Solana mainnet, real USDC",
+  "result": "PASS",
+  "program": "Hg3wRaydFtJhYrdvYrKECacpJYDsC9Px7yKmpncj2fhc",
+  "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "legs": {
+    "closeOnSettle": {
+      "scope": "settle_locked_voucher closes the claim inline (close = dexter_authority); rent refunded, payout intact",
+      "claimPda": "4bWa9TYWTa93aqFeW951QiLJ5YLkZa3JtvKPyn53tNfy",
+      "rentRefundLandsAt": "3SWJTQ4FBDveFQGQbqd8pxyBxa2PKqkega4QzxgPMWMG",
+      "txSignatures": {
+        "fund": "2tkaUy1VGomUUhKWpX3iZEN3dkkPEPDRQ2qj5HMaW1Vd9N5tMKLBH4BQm23wMrQCzcj4zzYcMd3mqnwhbvGN2NJf",
+        "registerSession": "3GDNUaKkqCdrDzZiFLSA3SF1dG8g21D4D6Zc8wUofS7W3SyCjWyy1gxz4Fu3Jj3QtD8Yk7eUJfKcTcoxNBQ8xbuD",
+        "lock": "66tfEy6s5igEpohw5MuVrLaea18oJDMqgpUmDnDWAPkkhP5ShsvuYmxAadivAXxivVpiu1Cm4XujJUkbCuqdB2W5",
+        "settle": "4phnrpQFxRGGyjLirzUoWuf4eDDEWQ2ExduQ7yCrQUSuxu7rBbcxQW1mFyWqN3FPRFtevwAGypbtzYmneF1YsTH1"
+      },
+      "onChainConfirmations": {
+        "claim_account_after_settle": "null (closed)",
+        "seller_ata_delta": "100000",
+        "facilitator_master_sol_before": "94096640",
+        "facilitator_master_sol_after": "96316880",
+        "outstanding_after": "0"
+      }
+    },
+    "closeLockedClaimTerminal": {
+      "scope": "direct-program lock (holder_recovery_at past) → reject-Pending → recover_abandoned_lock → close_locked_claim closes the Abandoned claim + refunds rent",
+      "claimPda": "HrQ2hrDmj3nckKWG6oQMnaDMmUi7ViZZBD3BFVg5UTjc",
+      "rentRefundLandsAt": "dexter_authority (operator wallet)",
+      "txSignatures": {
+        "fund": "3GCtpCZaiHVvhPHkdwjzEpsFPSyoDWdD18m2C6f2xdAVjNHRXQTVoF9SXELoDkPojM5aW1p6pf8ztvHfaB1Bv7Ur",
+        "lock": "4mWggbL4BJT57XwjpDxk4LR5Y2w3GrE3zFCPy24zSoPZ6EL87CkyubeDnhn5t5a9SvqPUqXD7xuXehDagdHRAUpr",
+        "recover": "3cujuPH7LefMqNKPFywk9MtaPLJxtj6miTrnixDJe7224Rr4Epsbgiq3Treb7LuEhX3NiycqJtCn33Jm22nUc7vZ",
+        "close": "55tQPy2acvQaYE8AB8DDwdeNCfjdCVVRnkGsxPDYsXgWWRm3ALGeRBmSBhP5uMckQ2xyJro7YgvpAUCAJ33EbhEN"
+      },
+      "onChainConfirmations": {
+        "pending_close_rejected_with": "ClaimNotTerminal",
+        "claim_rent_before_close": "2220240",
+        "claim_account_after_close": "null (closed)",
+        "dexter_authority_sol_before": "5224979779",
+        "dexter_authority_sol_after": "5227195019"
+      }
+    }
+  },
+  "scope": "Proves rent reclamation for finished LockedClaims on mainnet with REAL USDC: (1) close-on-settle via the facilitator hot path, (2) close_locked_claim janitor on a terminal Abandoned claim, plus the Pending-close rejection (ClaimNotTerminal)."
+}

@@ -91,7 +91,7 @@ export interface SettleLockedVoucherParams {
  *   [2] claim               (writable)
  *   [3] vault               (writable)
  *   [4] holder              (signer — the current claim holder collecting)
- *   [5] dexter_authority    (signer)
+ *   [5] dexter_authority    (signer, writable — close = dexter_authority reclaims claim rent)
  * Data: discriminator only (SettleLockedVoucherArgs is empty).
  */
 export function buildSettleLockedVoucherInstruction(
@@ -107,7 +107,7 @@ export function buildSettleLockedVoucherInstruction(
       { pubkey: p.claimPda, isSigner: false, isWritable: true },
       { pubkey: p.vaultPda, isSigner: false, isWritable: true },
       { pubkey: p.holder, isSigner: true, isWritable: false },
-      { pubkey: p.dexterAuthority, isSigner: true, isWritable: false },
+      { pubkey: p.dexterAuthority, isSigner: true, isWritable: true },
     ],
     data,
   });

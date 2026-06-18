@@ -60,6 +60,8 @@ describe('settleLockedVoucher', () => {
     expect(ix.keys[4].isSigner).toBe(true);
     expect(ix.keys[5].pubkey.equals(NEW_HOLDER)).toBe(true);
     expect(ix.keys[5].isSigner).toBe(true);
+    // dexter_authority is writable on-chain (close = dexter_authority reclaims claim rent)
+    expect(ix.keys[5].isWritable).toBe(true);
     expect(ix.data.length).toBe(8); // discriminator only
     expect(Buffer.from(ix.data)).toEqual(Buffer.from(DISCRIMINATORS.settle_locked_voucher));
   });

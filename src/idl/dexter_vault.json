@@ -8,6 +8,59 @@
   },
   "instructions": [
     {
+      "name": "close_locked_claim",
+      "discriminator": [
+        231,
+        142,
+        174,
+        161,
+        156,
+        183,
+        26,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "`has_one` enforces vault.dexter_authority == dexter_authority.key()",
+            "(same authority gate as close_session / settle_locked_voucher)."
+          ]
+        },
+        {
+          "name": "claim",
+          "docs": [
+            "The TERMINAL claim being reclaimed. `close = dexter_authority` drains all",
+            "lamports to the authority, reassigns to System, resizes to 0 — no revival",
+            "(same semantics close_session relies on). Bound to this vault."
+          ],
+          "writable": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "The vault's recorded authority — signs and receives the reclaimed rent",
+            "(the party that operationally fronted it). Mirrors close_session."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "CloseLockedClaimArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "close_session",
       "discriminator": [
         68,
@@ -2367,8 +2420,13 @@
         {
           "name": "dexter_authority",
           "docs": [
-            "Fee gate (matches settle_tab_voucher's discipline)."
+            "Fee gate (matches settle_tab_voucher's discipline). MUST be `mut`:",
+            "`close = dexter_authority` on the claim credits the reclaimed rent to",
+            "this account, mutating its lamports — without `mut` the runtime rejects",
+            "settle with \"instruction changed the balance of a read-only account\"",
+            "(matches close_session, whose dexter_authority is also `mut`)."
           ],
+          "writable": true,
           "signer": true
         }
       ],
@@ -2942,9 +3000,21 @@
       "code": 6040,
       "name": "NotALegacyVault",
       "msg": "account is not a recognized pre-version-byte legacy vault (expected exactly 151-byte V1 or 183-byte V1.5 with the Vault discriminator)"
+    },
+    {
+      "code": 6041,
+      "name": "ClaimNotTerminal",
+      "msg": "claim is still Pending (a live obligation); only Settled or Abandoned claims can be closed for rent reclaim"
     }
   ],
   "types": [
+    {
+      "name": "CloseLockedClaimArgs",
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    },
     {
       "name": "CloseSessionArgs",
       "type": {
