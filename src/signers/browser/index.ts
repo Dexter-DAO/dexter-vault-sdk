@@ -234,6 +234,9 @@ function bytesFromBigint(n: bigint, length: number): Uint8Array {
  * Exported so byte-parity tests can lock the conversion against the
  * dexter-fe implementation it replaces.
  */
+export { DexterApiBrowserPasskeySigner } from './dexterApiSigner.js';
+export type { ServerPolicy, DexterApiSignerConfig } from './dexterApiSigner.js';
+
 export function derSignatureToCompactLowS(der: Uint8Array): Uint8Array {
   let i = 0;
   if (der[i++] !== 0x30) {
