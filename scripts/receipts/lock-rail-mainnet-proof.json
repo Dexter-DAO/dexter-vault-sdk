@@ -1,0 +1,20 @@
+{
+  "proof": "SDK lock rail — Solana mainnet, real USDC, SDK + facilitator",
+  "result": "PASS",
+  "program": "Hg3wRaydFtJhYrdvYrKECacpJYDsC9Px7yKmpncj2fhc",
+  "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "vaultPda": "9LmX3SdApUSxaY7tabDFEqDGDeJHSAryfs2zMhiJf2Td",
+  "seller": "9QiLRgt8MREGx1Lc5EbGtDEazAKGQo6asdyMgWFBUma5",
+  "txSignatures": {
+    "fund": "2oTqbnzcPzLakYKLc1RzaCaBmTKKxpYgxvqtqapu9RTQ4kCgH56N4ivhttu5x8d5eFdtYKiGoZkjnKm4mfTU56FL",
+    "registerSession": "3Bd9w5BGDSt8N3keN164wCc4BuKUf1MKe3vn8EMbNSVCLyai3NgCxj2QbnddoyjZs5odChiEhrZBneeVLMssxMDD",
+    "lock": "57gogWVB2fYqgXsprULN32sWXcMdWTxoncppNrYt8xoxJnpm8QcRChPWkEdcMGZx6vWvDEc7ZiVTmbk2oeGECrm4",
+    "settle": "Syj9CJog8ADTffEeaYESRMqMZjUL63akHW3ggALxgZcZePPJErLtRoYuidzQrvEpELj43TbR3Tgwr7t7qyTwK7N"
+  },
+  "onChainConfirmations": {
+    "claim_status_after_settle": "Settled",
+    "seller_ata_delta": "100000",
+    "outstanding_after": "0"
+  },
+  "scope": "Proves the productized lock lifecycle (vault → session → /tab/lock → /tab/lock/settle) on mainnet with REAL USDC via the shipped SDK + facilitator. Does NOT cover credit draw/repay/seize (separate proof)."
+}
