@@ -5,3 +5,7 @@ export { enrollPasskey, EnrollError } from './enroll.js';
 export type { EnrollOptions, EnrollResult } from './enroll.js';
 export { resolveVaultAddresses } from './deriveAddresses.js';
 export type { DepositAddressResolver, VaultAddresses } from './types.js';
+export { createDexterResolver } from './dexterResolver.js';
+export type { DexterResolverOptions } from './dexterResolver.js';
+export { deployVault, InsufficientFundsForDeployError } from './deployVault.js';
+export type { DeployVaultOptions, DeployVaultResult } from './deployVault.js';
