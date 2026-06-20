@@ -165,3 +165,6 @@ export interface SignedVoucher {
   sessionRegistration: Uint8Array;
   sessionSignature: Uint8Array;
 }
+
+export interface CreditRootState { address: string; version: number; bump: number; nullifier: Uint8Array; establishedAt: number; eventCount: bigint; }
+export interface CreditEventState { address: string; version: number; bump: number; nullifier: Uint8Array; seq: bigint; vault: string; recordedAt: number; kind: number; amount: bigint; }
