@@ -235,7 +235,15 @@ function bytesFromBigint(n: bigint, length: number): Uint8Array {
  * dexter-fe implementation it replaces.
  */
 export { DexterApiBrowserPasskeySigner } from './dexterApiSigner.js';
-export type { ServerPolicy, DexterApiSignerConfig } from './dexterApiSigner.js';
+export type {
+  ServerPolicy,
+  DexterApiSignerConfig,
+  AnonServerPolicy,
+  AnonChallengeResult,
+  DexterApiGuestSignerConfig,
+  DexterApiBrowserPasskeySignerConfig,
+  SignerIdentity,
+} from './dexterApiSigner.js';
 
 export function derSignatureToCompactLowS(der: Uint8Array): Uint8Array {
   let i = 0;
