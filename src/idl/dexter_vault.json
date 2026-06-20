@@ -31,7 +31,7 @@
           "name": "claim",
           "docs": [
             "The TERMINAL claim being reclaimed. `close = dexter_authority` drains all",
-            "lamports to the authority, reassigns to System, resizes to 0 — no revival",
+            "lamports to the authority, reassigns to System, resizes to 0 \u2014 no revival",
             "(same semantics close_session relies on). Bound to this vault."
           ],
           "writable": true
@@ -39,7 +39,7 @@
         {
           "name": "dexter_authority",
           "docs": [
-            "The vault's recorded authority — signs and receives the reclaimed rent",
+            "The vault's recorded authority \u2014 signs and receives the reclaimed rent",
             "(the party that operationally fronted it). Mirrors close_session."
           ],
           "writable": true,
@@ -87,19 +87,19 @@
             "The CLEARED session PDA being closed. A cleared session has every",
             "SessionRegistration field zeroed (including `allowed_counterparty`), so",
             "the binding to (vault, counterparty) cannot be read from the account",
-            "body — the PDA SEEDS are the proof: only the canonical PDA for",
+            "body \u2014 the PDA SEEDS are the proof: only the canonical PDA for",
             "(vault, args.allowed_counterparty) satisfies this constraint. Bump from",
-            "stored (`session.bump`), matching revoke_session_key — register stamps",
+            "stored (`session.bump`), matching revoke_session_key \u2014 register stamps",
             "the canonical bump at first touch and neither revoke nor the register-",
             "time expired-sibling sweep ever zeroes `bump` (or `vault`), so it is",
             "valid on a cleared account.",
             "",
-            "`close = dexter_authority` — Anchor 0.32.1 close semantics (verified in",
+            "`close = dexter_authority` \u2014 Anchor 0.32.1 close semantics (verified in",
             "anchor-lang 0.32.1 src/common.rs::close): drains ALL lamports to the",
             "destination, reassigns the account to the System Program, and resizes",
             "data to 0. No stale bytes survive and the account is no longer",
             "program-owned, so a same-transaction revival (re-funding the emptied",
-            "account with stale state) is structurally impossible — there is no",
+            "account with stale state) is structurally impossible \u2014 there is no",
             "state left to revive and `Account<SessionAccount>` deserialization",
             "would fail the owner check anyway."
           ],
@@ -132,7 +132,7 @@
         {
           "name": "dexter_authority",
           "docs": [
-            "The vault's recorded dexter_authority — must sign, and receives the",
+            "The vault's recorded dexter_authority \u2014 must sign, and receives the",
             "reclaimed rent (hence `mut`). Authority-only in v1 by design: the",
             "authority operationally funds session-PDA rent in the hosted flow, so",
             "the rent returns to the party that fronted it."
@@ -173,7 +173,7 @@
           "docs": [
             "The FINANCIER's swig (identity + authority). On the FINANCIER leg the handler",
             "requires this equals `vault.standby_backer` (the right financier). On the USER",
-            "leg it's harmless — the passkey verifier reads the instructions_sysvar, not",
+            "leg it's harmless \u2014 the passkey verifier reads the instructions_sysvar, not",
             "account positions, and the user knows the financier swig regardless (it's",
             "recorded on their vault).",
             "recorded backer is enforced in the handler."
@@ -183,7 +183,7 @@
           "name": "financier_swig_wallet_address",
           "docs": [
             "The financier's swig_wallet PDA, derived from `financier_swig`. On the",
-            "FINANCIER leg this PDA MUST SIGN (mechanism B consent — checked in-handler via",
+            "FINANCIER leg this PDA MUST SIGN (mechanism B consent \u2014 checked in-handler via",
             "`is_signer`): the close runs only as the inner CPI of the financier's swig",
             "SignV2, which invoke_signed's this PDA. It is NOT typed `Signer` at the struct",
             "level because the USER leg shares this struct and does not sign it; the seeds",
@@ -262,7 +262,7 @@
         {
           "name": "vault",
           "docs": [
-            "The USER's vault — credit terms cleared here (standby_backer = None,",
+            "The USER's vault \u2014 credit terms cleared here (standby_backer = None,",
             "standby_cap = 0). Mutated."
           ],
           "writable": true
@@ -309,7 +309,7 @@
           "docs": [
             "`verify_passkey_signed` reads the PREVIOUS instruction (current_index - 1),",
             "the secp256r1_verify carrying the user's passkey signature. The FINANCIER leg",
-            "does NOT read it — its consent is the swig_wallet signer (mechanism B), not an",
+            "does NOT read it \u2014 its consent is the swig_wallet signer (mechanism B), not an",
             "adjacent instruction."
           ],
           "address": "Sysvar1nstructions1111111111111111111111111"
@@ -342,7 +342,7 @@
         {
           "name": "financier_swig",
           "docs": [
-            "Position 0 — required at this index by Swig's ProgramExec validator.",
+            "Position 0 \u2014 required at this index by Swig's ProgramExec validator.",
             "This is the FINANCIER's swig, NOT the user's `vault.swig_address`. It",
             "must equal `vault.standby_backer`; because that field is `Option<Pubkey>`",
             "the equality is enforced in the handler (an `#[account(address = ...)]`",
@@ -353,7 +353,7 @@
         {
           "name": "financier_swig_wallet_address",
           "docs": [
-            "Position 1 — required by Swig's ProgramExec validator. Derives from the",
+            "Position 1 \u2014 required by Swig's ProgramExec validator. Derives from the",
             "FINANCIER's swig, so the following SignV2 spends the FINANCIER's",
             "swig_wallet ATA."
           ],
@@ -430,7 +430,7 @@
         {
           "name": "vault",
           "docs": [
-            "The USER's vault — borrowed accumulator rises here, recovery deadline is",
+            "The USER's vault \u2014 borrowed accumulator rises here, recovery deadline is",
             "armed here. Mutated."
           ],
           "writable": true
@@ -463,6 +463,85 @@
       ]
     },
     {
+      "name": "establish_credit_root",
+      "discriminator": [
+        182,
+        245,
+        97,
+        77,
+        108,
+        145,
+        37,
+        247
+      ],
+      "accounts": [
+        {
+          "name": "root_cache",
+          "docs": [
+            "The singleton World ID root cache. Read-only here; its `root` is the",
+            "value the proof's merkle_root MUST match (`bind_world_id_context`)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  108,
+                  100,
+                  95,
+                  105,
+                  100,
+                  95,
+                  114,
+                  111,
+                  111,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "credit_root",
+          "docs": [
+            "The one-human-one-root PDA. `init` (NOT init_if_needed): the PDA's",
+            "existence IS the uniqueness guard \u2014 a second proof for the same human",
+            "yields the same nullifier seed, so this `init` fails (\"already in use\").",
+            "The seed uses `args.public_inputs[0]` directly; the handler verifies the",
+            "proof and re-derives the same value via `bind_world_id_context`, so the",
+            "PDA seed and the stored nullifier are provably the same verified value."
+          ],
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Pays rent for the new CreditRoot. Anyone may pay; the human's binding is",
+            "in the proof, not in who funds the PDA."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "EstablishCreditRootArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "finalize_withdrawal",
       "discriminator": [
         178,
@@ -478,14 +557,14 @@
         {
           "name": "swig",
           "docs": [
-            "Position 0 — REQUIRED at this index by Swig's ProgramExec authority",
+            "Position 0 \u2014 REQUIRED at this index by Swig's ProgramExec authority",
             "validator. When a Swig::SignV2 follows this instruction in the same",
             "transaction, Swig's on-chain validator inspects accounts[0..1] of the",
             "preceding instruction and rejects unless they're [swig, swig_wallet].",
             "",
             "We additionally enforce `swig.key() == vault.swig_address` via the",
             "`address` constraint so a caller cannot pass an arbitrary Swig account",
-            "in here — defense in depth: even if Swig's own validation changes in a",
+            "in here \u2014 defense in depth: even if Swig's own validation changes in a",
             "future program upgrade, this vault keeps its own invariant.",
             "",
             "deserialize or dereference it."
@@ -494,14 +573,14 @@
         {
           "name": "swig_wallet_address",
           "docs": [
-            "Position 1 — required by Swig's ProgramExec validator (see `swig`).",
+            "Position 1 \u2014 required by Swig's ProgramExec validator (see `swig`).",
             "The Swig wallet address is the PDA owning the SPL token ATA being",
             "debited; it is derived under the Swig program at",
             "`[\"swig-wallet-address\", swig_pubkey]`.",
             "",
             "We independently verify the canonical derivation via Anchor's `seeds`",
             "+ `seeds::program` constraint. If a caller supplied a fake account, our",
-            "program rejects before any Swig CPI runs — we do not rely on Swig",
+            "program rejects before any Swig CPI runs \u2014 we do not rely on Swig",
             "catching it downstream.",
             ""
           ],
@@ -582,7 +661,7 @@
         {
           "name": "vault_usdc_ata",
           "docs": [
-            "The swig wallet's USDC ATA — read live to enforce the reservation",
+            "The swig wallet's USDC ATA \u2014 read live to enforce the reservation",
             "invariant per V0.3 Decision 1: post-withdrawal balance must remain",
             "at or above `vault.outstanding_locked_amount`. The token account's",
             "`owner` field must match the swig_wallet_address PDA."
@@ -668,7 +747,7 @@
             "The Dexter session authority to bind to this vault. Must sign init, so",
             "a vault can only be created bound to an authority that consented. This",
             "key may later mutate `pending_voucher_count` (settle_voucher /",
-            "force_release) — and only this key. It can never move funds."
+            "force_release) \u2014 and only this key. It can never move funds."
           ],
           "signer": true
         },
@@ -708,7 +787,7 @@
         {
           "name": "vault_usdc_ata",
           "docs": [
-            "The swig wallet's USDC ATA — read to enforce the vault-balance",
+            "The swig wallet's USDC ATA \u2014 read to enforce the vault-balance",
             "self-check per V0.3 Decision 1. The handler cross-checks that this",
             "token account's `owner` field equals the canonical swig wallet PDA",
             "derived below so a caller cannot pass an unrelated funded ATA."
@@ -794,7 +873,7 @@
           "docs": [
             "V6: the per-counterparty SessionAccount PDA whose meter graduates. The",
             "session moved OUT of `vault.active_session` into this PDA at",
-            "`[SESSION_SEED, vault, allowed_counterparty]`. `mut` — the graduation",
+            "`[SESSION_SEED, vault, allowed_counterparty]`. `mut` \u2014 the graduation",
             "mutates `current_outstanding`, `crystallized_cumulative`, and",
             "`last_locked_sequence` in place."
           ],
@@ -834,7 +913,7 @@
         {
           "name": "seller_holder",
           "docs": [
-            "Holder at creation — the seller who collected the voucher."
+            "Holder at creation \u2014 the seller who collected the voucher."
           ],
           "signer": true
         },
@@ -914,7 +993,7 @@
         {
           "name": "payer",
           "docs": [
-            "Funds the rent top-up for the grow (151/183 → 279 bytes)."
+            "Funds the rent top-up for the grow (151/183 \u2192 279 bytes)."
           ],
           "writable": true,
           "signer": true
@@ -1135,7 +1214,7 @@
         {
           "name": "dexter_authority",
           "docs": [
-            "Authority gate — must equal the decoded vault.dexter_authority."
+            "Authority gate \u2014 must equal the decoded vault.dexter_authority."
           ],
           "signer": true
         },
@@ -1183,7 +1262,7 @@
         {
           "name": "dexter_authority",
           "docs": [
-            "Authority gate — must equal the decoded vault.dexter_authority."
+            "Authority gate \u2014 must equal the decoded vault.dexter_authority."
           ],
           "signer": true
         },
@@ -1258,7 +1337,7 @@
         {
           "name": "vault",
           "docs": [
-            "The USER's vault — receives `standby_backer` / `standby_cap`. Mutated, no",
+            "The USER's vault \u2014 receives `standby_backer` / `standby_cap`. Mutated, no",
             "signer required: the user's passkey signature embedded in the args",
             "(verified via the SIMD-0075 precompile sibling) is what authorizes the",
             "mutation."
@@ -1268,7 +1347,7 @@
         {
           "name": "financier_swig",
           "docs": [
-            "`standby_backer`. Not deserialized — it is an identity, not an account we",
+            "`standby_backer`. Not deserialized \u2014 it is an identity, not an account we",
             "read. The financier's authorization in v1 is represented by this account",
             "+ their wallet-level co-signing of the transaction (see module docs)."
           ]
@@ -1276,7 +1355,7 @@
         {
           "name": "standby_backer",
           "docs": [
-            "The financier's reserve ledger — must exist (set via set_standby_reserve)",
+            "The financier's reserve ledger \u2014 must exist (set via set_standby_reserve)",
             "and match financier_swig. Mutated (aggregate_promised updated)."
           ],
           "writable": true,
@@ -1367,6 +1446,70 @@
       ]
     },
     {
+      "name": "record_credit_event",
+      "discriminator": [
+        192,
+        207,
+        202,
+        39,
+        125,
+        52,
+        240,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "credit_root",
+          "docs": [
+            "The human's permanent credit identity. `mut` because `event_count` is the",
+            "monotonic seq we both seed the event with and then increment. The seed",
+            "uses the stored nullifier (canonical bump), so this is the canonical PDA."
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "The per-agent vault this event concerns. Read-only here. It must be the",
+            "canonical vault for `derive_identity_claim(credit_root.nullifier, agent_id)`",
+            "\u2014 the handler enforces that weld below."
+          ]
+        },
+        {
+          "name": "credit_event",
+          "docs": [
+            "The new credit event, keyed to the HUMAN (nullifier) at the current seq.",
+            "`init` (NOT init_if_needed): each seq is written exactly once; a replay at",
+            "the same seq would hit \"already in use\". The seed binds it to the",
+            "nullifier + the current `event_count`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Pays rent for the new CreditEvent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RecordCreditEventArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "recover_abandoned_lock",
       "discriminator": [
         169,
@@ -1428,7 +1571,7 @@
         {
           "name": "vault_usdc_ata",
           "docs": [
-            "The swig wallet's USDC ATA — read live to enforce the overcommit",
+            "The swig wallet's USDC ATA \u2014 read live to enforce the overcommit",
             "invariant per V0.3 Decision 1: the new session's max_amount plus",
             "the existing outstanding_locked_amount must fit within actual USDC",
             "balance. The ATA's `owner` field is verified against the canonical",
@@ -1594,7 +1737,7 @@
         {
           "name": "swig",
           "docs": [
-            "Position 0 — required at this index by Swig's ProgramExec validator.",
+            "Position 0 \u2014 required at this index by Swig's ProgramExec validator.",
             "This is the USER's swig, address-constrained to `vault.swig_address`",
             "(the OPPOSITE of draw_credit's financier swig). The following SignV2",
             "spends the USER's swig_wallet ATA to repay the financier."
@@ -1603,7 +1746,7 @@
         {
           "name": "swig_wallet_address",
           "docs": [
-            "Position 1 — required by Swig's ProgramExec validator. Derives from the",
+            "Position 1 \u2014 required by Swig's ProgramExec validator. Derives from the",
             "USER's swig, so the following SignV2 spends the USER's swig_wallet ATA."
           ],
           "pda": {
@@ -1679,7 +1822,7 @@
         {
           "name": "vault",
           "docs": [
-            "The USER's vault — borrowed accumulator falls here, recovery deadline is",
+            "The USER's vault \u2014 borrowed accumulator falls here, recovery deadline is",
             "cleared here when borrowed reaches 0. Mutated."
           ],
           "writable": true
@@ -1838,7 +1981,7 @@
           "name": "dexter_authority",
           "docs": [
             "Must equal the vault's CURRENT `dexter_authority`. Only the current",
-            "authority can hand off to a new one — so the session-master key can be",
+            "authority can hand off to a new one \u2014 so the session-master key can be",
             "rotated without bricking existing vaults."
           ],
           "signer": true,
@@ -1910,7 +2053,7 @@
         {
           "name": "swig",
           "docs": [
-            "Position 0 — required at this index by Swig's ProgramExec validator.",
+            "Position 0 \u2014 required at this index by Swig's ProgramExec validator.",
             "This is the USER's swig, address-constrained to `vault.swig_address`",
             "(same as repay_credit; the OPPOSITE of draw_credit's financier swig).",
             "The following SignV2 spends the USER's swig_wallet ATA to pay the",
@@ -1920,7 +2063,7 @@
         {
           "name": "swig_wallet_address",
           "docs": [
-            "Position 1 — required by Swig's ProgramExec validator. Derives from the",
+            "Position 1 \u2014 required by Swig's ProgramExec validator. Derives from the",
             "USER's swig, so the following SignV2 spends the USER's swig_wallet ATA."
           ],
           "pda": {
@@ -1996,7 +2139,7 @@
         {
           "name": "vault",
           "docs": [
-            "The USER's vault — `borrowed` is zeroed here and the recovery deadline is",
+            "The USER's vault \u2014 `borrowed` is zeroed here and the recovery deadline is",
             "cleared here. Mutated."
           ],
           "writable": true
@@ -2006,7 +2149,7 @@
           "docs": [
             "The orchestration authority driving the liquidation. Matches",
             "repay_credit / draw_credit's gate exactly. The financier is NOT",
-            "passkey-verified in v1 — the deadline + dexter_authority are the gate."
+            "passkey-verified in v1 \u2014 the deadline + dexter_authority are the gate."
           ],
           "signer": true
         },
@@ -2055,7 +2198,7 @@
             "The financier's swig_wallet PDA. A SIGNER: this instruction runs ONLY as",
             "the inner CPI of the financier's swig SignV2, which signs with this PDA",
             "(Swig invoke_signed). PDA-constrained so we KNOW the signer is the",
-            "financier's swig_wallet — that derivation + the signature together ARE the",
+            "financier's swig_wallet \u2014 that derivation + the signature together ARE the",
             "financier's consent, bound to THIS exact call (mechanism B). No marker, no",
             "sysvar adjacency."
           ],
@@ -2234,7 +2377,7 @@
         {
           "name": "vault",
           "docs": [
-            "The dexter-vault PDA — initialized by initialize_vault, mutated here",
+            "The dexter-vault PDA \u2014 initialized by initialize_vault, mutated here",
             "(we set swig_address)."
           ],
           "writable": true
@@ -2258,7 +2401,7 @@
         {
           "name": "swig_wallet_address",
           "docs": [
-            "The Swig wallet PDA (different from swig_account — it's the spending",
+            "The Swig wallet PDA (different from swig_account \u2014 it's the spending",
             "authority address). CPI'd into by CreateV1."
           ],
           "writable": true
@@ -2273,20 +2416,20 @@
         {
           "name": "system_program",
           "docs": [
-            "System program. Declared readonly at the outer-ix level — Solana's",
+            "System program. Declared readonly at the outer-ix level \u2014 Solana's",
             "runtime demotes the System Program to readonly anyway (program-id",
             "accounts cannot be writable in the outer transaction). All inner CPIs",
             "(both CreateV1 and AddAuthority) therefore pass System Program as",
             "`AccountMeta::new_readonly(...)` to avoid privilege escalation.",
             "`system_program::CreateAccount` itself doesn't require the System",
-            "Program account to be writable — it operates on `from`/`to`."
+            "Program account to be writable \u2014 it operates on `from`/`to`."
           ],
           "address": "11111111111111111111111111111111"
         },
         {
           "name": "instructions_sysvar",
           "docs": [
-            "Instructions sysvar — read by verify_passkey_signed."
+            "Instructions sysvar \u2014 read by verify_passkey_signed."
           ],
           "address": "Sysvar1nstructions1111111111111111111111111"
         }
@@ -2318,13 +2461,13 @@
         {
           "name": "swig",
           "docs": [
-            "Position 0 — required at this index by Swig's ProgramExec validator."
+            "Position 0 \u2014 required at this index by Swig's ProgramExec validator."
           ]
         },
         {
           "name": "swig_wallet_address",
           "docs": [
-            "Position 1 — required by Swig's ProgramExec validator."
+            "Position 1 \u2014 required by Swig's ProgramExec validator."
           ],
           "pda": {
             "seeds": [
@@ -2422,7 +2565,7 @@
           "docs": [
             "Fee gate (matches settle_tab_voucher's discipline). MUST be `mut`:",
             "`close = dexter_authority` on the claim credits the reclaimed rent to",
-            "this account, mutating its lamports — without `mut` the runtime rejects",
+            "this account, mutating its lamports \u2014 without `mut` the runtime rejects",
             "settle with \"instruction changed the balance of a read-only account\"",
             "(matches close_session, whose dexter_authority is also `mut`)."
           ],
@@ -2457,7 +2600,7 @@
         {
           "name": "swig",
           "docs": [
-            "Position 0 — REQUIRED at this index by Swig's ProgramExec authority",
+            "Position 0 \u2014 REQUIRED at this index by Swig's ProgramExec authority",
             "validator. When a Swig::SignV2 follows this instruction in the same",
             "transaction, Swig's on-chain validator inspects accounts[0..1] of",
             "the preceding instruction and rejects unless they're",
@@ -2473,7 +2616,7 @@
         {
           "name": "swig_wallet_address",
           "docs": [
-            "Position 1 — required by Swig's ProgramExec validator (see `swig`).",
+            "Position 1 \u2014 required by Swig's ProgramExec validator (see `swig`).",
             "The Swig wallet address is the PDA owning the SPL token ATA being",
             "debited; derived under the Swig program at",
             "`[\"swig-wallet-address\", swig_pubkey]`.",
@@ -2560,7 +2703,7 @@
             "against. The session moved OUT of `vault.active_session` into this",
             "PDA at `[SESSION_SEED, vault, allowed_counterparty]`. The seed binds",
             "it to (vault, the seller named in the voucher), so a caller cannot",
-            "settle against a foreign counterparty's session. `mut` — we advance",
+            "settle against a foreign counterparty's session. `mut` \u2014 we advance",
             "the `spent` odometer and release `current_outstanding` in place."
           ],
           "writable": true,
@@ -2592,12 +2735,12 @@
         {
           "name": "dexter_authority",
           "docs": [
-            "Must equal `vault.dexter_authority` — only the recorded authority",
+            "Must equal `vault.dexter_authority` \u2014 only the recorded authority",
             "can drive the gate-counter decrement. The buyer's session-key",
             "signature is what authorizes the SPEND amount; this signer is what",
             "authorizes the counter mutation. Same model as the existing",
             "`settle_voucher`. NOTE: this signer does NOT sign the Swig transfer",
-            "in [N+1] — that's signed by the swig wallet PDA via Swig's",
+            "in [N+1] \u2014 that's signed by the swig wallet PDA via Swig's",
             "ProgramExec authority, gated by the vault program being the",
             "ProgramExec authority on the Swig."
           ],
@@ -2643,7 +2786,7 @@
           "name": "dexter_authority",
           "docs": [
             "Must equal the `dexter_authority` recorded on the vault at init.",
-            "`has_one` enforces this — closing Finding B (previously any signer",
+            "`has_one` enforces this \u2014 closing Finding B (previously any signer",
             "could mutate the counter)."
           ],
           "signer": true,
@@ -2656,7 +2799,7 @@
           "docs": [
             "V6: the per-counterparty SessionAccount PDA whose revolving meter rises",
             "at tab-open. OPTIONAL because only the `increment == true` (tab-open)",
-            "path touches a session — the `increment == false` (close) path is a",
+            "path touches a session \u2014 the `increment == false` (close) path is a",
             "bare `pending_voucher_count` decrement that never reads a session, so a",
             "caller closing a counter need not pass one. When present, the seed binds",
             "it to (vault, allowed_counterparty); `mut` because the RISE seam writes",
@@ -2742,6 +2885,32 @@
     }
   ],
   "accounts": [
+    {
+      "name": "CreditEvent",
+      "discriminator": [
+        199,
+        31,
+        108,
+        139,
+        172,
+        102,
+        124,
+        77
+      ]
+    },
+    {
+      "name": "CreditRoot",
+      "discriminator": [
+        221,
+        14,
+        171,
+        10,
+        71,
+        90,
+        71,
+        61
+      ]
+    },
     {
       "name": "LockedClaim",
       "discriminator": [
@@ -3024,7 +3193,7 @@
             "name": "allowed_counterparty",
             "docs": [
               "The counterparty whose CLEARED session PDA is being closed. Goes in the",
-              "args so the accounts struct can re-derive the PDA seed — the account",
+              "args so the accounts struct can re-derive the PDA seed \u2014 the account",
               "body's own copy of this field is zeroed on a cleared session, so the",
               "seed derivation is the only binding."
             ],
@@ -3087,6 +3256,133 @@
       }
     },
     {
+      "name": "CreditEvent",
+      "docs": [
+        "A single credit event keyed to the HUMAN (nullifier), not a vault.",
+        "PDA: seeds = [CREDIT_EVENT_SEED, nullifier, &seq.to_le_bytes()]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version. First field per house style."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical bump for this PDA."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "nullifier",
+            "docs": [
+              "The human nullifier this event is keyed to (mirrors the CreditRoot seed)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "seq",
+            "docs": [
+              "Monotonic sequence number within the human's credit history."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "The per-agent vault this event concerns (advisory; credit follows N)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "recorded_at",
+            "docs": [
+              "Unix time this event was recorded on-chain."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "kind",
+            "docs": [
+              "Opaque event payload kind (extended by the credit product)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "USDC amount (or product-defined unit) associated with this event."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreditRoot",
+      "docs": [
+        "One-human-one-root. PDA: seeds = [CREDIT_ROOT_SEED, nullifier]. `init`",
+        "(NOT init_if_needed) \u2192 existence IS the uniqueness guard. PERMANENT: there",
+        "is no close instruction; this is the human's durable credit identity."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version. First field per house style."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical bump for this PDA."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "nullifier",
+            "docs": [
+              "The verified World ID nullifier N (the seed). Deterministic per",
+              "(human, DEXTER_RP_ID, DEXTER_ACTION)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "established_at",
+            "docs": [
+              "Unix time this CreditRoot was established on-chain."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "event_count",
+            "docs": [
+              "Running count of credit events recorded against this human (event seq)."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "DrawCreditArgs",
       "type": {
         "kind": "struct",
@@ -3106,6 +3402,74 @@
               "`borrow_recovery_at` on the FIRST draw only."
             ],
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EstablishCreditRootArgs",
+      "docs": [
+        "The invention: a World ID v4 \u03c0\u2082 (OPRFNullifier) proof plus its 15 public",
+        "inputs. The verifier folds the proof against the embedded VK; the handler",
+        "then binds the public inputs to the cached root + Dexter context and `init`s",
+        "the per-human `CreditRoot` keyed by the verified nullifier."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proof_a",
+            "docs": [
+              "G1, negated + big-endian (groth16-solana input convention)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "proof_b",
+            "docs": [
+              "G2, `x_c1 || x_c0 || y_c1 || y_c0`, each big-endian."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "proof_c",
+            "docs": [
+              "G1, big-endian, NOT negated."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "public_inputs",
+            "docs": [
+              "The 15 \u03c0\u2082 public inputs, each a 32-byte big-endian bn254 field element.",
+              "`public_inputs[0]` is the nullifier (the CreditRoot seed)."
+            ],
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                15
+              ]
+            }
           }
         ]
       }
@@ -3165,7 +3529,7 @@
           {
             "name": "cooling_off_seconds",
             "docs": [
-              "Withdrawal cooling-off in seconds. Zero = instant. See §7.1 of the v2",
+              "Withdrawal cooling-off in seconds. Zero = instant. See \u00a77.1 of the v2",
               "design doc for why this tightened from i64 to u32."
             ],
             "type": "u32"
@@ -3225,7 +3589,7 @@
           {
             "name": "voucher_hash",
             "docs": [
-              "sha256(voucher_message) — used as the third PDA seed for the claim.",
+              "sha256(voucher_message) \u2014 used as the third PDA seed for the claim.",
               "The handler verifies this matches the actually-signed message before",
               "trusting it as a seed."
             ],
@@ -3260,7 +3624,7 @@
           {
             "name": "allowed_counterparty",
             "docs": [
-              "V6: the seller this voucher's session is bound to — equals the session",
+              "V6: the seller this voucher's session is bound to \u2014 equals the session",
               "PDA's `allowed_counterparty`. Carried in the args so the accounts",
               "struct can re-derive the session PDA seed. Not part of the signed",
               "voucher message (layout unchanged); the seed binding ties the lock to",
@@ -3277,8 +3641,8 @@
         "Crystallized claim against vault USDC. Created by `lock_voucher`,",
         "transferable via `transfer_lock_ownership`, settled by",
         "`settle_locked_voucher`, reclaimed by `recover_abandoned_lock`. Independent",
-        "of any `SessionAccount` after creation — see V0.3 Decision 7. State machine",
-        "per V0.3 Decision 6: pending → {settled, abandoned}, both terminal one-way."
+        "of any `SessionAccount` after creation \u2014 see V0.3 Decision 7. State machine",
+        "per V0.3 Decision 6: pending \u2192 {settled, abandoned}, both terminal one-way."
       ],
       "type": {
         "kind": "struct",
@@ -3318,7 +3682,7 @@
           {
             "name": "voucher_hash",
             "docs": [
-              "Voucher payload hash — sha256 of the 44-byte canonical voucher message.",
+              "Voucher payload hash \u2014 sha256 of the 44-byte canonical voucher message.",
               "For audit / indexer correlation; not re-verified at settle."
             ],
             "type": {
@@ -3559,6 +3923,47 @@
       }
     },
     {
+      "name": "RecordCreditEventArgs",
+      "docs": [
+        "Append a credit event to a human's `CreditRoot`, welding a per-agent vault to",
+        "that human. Credit history keys to the nullifier `N`, not to a vault address."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent_id",
+            "docs": [
+              "The per-agent identifier (caller-supplied 32 bytes). Combined with the",
+              "CreditRoot's verified nullifier this MUST reproduce the vault's stored",
+              "`identity_claim` (`SHA256(nullifier \u2016 agent_id)`), proving the vault",
+              "descends from this human."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "kind",
+            "docs": [
+              "Opaque event payload kind (extended by the credit product)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "USDC amount (or product-defined unit) associated with this event."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "RecoverAbandonedLockArgs",
       "type": {
         "kind": "struct",
@@ -3586,7 +3991,7 @@
             "name": "session_pubkey",
             "docs": [
               "Ed25519 pubkey the buyer's SDK generated in memory. The passkey is",
-              "endorsing this exact key — only this key can sign vouchers for the",
+              "endorsing this exact key \u2014 only this key can sign vouchers for the",
               "duration of the session."
             ],
             "type": {
@@ -3793,7 +4198,7 @@
         "Empty by design. Unlike `recover_abandoned_lock` (which carries WebAuthn",
         "ceremony bytes because the BUYER must passkey-sign their own recovery),",
         "`seize_collateral` takes NO args: the financier is not passkey-verified in",
-        "v1, and the seized amount is the on-chain `vault.borrowed` snapshot — never a",
+        "v1, and the seized amount is the on-chain `vault.borrowed` snapshot \u2014 never a",
         "caller-supplied value. The deadline + dexter_authority are the entire gate."
       ],
       "type": {
@@ -3817,7 +4222,7 @@
             "docs": [
               "First-touch / migration discriminator. 0 = never touched (or cleared by",
               "revoke). SESSION_VERSION_V1 once written. NOT the Anchor discriminator",
-              "(Anchor sets that on init_if_needed before the handler runs) — this is a",
+              "(Anchor sets that on init_if_needed before the handler runs) \u2014 this is a",
               "program-controlled field, the only reliable new-vs-replace signal."
             ],
             "type": "u8"
@@ -3825,7 +4230,7 @@
           {
             "name": "bump",
             "docs": [
-              "Stored canonical bump → create_program_address (one-shot, no ~1500 CU",
+              "Stored canonical bump \u2192 create_program_address (one-shot, no ~1500 CU",
               "find_program_address search) when re-deriving siblings in the gate."
             ],
             "type": "u8"
@@ -3840,7 +4245,7 @@
           {
             "name": "session",
             "docs": [
-              "The session registration scope — UNCHANGED struct, reused verbatim."
+              "The session registration scope \u2014 UNCHANGED struct, reused verbatim."
             ],
             "type": {
               "defined": {
@@ -3858,13 +4263,13 @@
         "",
         "The session pubkey is an ordinary ed25519 keypair the buyer's SDK generated",
         "in memory at tab-open time. The passkey signed a 180-byte registration",
-        "message (see docs/DESIGN-vault-v2-session-keys.md §2.2) endorsing these",
+        "message (see docs/DESIGN-vault-v2-session-keys.md \u00a72.2) endorsing these",
         "scope limits. From this point on, the seller's middleware accepts vouchers",
         "signed by `session_pubkey` for this vault, up to `max_amount` and before",
         "`expires_at`, only for `allowed_counterparty`.",
         "",
-        "`spent` is the running cumulative — incremented by settle paths that close",
-        "vouchers — so we can enforce the cap across the lifetime of the session",
+        "`spent` is the running cumulative \u2014 incremented by settle paths that close",
+        "vouchers \u2014 so we can enforce the cap across the lifetime of the session",
         "without an additional read."
       ],
       "type": {
@@ -3904,7 +4309,7 @@
             "docs": [
               "Live unsettled exposure. Rises at tab-open (settle_voucher increment),",
               "falls at confirmed settle (settle_tab_voucher). This is the field that",
-              "REVOLVES — the credex meter."
+              "REVOLVES \u2014 the credex meter."
             ],
             "type": "u64"
           },
@@ -3930,7 +4335,7 @@
             "name": "last_locked_sequence",
             "docs": [
               "Last voucher sequence number that was locked. Reserved for future",
-              "out-of-order lock detection — NOT the XOR guard (the frontier is)."
+              "out-of-order lock detection \u2014 NOT the XOR guard (the frontier is)."
             ],
             "type": "u32"
           }
@@ -4049,7 +4454,7 @@
           {
             "name": "channel_id",
             "docs": [
-              "Channel id from the voucher's payload — first 32 bytes of the",
+              "Channel id from the voucher's payload \u2014 first 32 bytes of the",
               "44-byte message the session key signed."
             ],
             "type": {
@@ -4081,7 +4486,7 @@
           {
             "name": "allowed_counterparty",
             "docs": [
-              "V6: the seller this voucher pays — equals the session PDA's",
+              "V6: the seller this voucher pays \u2014 equals the session PDA's",
               "`allowed_counterparty`. Carried in the args so the accounts struct can",
               "re-derive the session PDA seed. Not part of the signed voucher message",
               "(the message layout is unchanged); the PDA seed binding is what ties",
@@ -4108,7 +4513,7 @@
           {
             "name": "allowed_counterparty",
             "docs": [
-              "V6: the seller the tab is opened against — equals the session PDA's",
+              "V6: the seller the tab is opened against \u2014 equals the session PDA's",
               "`allowed_counterparty`. Carried so the accounts struct can re-derive the",
               "(optional) session PDA seed. Only load-bearing on the increment path; on",
               "the close path it's ignored (no session account is passed)."
@@ -4123,7 +4528,7 @@
       "docs": [
         "Financier reserve ledger (aggregate-reserve primitive). One per financier",
         "swig identity. The program reads THIS (allowed) but never the financier's",
-        "Vault (forbidden — the rehypothecation firewall). Enforces",
+        "Vault (forbidden \u2014 the rehypothecation firewall). Enforces",
         "`aggregate_promised <= committed_reserve` so a financier cannot promise more",
         "standby capacity across vaults than they have committed."
       ],
@@ -4265,7 +4670,7 @@
           {
             "name": "dexter_authority",
             "docs": [
-              "The session authority recorded at init — the ONLY key permitted to",
+              "The session authority recorded at init \u2014 the ONLY key permitted to",
               "mutate `pending_voucher_count` (settle_voucher / force_release)."
             ],
             "type": "pubkey"
