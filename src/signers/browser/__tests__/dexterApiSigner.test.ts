@@ -17,25 +17,34 @@ function fakeAssertion() {
   };
 }
 
+const AUTH_OP_MESSAGE = new Uint8Array([100, 101, 102, 103]);
+
 describe('DexterApiBrowserPasskeySigner', () => {
-  it('sign() runs the assertion then verifies with server policy; returns Uint8Array fields', async () => {
-    const policy = { issueChallenge: vi.fn(), verify: vi.fn().mockResolvedValue(undefined) };
-    const signer = new DexterApiBrowserPasskeySigner({ credentialId: CRED, publicKey: PUB, policy, __assertion: fakeAssertion() });
-    const out = await signer.sign(new Uint8Array(32).fill(1));
+  it('sign() hashes the op, mints a challenge bound to sha256(op), asserts over the server challenge, verifies', async () => {
+    const opHash = await sha256(AUTH_OP_MESSAGE);
+    // Server uses the operationHash AS the challenge (dexter-fe + webauthn.rs law).
+    const policy = {
+      issueChallenge: vi.fn().mockImplementation(async ({ operationHash }: { operationHash: Uint8Array }) => operationHash),
+      verify: vi.fn().mockResolvedValue(undefined),
+    };
+    const assertion = fakeAssertion();
+    const signer = new DexterApiBrowserPasskeySigner({ credentialId: CRED, publicKey: PUB, policy, __assertion: assertion });
+
+    const out = await signer.sign(AUTH_OP_MESSAGE);
+
+    // issueChallenge bound to credentialId + sha256(op).
+    expect(policy.issueChallenge).toHaveBeenCalledTimes(1);
+    const mintArg = policy.issueChallenge.mock.calls[0]![0] as { credentialId: Uint8Array; operationHash: Uint8Array };
+    expect(mintArg.credentialId).toBe(CRED);
+    expect(Array.from(mintArg.operationHash)).toEqual(Array.from(opHash));
+
+    // MONEY-PATH INVARIANT: the challenge the assertion ran over === sha256(operationMessage).
+    expect(assertion.assertOver).toHaveBeenCalledTimes(1);
+    expect(Array.from(assertion.assertOver.mock.calls[0]![0] as Uint8Array)).toEqual(Array.from(opHash));
+
     expect(out.signature).toBeInstanceOf(Uint8Array);
     expect(out.signature).toHaveLength(64);
     expect(out.clientDataJSON).toBeInstanceOf(Uint8Array);
-    expect(policy.verify).toHaveBeenCalledTimes(1);
-  });
-
-  it('signWithServerChallenge() fetches the challenge then signs', async () => {
-    const policy = {
-      issueChallenge: vi.fn().mockResolvedValue(new Uint8Array(32).fill(2)),
-      verify: vi.fn().mockResolvedValue(undefined),
-    };
-    const signer = new DexterApiBrowserPasskeySigner({ credentialId: CRED, publicKey: PUB, policy, __assertion: fakeAssertion() });
-    await signer.signWithServerChallenge();
-    expect(policy.issueChallenge).toHaveBeenCalledWith({ credentialId: CRED });
     expect(policy.verify).toHaveBeenCalledTimes(1);
   });
 

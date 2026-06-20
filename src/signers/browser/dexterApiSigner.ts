@@ -4,8 +4,18 @@ import type { PasskeySignerWithPublicKey } from '../types.js';
 // ── Auth-path server policy (credentialId-keyed) ──────────────────────────
 
 export interface ServerPolicy {
-  /** dexter-api /sign/challenge — issue a 32-byte challenge for this credential. */
-  issueChallenge(args: { credentialId: Uint8Array }): Promise<Uint8Array>;
+  /**
+   * dexter-api /api/passkey/sign/challenge — body `{ operationHash }`. The
+   * operationHash (sha256 of the op message) becomes the WebAuthn challenge,
+   * binding the assertion to the exact on-chain op (replay defense + the
+   * on-chain webauthn.rs law: clientDataJSON.challenge === sha256(op)).
+   * Mirrors dexter-fe/app/lib/passkey-signer.ts's auth leg. Returns the
+   * server-issued challenge (=== operationHash).
+   */
+  issueChallenge(args: {
+    credentialId: Uint8Array;
+    operationHash: Uint8Array;
+  }): Promise<Uint8Array>;
   /** dexter-api /sign/verify — verify the assertion (replay defense, sig counter). */
   verify(args: {
     credentialId: Uint8Array;
@@ -133,7 +143,9 @@ function isGuestConfig(
  * Two keyings, one class — mirroring dexter-fe's `kind: 'auth' | 'guest'`:
  *
  *   - **auth**  — logged-in flow, keyed on `credentialId` + `ServerPolicy`.
- *     Public API: `sign(challenge)`, `signWithServerChallenge()`. UNCHANGED.
+ *     Method: `sign(operationMessage)` — mints a challenge bound to
+ *     sha256(op) (the on-chain webauthn.rs law + replay defense), runs the
+ *     assertion over the server challenge, verifies with `{ credentialId }`.
  *
  *   - **guest** — no-account ANON flow, keyed on a server-minted `userHandle`
  *     + `AnonServerPolicy`. Authorizes tab-opens/spends for a guest who signs
@@ -173,21 +185,48 @@ export class DexterApiBrowserPasskeySigner implements PasskeySignerWithPublicKey
     }
   }
 
-  // ── Auth path (UNCHANGED) ────────────────────────────────────────────────
+  // ── Auth path ────────────────────────────────────────────────────────────
 
-  /** Sign a caller-supplied challenge, then run the server verify leg. */
-  async sign(challenge: Uint8Array): Promise<{
+  /**
+   * Sign an OPERATION MESSAGE (the raw bytes the on-chain handler verifies).
+   * Mirrors dexter-fe's auth leg AND the on-chain webauthn.rs law:
+   *
+   *   1. opHash = sha256(operationMessage)
+   *   2. mint a server challenge bound to `{ credentialId, operationHash: opHash }`
+   *      — the opHash IS the WebAuthn challenge (binds the assertion to this
+   *      exact on-chain op; replay defense).
+   *   3. run the WebAuthn assertion over the SERVER-issued challenge.
+   *   4. verify with `{ credentialId, ... }` (replay-defense + counter).
+   *
+   * Invariant (money-path): clientDataJSON.challenge === sha256(operationMessage),
+   * exactly what programs/dexter-vault/src/verify/webauthn.rs requires.
+   */
+  async sign(operationMessage: Uint8Array): Promise<{
     signature: Uint8Array;
     clientDataJSON: Uint8Array;
     authenticatorData: Uint8Array;
   }> {
     if (this.identity.kind !== 'auth' || !this.policy) {
       throw new Error(
-        'sign(challenge) is the auth-path API; a guest signer must call signOperation(operationMessage)',
+        'sign(operationMessage) is the auth-path API; a guest signer must call signOperation(operationMessage)',
       );
     }
+
+    const operationHash = await sha256(operationMessage);
+
+    // 1. Mint the challenge bound to credentialId + operationHash. The server
+    //    uses the opHash AS the WebAuthn challenge (clientDataJSON.challenge ===
+    //    sha256(op)), matching dexter-fe and the on-chain webauthn.rs law.
+    const challenge = await this.policy.issueChallenge({
+      credentialId: this.credentialId,
+      operationHash,
+    });
+
+    // 2. Run the WebAuthn ceremony over the SERVER challenge.
     const assertion = this.assertionFor(this.credentialId);
     const res = await assertion.assertOver(challenge);
+
+    // 3. Verify with the server (replay defense, sig counter).
     await this.policy.verify({
       credentialId: this.credentialId,
       signature: res.signature,
@@ -195,21 +234,6 @@ export class DexterApiBrowserPasskeySigner implements PasskeySignerWithPublicKey
       authenticatorData: res.authenticatorData,
     });
     return { signature: res.signature, clientDataJSON: res.clientDataJSON, authenticatorData: res.authenticatorData };
-  }
-
-  /** Convenience: fetch a server challenge, then sign it. */
-  async signWithServerChallenge(): Promise<{
-    signature: Uint8Array;
-    clientDataJSON: Uint8Array;
-    authenticatorData: Uint8Array;
-  }> {
-    if (this.identity.kind !== 'auth' || !this.policy) {
-      throw new Error(
-        'signWithServerChallenge() is the auth-path API; a guest signer must call signOperation(operationMessage)',
-      );
-    }
-    const challenge = await this.policy.issueChallenge({ credentialId: this.credentialId });
-    return this.sign(challenge);
   }
 
   // ── Guest path (ANON) ────────────────────────────────────────────────────
@@ -236,7 +260,7 @@ export class DexterApiBrowserPasskeySigner implements PasskeySignerWithPublicKey
   }> {
     if (this.identity.kind !== 'guest' || !this.anonPolicy) {
       throw new Error(
-        'signOperation(operationMessage) is the guest-path API; an auth signer must call sign(challenge) / signWithServerChallenge()',
+        'signOperation(operationMessage) is the guest-path API; an auth signer must call sign(operationMessage)',
       );
     }
     const { userHandle } = this.identity;

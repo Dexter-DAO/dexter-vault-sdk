@@ -75,11 +75,13 @@ export async function deployVault(opts: DeployVaultOptions): Promise<DeployVault
   // in the clientDataJSON produced by the WebAuthn ceremony).
   const operationMessage = buildSetSwigOperationMessage(opts.swigStateAddress);
 
-  // Have the signer assert over the operation message. The WebAuthn ceremony
-  // internally hashes it (sha256) and embeds the hash as the challenge in
-  // clientDataJSON, then signs authenticatorData || sha256(clientDataJSON) —
-  // exactly what buildClientDataJSON + signOperationWithPasskey does in the
-  // prove-turnkey-deploy.mjs proof script (lines 255-263 + 338-341).
+  // Pass the RAW operation message to the signer. The SIGNER hashes it
+  // (sha256) and binds that hash as the WebAuthn challenge in clientDataJSON
+  // (clientDataJSON.challenge === sha256(operationMessage)), then signs
+  // authenticatorData || sha256(clientDataJSON) — exactly what the on-chain
+  // webauthn.rs law requires and what buildClientDataJSON +
+  // signOperationWithPasskey does in the prove-turnkey-deploy.mjs proof
+  // script (lines 255-263 + 338-341).
   const { signature, clientDataJSON, authenticatorData } = await opts.signer.sign(operationMessage);
 
   // All byte fields sent to the warmup endpoint are plain base64 strings.
