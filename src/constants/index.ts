@@ -55,6 +55,26 @@ export const LOCKED_CLAIM_DISCRIMINATOR_B58 = 'Ra2KzfH1LnQ';
 // fixed size constant and no dataSize gPA filter — see lockedClaimReader.ts.
 export const LOCKED_CLAIM_VAULT_OFFSET = 10;
 
+// ── Credit-identity accounts (CreditRoot / CreditEvent) ───────────────────
+// Anchor account discriminators: sha256("account:<Name>")[..8]. Used as gPA
+// memcmp filters at offset 0. b58 strings are precomputed (no runtime bs58
+// import in the fetch path) and pinned by a unit test against bs58.encode(...).
+export const CREDIT_ROOT_DISCRIMINATOR = Uint8Array.from([221, 14, 171, 10, 71, 90, 71, 61]);
+export const CREDIT_ROOT_DISCRIMINATOR_B58 = 'dyXtycev4kU';
+export const CREDIT_EVENT_DISCRIMINATOR = Uint8Array.from([199, 31, 108, 139, 172, 102, 124, 77]);
+export const CREDIT_EVENT_DISCRIMINATOR_B58 = 'aJjvifZcCu2';
+
+// Byte offset of the `nullifier` field inside CreditEvent (8 disc + version u8 + bump u8).
+export const CREDIT_EVENT_NULLIFIER_OFFSET = 10; // 8 disc + 1 version + 1 bump
+
+// PDA seeds for CreditRoot / CreditEvent.
+export const CREDIT_ROOT_SEED = 'credit_root';
+export const CREDIT_EVENT_SEED = 'credit_event';
+
+// Total account sizes (8 disc + INIT_SPACE). gPA dataSize filters.
+export const CREDIT_ROOT_SIZE = 58;   // 8+1+1+32+8+8
+export const CREDIT_EVENT_SIZE = 99;  // 8+1+1+32+8+32+8+1+8
+
 // ── Session accounts (V6) ─────────────────────────────────────────────────
 
 // Session PDA seed — matches programs/dexter-vault/src/constants.rs (b"session").
@@ -111,6 +131,8 @@ export const DISCRIMINATORS = Object.freeze({
   migrate_v5_to_v6_with_session: Uint8Array.from([225, 119, 165, 163, 251, 174, 42, 15]),
   close_session:           Uint8Array.from([68, 114, 178, 140, 222, 38, 248, 211]),
   close_locked_claim:      Uint8Array.from([231, 142, 174, 161, 156, 183, 26, 60]),
+  establish_credit_root:   Uint8Array.from([182, 245, 97, 77, 108, 145, 37, 247]),
+  record_credit_event:     Uint8Array.from([192, 207, 202, 39, 125, 52, 240, 255]),
 });
 
 // ── Domain separators (32 bytes each, NUL-padded) ────────────────────────
