@@ -34,14 +34,38 @@ export interface PasskeySigner {
 }
 
 /**
- * A `PasskeySigner` that also exposes its 33-byte SEC1 compressed P-256
- * public key eagerly. The x402 tab adapter consumes THIS shape: it reads
- * `publicKey` for the secp256r1 precompile and calls `sign(challenge)` for
- * the WebAuthn assertion. Not every `PasskeySigner` can expose a pubkey
- * eagerly (a raw WebAuthn ceremony only learns it after the first
- * assertion), so it lives in its own interface rather than the base.
+ * The honest, policy-wrapped passkey signer surface.
+ *
+ * ONE canonical method — `signOperation(operationMessage)` — that BOTH the
+ * auth (logged-in) and guest (ANON) keyings honor. It takes the RAW on-chain
+ * operation message, hashes it internally (opHash = sha256(op)), mints a
+ * server challenge bound to that hash, runs the WebAuthn assertion over the
+ * server challenge, and returns the three on-chain-ready byte fields.
+ *
+ * Invariant (the on-chain webauthn.rs law):
+ *   clientDataJSON.challenge === sha256(operationMessage)
+ *
+ * This is distinct from the low-level `PasskeySigner.sign(challenge)` ceremony
+ * driver (WebAuthnAssertion), which asserts over a raw challenge with no
+ * hashing/policy. A consumer handed a `PasskeySignerWithPublicKey` can never
+ * be handed a method that throws — both auth and guest implement
+ * `signOperation` honestly.
+ *
+ * Also exposes the 33-byte SEC1 compressed P-256 public key eagerly: the x402
+ * tab adapter reads `publicKey` for the secp256r1 precompile.
  */
-export interface PasskeySignerWithPublicKey extends PasskeySigner {
+export interface PasskeySignerWithPublicKey {
+  /** Opaque credential ID. For guest signers, resolved after first signOperation(). */
+  readonly credentialId: Uint8Array;
   /** 33-byte SEC1 compressed P-256 public key (the form the vault stores). */
   readonly publicKey: Uint8Array;
+  /**
+   * Sign a RAW on-chain operation message. Hashes internally and binds
+   * sha256(op) as the WebAuthn challenge. Honored by BOTH auth and guest.
+   */
+  signOperation(operationMessage: Uint8Array): Promise<{
+    signature: Uint8Array;
+    clientDataJSON: Uint8Array;
+    authenticatorData: Uint8Array;
+  }>;
 }

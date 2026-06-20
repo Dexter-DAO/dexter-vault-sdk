@@ -20,7 +20,7 @@ function fakeAssertion() {
 const AUTH_OP_MESSAGE = new Uint8Array([100, 101, 102, 103]);
 
 describe('DexterApiBrowserPasskeySigner', () => {
-  it('sign() hashes the op, mints a challenge bound to sha256(op), asserts over the server challenge, verifies', async () => {
+  it('signOperation() hashes the op, mints a challenge bound to sha256(op), asserts over the server challenge, verifies', async () => {
     const opHash = await sha256(AUTH_OP_MESSAGE);
     // Server uses the operationHash AS the challenge (dexter-fe + webauthn.rs law).
     const policy = {
@@ -30,7 +30,7 @@ describe('DexterApiBrowserPasskeySigner', () => {
     const assertion = fakeAssertion();
     const signer = new DexterApiBrowserPasskeySigner({ credentialId: CRED, publicKey: PUB, policy, __assertion: assertion });
 
-    const out = await signer.sign(AUTH_OP_MESSAGE);
+    const out = await signer.signOperation(AUTH_OP_MESSAGE);
 
     // issueChallenge bound to credentialId + sha256(op).
     expect(policy.issueChallenge).toHaveBeenCalledTimes(1);

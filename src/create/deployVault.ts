@@ -1,13 +1,13 @@
 import { buildSetSwigOperationMessage } from '../messages/operations.js';
-import type { PasskeySigner } from '../signers/types.js';
+import type { PasskeySignerWithPublicKey } from '../signers/types.js';
 
 export interface DeployVaultOptions {
   /** base64url-encoded 16-byte user handle. */
   userHandle: string;
   /** Swig state address (base58 string) returned by /initialize. */
   swigStateAddress: string;
-  /** Passkey signer — signs the set_swig operation message. */
-  signer: PasskeySigner;
+  /** Passkey signer — signs the set_swig operation message via signOperation(). */
+  signer: PasskeySignerWithPublicKey;
   /** Base URL for the Dexter API. Defaults to "https://api.dexter.cash". */
   baseUrl?: string;
   /** Injectable fetch for tests. Defaults to global fetch. */
@@ -82,7 +82,7 @@ export async function deployVault(opts: DeployVaultOptions): Promise<DeployVault
   // webauthn.rs law requires and what buildClientDataJSON +
   // signOperationWithPasskey does in the prove-turnkey-deploy.mjs proof
   // script (lines 255-263 + 338-341).
-  const { signature, clientDataJSON, authenticatorData } = await opts.signer.sign(operationMessage);
+  const { signature, clientDataJSON, authenticatorData } = await opts.signer.signOperation(operationMessage);
 
   // All byte fields sent to the warmup endpoint are plain base64 strings.
   // Confirmed from passkeyVaultAnon.ts:863-864: base64ToBytes() is used to

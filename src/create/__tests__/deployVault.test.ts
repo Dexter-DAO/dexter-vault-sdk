@@ -12,7 +12,8 @@ const FAKE_AUTHENTICATOR_DATA = new Uint8Array([0x04, 0x05, 0x06]);
 function makeSigner() {
   return {
     credentialId: new Uint8Array([1, 2, 3]),
-    sign: vi.fn().mockResolvedValue({
+    publicKey: new Uint8Array(33).fill(2),
+    signOperation: vi.fn().mockResolvedValue({
       signature: FAKE_SIGNATURE,
       clientDataJSON: FAKE_CLIENT_DATA_JSON,
       authenticatorData: FAKE_AUTHENTICATOR_DATA,
@@ -45,8 +46,8 @@ describe('deployVault', () => {
       fetch: fetchMock,
     });
 
-    expect(signer.sign).toHaveBeenCalledTimes(1);
-    const calledWith = (signer.sign.mock.calls[0] as [Uint8Array])[0];
+    expect(signer.signOperation).toHaveBeenCalledTimes(1);
+    const calledWith = (signer.signOperation.mock.calls[0] as [Uint8Array])[0];
     const expectedMsg = buildSetSwigOperationMessage(SWIG_ADDRESS);
     expect(Buffer.from(calledWith)).toEqual(Buffer.from(expectedMsg));
   });
