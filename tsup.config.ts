@@ -13,6 +13,7 @@ export default defineConfig({
     'kit/index': 'src/kit/index.ts',
     'messages/index': 'src/messages/index.ts',
     'reader/index': 'src/reader/index.ts',
+    'credit/index': 'src/credit/index.ts',
     'precompile/index': 'src/precompile/index.ts',
     'session/index': 'src/session/index.ts',
     'signers/types': 'src/signers/types.ts',

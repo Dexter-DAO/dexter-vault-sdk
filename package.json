@@ -98,6 +98,16 @@
         "default": "./dist/reader/index.cjs"
       }
     },
+    "./credit": {
+      "import": {
+        "types": "./dist/credit/index.d.ts",
+        "default": "./dist/credit/index.js"
+      },
+      "require": {
+        "types": "./dist/credit/index.d.cts",
+        "default": "./dist/credit/index.cjs"
+      }
+    },
     "./precompile": {
       "import": {
         "types": "./dist/precompile/index.d.ts",
@@ -215,6 +225,9 @@
       ],
       "reader": [
         "./dist/reader/index.d.ts"
+      ],
+      "credit": [
+        "./dist/credit/index.d.ts"
       ],
       "precompile": [
         "./dist/precompile/index.d.ts"
