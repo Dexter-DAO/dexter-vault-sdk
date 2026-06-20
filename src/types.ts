@@ -33,6 +33,14 @@ export interface VaultStateFull {
   pendingVoucherCount: number;
   liveSessionCount: number;
   outstandingLockedAmount: string;  // atomic, u64 stringified (sum of unsettled LockedClaim amounts)
+  /** V5 credit tail. Atomic u64 stringified. Outstanding draw not yet repaid. */
+  borrowed: string;
+  /** V5: financier swig backing this vault past the user's balance; null = no line open. */
+  standbyBacker: string | null;
+  /** V5: ceiling the financier committed. Atomic u64 stringified. `borrowed <= standbyCap`. */
+  standbyCap: string;
+  /** V5: unix seconds after which the financier may seize; null = nothing borrowed. */
+  borrowRecoveryAt: number | null;
 }
 
 // ── LockedClaim (crystallized, buyer-irrevocable reservation tier) ────────
