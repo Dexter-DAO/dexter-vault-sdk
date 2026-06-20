@@ -4,7 +4,7 @@
  * spend past the balance) draw/repay/seize credit. Every verb COMPOSES and
  * RETURNS instructions; the caller owns the transaction lifecycle.
  */
-export { openTab } from './openTab.js';
+export { buildOpenTabInstructions } from './openTab.js';
 export type { OpenTabParams } from './openTab.js';
 export { settleTab } from './settleTab.js';
 export type { SettleTabParams } from './settleTab.js';

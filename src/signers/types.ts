@@ -32,3 +32,16 @@ export interface PasskeySigner {
     authenticatorData: Uint8Array;
   }>;
 }
+
+/**
+ * A `PasskeySigner` that also exposes its 33-byte SEC1 compressed P-256
+ * public key eagerly. The x402 tab adapter consumes THIS shape: it reads
+ * `publicKey` for the secp256r1 precompile and calls `sign(challenge)` for
+ * the WebAuthn assertion. Not every `PasskeySigner` can expose a pubkey
+ * eagerly (a raw WebAuthn ceremony only learns it after the first
+ * assertion), so it lives in its own interface rather than the base.
+ */
+export interface PasskeySignerWithPublicKey extends PasskeySigner {
+  /** 33-byte SEC1 compressed P-256 public key (the form the vault stores). */
+  readonly publicKey: Uint8Array;
+}

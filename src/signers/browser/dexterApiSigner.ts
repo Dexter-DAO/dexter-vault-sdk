@@ -1,5 +1,5 @@
 import { WebAuthnAssertion } from './index.js';
-import type { PasskeySigner } from '../types.js';
+import type { PasskeySignerWithPublicKey } from '../types.js';
 
 export interface ServerPolicy {
   /** dexter-api /sign/challenge — issue a 32-byte challenge for this credential. */
@@ -24,6 +24,14 @@ interface AssertionLike {
 
 export interface DexterApiSignerConfig {
   credentialId: Uint8Array;
+  /**
+   * The vault's stored authority pubkey: 33-byte SEC1 compressed P-256.
+   * The consumer (fe / the x402 tab adapter) already knows this from the
+   * vault account; the on-chain secp256r1 verifier compares against it on
+   * every passkey-signed instruction. Exposed eagerly so the adapter can
+   * build the precompile without a server round-trip.
+   */
+  publicKey: Uint8Array;
   policy: ServerPolicy;
   rpId?: string;
   /** Test seam: inject a fake WebAuthnAssertion. Production omits it. */
@@ -37,13 +45,16 @@ export interface DexterApiSignerConfig {
  * PasskeySigner; outputs Uint8Array (not base64) so the x402 adapter can drop
  * its stub and import this type. "Unify, don't bridge."
  */
-export class DexterApiBrowserPasskeySigner implements PasskeySigner {
+export class DexterApiBrowserPasskeySigner implements PasskeySignerWithPublicKey {
   readonly credentialId: Uint8Array;
+  /** 33-byte SEC1 compressed P-256 authority pubkey (vault-stored). */
+  readonly publicKey: Uint8Array;
   private readonly policy: ServerPolicy;
   private readonly assertion: AssertionLike;
 
   constructor(config: DexterApiSignerConfig) {
     this.credentialId = config.credentialId;
+    this.publicKey = config.publicKey;
     this.policy = config.policy;
     this.assertion =
       config.__assertion ?? new WebAuthnAssertion({ credentialId: config.credentialId, rpId: config.rpId });

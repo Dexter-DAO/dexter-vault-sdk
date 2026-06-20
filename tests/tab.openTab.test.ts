@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { PublicKey } from '@solana/web3.js';
-import { openTab } from '../src/tab/openTab.js';
+import { buildOpenTabInstructions } from '../src/tab/openTab.js';
 import { deriveSessionPda } from '../src/session/index.js';
 
 const VAULT = new PublicKey('SysvarC1ock11111111111111111111111111111111');
@@ -8,7 +8,7 @@ const COUNTERPARTY = new PublicKey('SysvarS1otHashes111111111111111111111111111'
 
 describe('openTab', () => {
   test('composes the settle_voucher(increment) leg carrying the session PDA', async () => {
-    const ixs = await openTab({
+    const ixs = await buildOpenTabInstructions({
       vaultPda: VAULT,
       amount: 1_000_000n,
       dexterAuthority: new PublicKey('11111111111111111111111111111111'),

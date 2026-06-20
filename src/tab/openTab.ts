@@ -19,7 +19,7 @@ export interface OpenTabParams {
   allowedCounterparty: PublicKey;
 }
 
-export async function openTab(p: OpenTabParams): Promise<TransactionInstruction[]> {
+export async function buildOpenTabInstructions(p: OpenTabParams): Promise<TransactionInstruction[]> {
   const ix = buildSettleVoucherInstruction({
     vaultPda: p.vaultPda,
     amount: p.amount,

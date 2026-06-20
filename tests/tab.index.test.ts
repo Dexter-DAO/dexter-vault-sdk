@@ -3,7 +3,7 @@ import * as tab from '../src/tab/index.js';
 
 describe('./tab barrel', () => {
   test('exposes the full verb surface', () => {
-    for (const name of ['openTab', 'settleTab', 'readTabMeter', 'drawCredit', 'repayCredit', 'seizeCollateral']) {
+    for (const name of ['buildOpenTabInstructions', 'settleTab', 'readTabMeter', 'drawCredit', 'repayCredit', 'seizeCollateral']) {
       expect(typeof (tab as any)[name]).toBe('function');
     }
   });
