@@ -14,3 +14,4 @@ export * from './credit.js';
 export * from './registerProgramAuthority.js';
 export * from './migrateV5ToV6.js';
 export { buildCloseSessionInstruction, type BuildCloseSessionArgs } from './closeSession.js';
+export * from './creditIdentity.js';
