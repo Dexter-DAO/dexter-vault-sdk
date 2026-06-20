@@ -132,6 +132,10 @@ describe('readVaultFull (V6: live_session_count, NO activeSession)', () => {
       pendingVoucherCount: 2,
       liveSessionCount: 3,
       outstandingLockedAmount: '250000',
+      borrowed: '0',
+      standbyBacker: null,
+      standbyCap: '0',
+      borrowRecoveryAt: null,
     });
     expect('activeSession' in result).toBe(false);
   });
@@ -153,6 +157,10 @@ describe('readVaultFull (V6: live_session_count, NO activeSession)', () => {
       pendingVoucherCount: 2,
       liveSessionCount: 5,
       outstandingLockedAmount: '999',
+      borrowed: '0',
+      standbyBacker: null,
+      standbyCap: '0',
+      borrowRecoveryAt: null,
     });
   });
 
@@ -174,6 +182,10 @@ describe('readVaultFull (V6: live_session_count, NO activeSession)', () => {
       pendingVoucherCount: 0,
       liveSessionCount: 0,
       outstandingLockedAmount: '0',
+      borrowed: '0',
+      standbyBacker: null,
+      standbyCap: '0',
+      borrowRecoveryAt: null,
     });
   });
 });
