@@ -35,7 +35,6 @@ import {
 } from "../constants/index.js";
 import { deriveCreditRootPda } from "../credit/derive.js";
 import type { CreditRootState, CreditEventState } from "../types.js";
-import bs58 from "bs58";
 
 function assertDisc(buf: Buffer, disc: Uint8Array): void {
   for (let i = 0; i < 8; i++) {
@@ -96,7 +95,9 @@ export async function fetchCreditEvents(
     filters: [
       { dataSize: CREDIT_EVENT_SIZE },
       { memcmp: { offset: 0, bytes: CREDIT_EVENT_DISCRIMINATOR_B58 } },
-      { memcmp: { offset: CREDIT_EVENT_NULLIFIER_OFFSET, bytes: bs58.encode(Buffer.from(nullifier)) } },
+      // base58-encode the 32-byte nullifier via PublicKey (CJS-safe; bs58@6 under
+      // CJS only exposes encode on `.default`, so a bare bs58.encode resolves undefined).
+      { memcmp: { offset: CREDIT_EVENT_NULLIFIER_OFFSET, bytes: new PublicKey(nullifier).toBase58() } },
     ],
   });
   return raw
