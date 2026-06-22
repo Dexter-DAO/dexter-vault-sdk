@@ -4,3 +4,4 @@ export * from './fetch.js';
 export * from './wait.js';
 export * from './registerWithRetry.js';
 export * from './resolveVaultUsdcAta.js';
+export * from './readSwigSessionRole.js';
