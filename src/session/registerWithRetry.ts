@@ -39,7 +39,9 @@ export interface RegisterSessionWithRetryArgs {
   nonce: number;                     // u32
   maxRevolvingCapacity: bigint;
   swigAddress: PublicKey;
-  vaultUsdcAta: PublicKey;
+  /** Vault swig-wallet USDC ATA, or `null` for a credit-only vault with no ATA
+   *  (own-USDC counted as 0 on-chain). Resolve via `resolveVaultUsdcAta`. */
+  vaultUsdcAta: PublicKey | null;
   payer: PublicKey;
   clientDataJSON: Uint8Array;
   authenticatorData: Uint8Array;

@@ -88,8 +88,11 @@ export interface BuildRegisterSessionKeyArgs {
    *  swig_wallet_address from this via deriveSwigWalletAddress(). */
   swigAddress: PublicKey;
   /** Swig wallet's USDC ATA — read live on-chain for the overcommit gate.
-   *  Caller-supplied (the SDK cannot derive it without the USDC mint). */
-  vaultUsdcAta: PublicKey;
+   *  Pass `null` for a credit-only vault whose ATA does not exist on-chain:
+   *  own-USDC is then counted as 0 and backing is the available standby credit
+   *  alone (the program receives Anchor's optional-account None sentinel).
+   *  Use {@link resolveVaultUsdcAta} to derive-and-probe this in one call. */
+  vaultUsdcAta: PublicKey | null;
   /** V6: funds the session PDA rent on first creation (signer, writable). */
   payer: PublicKey;
   /** V6: EVERY OTHER version!=0 SessionAccount PDA of this vault (live AND
@@ -130,7 +133,10 @@ export function buildRegisterSessionKeyInstruction(
   return new TransactionInstruction({
     keys: [
       { pubkey: args.vaultPda, isSigner: false, isWritable: true },
-      { pubkey: args.vaultUsdcAta, isSigner: false, isWritable: false },
+      // Anchor optional-account None convention: a credit-only vault has no
+      // USDC ATA, so we pass the program-ID sentinel (readonly, non-signer);
+      // the program then counts own-USDC as 0. A real ATA is passed unchanged.
+      { pubkey: args.vaultUsdcAta ?? DEXTER_VAULT_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: args.swigAddress, isSigner: false, isWritable: false },
       { pubkey: swigWalletAddress, isSigner: false, isWritable: false },
       { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },

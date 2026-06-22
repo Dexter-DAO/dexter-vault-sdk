@@ -199,6 +199,38 @@ describe('buildRegisterSessionKeyInstruction (V6)', () => {
     });
     expect(ix2.keys.length).toBe(8);
   });
+
+  test('null vaultUsdcAta (credit-only vault) → program-ID sentinel at keys[1], data unchanged', () => {
+    const ixNull = buildRegisterSessionKeyInstruction({
+      vaultPda,
+      sessionPubkey: new Uint8Array(32).fill(1),
+      maxAmount: 1_000_000n,
+      expiresAt: 4_000_000_000n,
+      allowedCounterparty: counterparty,
+      nonce: 7,
+      maxRevolvingCapacity: 500_000n,
+      swigAddress,
+      vaultUsdcAta: null,
+      payer,
+      siblingSessionPdas: siblings,
+      clientDataJSON: new Uint8Array([1, 2]),
+      authenticatorData: new Uint8Array(37),
+    });
+    // Anchor optional-account None convention: slot [1] carries the program ID,
+    // readonly + non-signer — the program reads own-USDC as 0.
+    expect(ixNull.keys[1]).toEqual({
+      pubkey: DEXTER_VAULT_PROGRAM_ID,
+      isSigner: false,
+      isWritable: false,
+    });
+    // Every other account slot is identical to the real-ATA build.
+    expect(ixNull.keys[0]).toEqual(ix.keys[0]);
+    expect(ixNull.keys[2]).toEqual(ix.keys[2]);
+    expect(ixNull.keys.length).toBe(ix.keys.length);
+    // The instruction DATA (args) is byte-identical — the ATA is an account,
+    // not an arg, so optionality cannot change the signed message.
+    expect(new Uint8Array(ixNull.data)).toEqual(new Uint8Array(ix.data));
+  });
 });
 
 describe('buildRevokeSessionKeyInstruction (V6)', () => {

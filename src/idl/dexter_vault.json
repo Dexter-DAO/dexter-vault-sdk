@@ -1572,11 +1572,15 @@
           "name": "vault_usdc_ata",
           "docs": [
             "The swig wallet's USDC ATA \u2014 read live to enforce the overcommit",
-            "invariant per V0.3 Decision 1: the new session's max_amount plus",
-            "the existing outstanding_locked_amount must fit within actual USDC",
-            "balance. The ATA's `owner` field is verified against the canonical",
-            "swig wallet PDA."
-          ]
+            "invariant: the new session's max_amount + outstanding_locked_amount",
+            "must fit within backing. When present, owner is verified against the",
+            "canonical swig wallet PDA.",
+            "OPTIONAL: a $0 credit-only vault has no USDC ATA (born on first",
+            "deposit). Pass the program-ID sentinel for None \u2192 own-USDC counts as",
+            "0 and backing is the available standby credit alone. Omission can only",
+            "understate backing, never inflate it."
+          ],
+          "optional": true
         },
         {
           "name": "swig"
