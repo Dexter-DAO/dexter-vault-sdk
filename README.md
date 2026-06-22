@@ -155,17 +155,22 @@ Registering requires the sibling contract: the program checks that the transacti
 
 ```ts
 import { buildRegisterSessionKeyInstruction, buildRevokeSessionKeyInstruction } from '@dexterai/vault/instructions';
-import { fetchVaultSessionAccounts, sessionPdasOf, waitForSession } from '@dexterai/vault/session';
+import { fetchVaultSessionAccounts, sessionPdasOf, waitForSession, resolveVaultUsdcAta } from '@dexterai/vault/session';
 
 // fetch siblings FRESH immediately before building (the gate sweeps expired
 // siblings; a stale list fails the on-chain completeness check)
 const siblings = sessionPdasOf(await fetchVaultSessionAccounts(connection, vaultPda));
-const ix = buildRegisterSessionKeyInstruction({ ...args, payer, siblingSessionPdas: siblings });
+// resolve the vault's USDC ATA — returns its address if it exists, or `null`
+// for a credit-only vault that never received a deposit (see note below)
+const vaultUsdcAta = await resolveVaultUsdcAta(connection, swigAddress);
+const ix = buildRegisterSessionKeyInstruction({ ...args, payer, vaultUsdcAta, siblingSessionPdas: siblings });
 // ... send [secp256r1Precompile, ix] ...
 await waitForSession(connection, vaultPda, allowedCounterparty, { expectedSessionPubkey });
 ```
 
 The builder handles the fiddly parts of the sibling list (excludes the target, dedups, sorts strict-ascending by raw bytes, marks all writable); your only job is fetching it fresh. `waitForSession` is content-aware confirm-visibility: it waits for the **new** `session_pubkey`, because on a replace the old registration also passes existence and version checks under read-your-writes lag.
+
+**`vaultUsdcAta` is optional.** The register gate computes backing as `own_USDC + available_standby_credit`. A self-funded vault passes its USDC ATA so its balance counts; a **credit-only vault never receives a deposit, so it has no ATA** — pass `vaultUsdcAta: null` and own-USDC is counted as 0 (backing is the standby line alone). `resolveVaultUsdcAta` makes this decision for you (derive-and-probe): use its `PublicKey | null` result directly. Omitting an ATA that exists only ever *understates* backing, so it is safe; a self-funded vault that wants its balance counted must pass it.
 
 ## Credit primitives
 
@@ -272,7 +277,7 @@ Each subpath is a tree-shakeable entry point. Pull only what you need.
 | `@dexterai/vault/instructions` | Every builder, including `buildSwigCreationBundle`, the session register/revoke pair, `buildSettleTabVoucherInstruction`, the withdrawal pair, `buildForceReleaseInstruction`, the rotate pair, `buildProvePasskeyInstruction`, the migrate pair |
 | `@dexterai/vault/messages` | `sessionRegisterMessage` (188 bytes), `sessionRevokeMessage` (128 bytes), `buildVoucherMessage` (44 bytes), `buildSetSwigOperationMessage` |
 | `@dexterai/vault/reader` | `readVaultOnchain` (slim), `readVaultFull` (adds `swigAddress`, `dexterAuthority`, `liveSessionCount`, `outstandingLockedAmount`), `decodeLockedClaim`, `fetchVaultLockedClaims` |
-| `@dexterai/vault/session` | V6 per-counterparty sessions: `deriveSessionPda`, `fetchSessionAccount`, `fetchVaultSessionAccounts`, `sessionPdasOf`, `waitForSession`, `registerSessionWithRetry`, and the rest |
+| `@dexterai/vault/session` | V6 per-counterparty sessions: `deriveSessionPda`, `fetchSessionAccount`, `fetchVaultSessionAccounts`, `sessionPdasOf`, `waitForSession`, `registerSessionWithRetry`, `resolveVaultUsdcAta` (derive-and-probe the vault USDC ATA, `null` for credit-only), and the rest |
 | `@dexterai/vault/grant` | Spend-grant consent flow: `requestSpendGrant`, `parseSpendGrantRequest`, `approveSpendGrant`, encode/decode |
 | `@dexterai/vault/connect` | Relying-app "Connect a Tab" auth: `verifyConnectProof`, `connectTab`, `decodeChallengeTo32Bytes`, `ConnectProof`, `ConnectVerifyResult` |
 | `@dexterai/vault/precompile` | `buildSecp256r1VerifyInstruction`, `buildPrecompileMessage`, `buildEd25519VerifyInstruction` |
