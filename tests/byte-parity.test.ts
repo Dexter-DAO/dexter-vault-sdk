@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'vitest';
 import { createHash } from 'node:crypto';
 import { PublicKey } from '@solana/web3.js';
-import { DISCRIMINATORS, OTS_SESSION_REGISTER_V1_DOMAIN, OTS_SESSION_REGISTER_V2_DOMAIN, OTS_SESSION_REVOKE_V1_DOMAIN } from '../src/constants/index.js';
-import { sessionRegisterMessage, sessionRevokeMessage, voucherPayloadMessage, buildVoucherMessage, buildSetSwigOperationMessage } from '../src/messages/index.js';
+import { DISCRIMINATORS, OTS_SESSION_REGISTER_V1_DOMAIN, OTS_SESSION_REGISTER_V2_DOMAIN, OTS_SESSION_REVOKE_V1_DOMAIN, OTS_REVOKE_AGENT_SPEND_V1_DOMAIN, OTS_ENABLE_AGENT_SPEND_V1_DOMAIN } from '../src/constants/index.js';
+import { sessionRegisterMessage, sessionRevokeMessage, revokeAgentSpendMessage, enableAgentSpendMessage, voucherPayloadMessage, buildVoucherMessage, buildSetSwigOperationMessage } from '../src/messages/index.js';
 import { buildSettleTabVoucherInstruction, buildInitializeVaultInstruction, buildSetSwigInstruction, buildSetSwigAtomicInstruction, SET_SWIG_ATOMIC_DISCRIMINATOR, buildRegisterSessionKeyInstruction, buildRevokeSessionKeyInstruction, buildProvePasskeyInstruction, buildRequestWithdrawalInstruction, buildFinalizeWithdrawalInstruction, buildForceReleaseInstruction, buildRotatePasskeyInstruction, buildRotateDexterAuthorityInstruction, buildSettleVoucherInstruction } from '../src/instructions/index.js';
 
 // ── Known-good test inputs (all-zero / sequential bytes so snapshots are stable) ──
@@ -213,6 +213,77 @@ describe('message layouts', () => {
     expect(bytes.length).toBe(8 + 32);
     expect(bytes.subarray(0, 8)).toEqual(new TextEncoder().encode('set_swig'));
     expect(bytes).toMatchSnapshot();
+  });
+});
+
+// ── Agent-spend off/on switch messages (anon-pay heal §5; AUTOMATIC mode) ──
+// revoke = idempotent off-switch (no nonce); enable = replay-protected on-switch
+// (server-issued single-use nonce + expiry). Both backend-verified, TS-only, no
+// Rust. Layout mirrors sessionRevokeMessage: 32-byte NUL-padded domain + 32-byte
+// pubkey identity fields, scalars packed at natural LE width (NOT padded to 32).
+
+describe('agent-spend off/on messages (anon-pay heal §5)', () => {
+  const KNOWN_NONCE  = 0x0123456789abcdefn;
+  const KNOWN_EXPIRY = 1735689600n; // 2025-01-01T00:00:00Z
+
+  test('OTS_REVOKE_AGENT_SPEND_V1 domain: 32 bytes, 25-char label + 7 NUL', () => {
+    expect(OTS_REVOKE_AGENT_SPEND_V1_DOMAIN.length).toBe(32);
+    const label = new TextDecoder().decode(OTS_REVOKE_AGENT_SPEND_V1_DOMAIN.slice(0, 25));
+    expect(label).toBe('OTS_REVOKE_AGENT_SPEND_V1');
+    for (let i = 25; i < 32; i++) expect(OTS_REVOKE_AGENT_SPEND_V1_DOMAIN[i]).toBe(0);
+  });
+
+  test('OTS_ENABLE_AGENT_SPEND_V1 domain: 32 bytes, 25-char label + 7 NUL', () => {
+    expect(OTS_ENABLE_AGENT_SPEND_V1_DOMAIN.length).toBe(32);
+    const label = new TextDecoder().decode(OTS_ENABLE_AGENT_SPEND_V1_DOMAIN.slice(0, 25));
+    expect(label).toBe('OTS_ENABLE_AGENT_SPEND_V1');
+    for (let i = 25; i < 32; i++) expect(OTS_ENABLE_AGENT_SPEND_V1_DOMAIN[i]).toBe(0);
+  });
+
+  test('off and on domains are distinct (no cross-replay between switch directions)', () => {
+    expect(Buffer.from(OTS_REVOKE_AGENT_SPEND_V1_DOMAIN))
+      .not.toEqual(Buffer.from(OTS_ENABLE_AGENT_SPEND_V1_DOMAIN));
+  });
+
+  test('96-byte revokeAgentSpendMessage (idempotent off-switch)', () => {
+    const bytes = revokeAgentSpendMessage({
+      programId: KNOWN_PROGRAM_ID,
+      vaultPda: KNOWN_VAULT_PDA,
+    });
+    expect(bytes.length).toBe(96);
+    expect(bytes.subarray(0, 32)).toEqual(OTS_REVOKE_AGENT_SPEND_V1_DOMAIN);
+    expect(bytes.subarray(32, 64)).toEqual(KNOWN_PROGRAM_ID.toBytes());
+    expect(bytes.subarray(64, 96)).toEqual(KNOWN_VAULT_PDA.toBytes());
+    expect(bytes).toMatchSnapshot();
+  });
+
+  test('revokeAgentSpendMessage is deterministic (idempotent → replay-safe)', () => {
+    const a = revokeAgentSpendMessage({ programId: KNOWN_PROGRAM_ID, vaultPda: KNOWN_VAULT_PDA });
+    const b = revokeAgentSpendMessage({ programId: KNOWN_PROGRAM_ID, vaultPda: KNOWN_VAULT_PDA });
+    expect(Buffer.from(b)).toEqual(Buffer.from(a));
+  });
+
+  test('112-byte enableAgentSpendMessage (replay-protected on-switch)', () => {
+    const bytes = enableAgentSpendMessage({
+      programId: KNOWN_PROGRAM_ID,
+      vaultPda: KNOWN_VAULT_PDA,
+      nonce: KNOWN_NONCE,
+      expiry: KNOWN_EXPIRY,
+    });
+    expect(bytes.length).toBe(112);
+    expect(bytes.subarray(0, 32)).toEqual(OTS_ENABLE_AGENT_SPEND_V1_DOMAIN);
+    expect(bytes.subarray(32, 64)).toEqual(KNOWN_PROGRAM_ID.toBytes());
+    expect(bytes.subarray(64, 96)).toEqual(KNOWN_VAULT_PDA.toBytes());
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    expect(view.getBigUint64(96, true)).toBe(KNOWN_NONCE);   // u64 LE, packed (NOT padded to 32)
+    expect(view.getBigInt64(104, true)).toBe(KNOWN_EXPIRY);  // i64 LE, packed
+    expect(bytes).toMatchSnapshot();
+  });
+
+  test('enableAgentSpendMessage nonce binds the signature (different nonce → different bytes)', () => {
+    const a = enableAgentSpendMessage({ programId: KNOWN_PROGRAM_ID, vaultPda: KNOWN_VAULT_PDA, nonce: 1n, expiry: KNOWN_EXPIRY });
+    const b = enableAgentSpendMessage({ programId: KNOWN_PROGRAM_ID, vaultPda: KNOWN_VAULT_PDA, nonce: 2n, expiry: KNOWN_EXPIRY });
+    expect(Buffer.from(b)).not.toEqual(Buffer.from(a));
   });
 });
 

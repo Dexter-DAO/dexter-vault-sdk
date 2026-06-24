@@ -154,3 +154,20 @@ export const OTS_SESSION_REVOKE_V1_DOMAIN: Uint8Array = (() => {
   buf.set(new TextEncoder().encode('OTS_SESSION_REVOKE_V1'), 0);
   return buf;
 })();
+
+// Agent-spend off/on switch (anon-pay heal §5; AUTOMATIC mode). User signs these
+// bytes with their passkey as the WebAuthn challenge; dexter-api verifies the
+// signature backend-side, then flips the armingAllowed flag (no on-chain handler
+// reads these bytes). Distinct domains so an off-signature can never be replayed
+// as an on-signature. See src/messages/session.ts for the layouts.
+export const OTS_REVOKE_AGENT_SPEND_V1_DOMAIN: Uint8Array = (() => {
+  const buf = new Uint8Array(32);
+  buf.set(new TextEncoder().encode('OTS_REVOKE_AGENT_SPEND_V1'), 0);
+  return buf;
+})();
+
+export const OTS_ENABLE_AGENT_SPEND_V1_DOMAIN: Uint8Array = (() => {
+  const buf = new Uint8Array(32);
+  buf.set(new TextEncoder().encode('OTS_ENABLE_AGENT_SPEND_V1'), 0);
+  return buf;
+})();

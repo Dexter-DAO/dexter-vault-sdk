@@ -1,5 +1,9 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`agent-spend off/on messages (anon-pay heal §5) > 96-byte revokeAgentSpendMessage (idempotent off-switch) 1`] = `Uint8Array(96) "4f54535f5245564f4b455f4147454e545f5350454e445f563100000000000000f7bbf6fb3438424cb755a212ae90f51ad4ddcfd3d565b0d75e188e10711876f306a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f08000000"`;
+
+exports[`agent-spend off/on messages (anon-pay heal §5) > 112-byte enableAgentSpendMessage (replay-protected on-switch) 1`] = `Uint8Array(112) "4f54535f454e41424c455f4147454e545f5350454e445f563100000000000000f7bbf6fb3438424cb755a212ae90f51ad4ddcfd3d565b0d75e188e10711876f306a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f08000000efcdab89674523018085746700000000"`;
+
 exports[`domain separators > OTS_SESSION_REGISTER_V1 1`] = `Uint8Array(32) "4f54535f53455353494f4e5f52454749535445525f5631000000000000000000"`;
 
 exports[`domain separators > OTS_SESSION_REVOKE_V1 1`] = `Uint8Array(32) "4f54535f53455353494f4e5f5245564f4b455f56310000000000000000000000"`;

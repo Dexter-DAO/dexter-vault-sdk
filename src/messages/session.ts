@@ -12,6 +12,8 @@ import type { PublicKey } from '@solana/web3.js';
 import {
   OTS_SESSION_REGISTER_V2_DOMAIN,
   OTS_SESSION_REVOKE_V1_DOMAIN,
+  OTS_REVOKE_AGENT_SPEND_V1_DOMAIN,
+  OTS_ENABLE_AGENT_SPEND_V1_DOMAIN,
 } from '../constants/index.js';
 
 export interface SessionRegisterMessageArgs {
@@ -88,6 +90,89 @@ export function sessionRevokeMessage(args: SessionRevokeMessageArgs): Uint8Array
   buf.set(args.sessionPubkey, o); o += 32;
   if (o !== 128) {
     throw new Error(`internal: session revoke message wrong length ${o}, expected 128`);
+  }
+  return buf;
+}
+
+export interface RevokeAgentSpendMessageArgs {
+  programId: PublicKey;
+  vaultPda: PublicKey;
+}
+
+/**
+ * 96-byte agent-spend OFF-switch message (anon-pay heal §5; AUTOMATIC mode).
+ *
+ * Under AUTOMATIC agent-spend the opt-out flag is the primary control surface,
+ * so this is THE off-switch. The user signs these bytes with their passkey (the
+ * bytes become the WebAuthn challenge); dexter-api verifies that signature
+ * backend-side, then sets armingAllowed=false. No on-chain instruction reads
+ * these bytes — verification is backend-only.
+ *
+ * Idempotent — NO nonce. Revoke is the fail-closed direction: replaying a
+ * captured off-signature just turns it off again (harmless). Mirrors
+ * sessionRevokeMessage. The on-switch (enableAgentSpendMessage) is the dangerous
+ * direction and DOES carry replay protection.
+ *
+ * Layout:
+ *    0   32  domain separator (OTS_REVOKE_AGENT_SPEND_V1)
+ *   32   32  program_id
+ *   64   32  vault_pda
+ *                                    ───
+ *                                    96
+ */
+export function revokeAgentSpendMessage(args: RevokeAgentSpendMessageArgs): Uint8Array {
+  const buf = new Uint8Array(96);
+  let o = 0;
+  buf.set(OTS_REVOKE_AGENT_SPEND_V1_DOMAIN, o); o += 32;
+  buf.set(args.programId.toBytes(), o); o += 32;
+  buf.set(args.vaultPda.toBytes(), o); o += 32;
+  if (o !== 96) {
+    throw new Error(`internal: revoke agent-spend message wrong length ${o}, expected 96`);
+  }
+  return buf;
+}
+
+export interface EnableAgentSpendMessageArgs {
+  programId: PublicKey;
+  vaultPda: PublicKey;
+  nonce: bigint;   // u64, server-issued single-use (the §5 verifier issues + burns it)
+  expiry: bigint;  // i64 unix-seconds; the verifier rejects once now >= expiry
+}
+
+/**
+ * 112-byte agent-spend ON-switch message (re-enable after revoke; AUTOMATIC mode).
+ *
+ * The DANGEROUS direction: a replayed enable could silently re-arm a wallet the
+ * owner shut off, so unlike the off-switch this carries a server-issued
+ * single-use `nonce` + an `expiry`. The §5 verifier issues the nonce on a
+ * "request enable challenge" call, stores it pending, and on the signed enable
+ * checks (a) nonce matches a live pending one, (b) now < expiry, then BURNS the
+ * nonce and sets armingAllowed=true. Backend-verified, TS-only (no on-chain
+ * handler reads these bytes).
+ *
+ * Scalars are packed at their natural little-endian width per this SDK's
+ * convention (see sessionRegisterMessage: u64=8B, i64=8B), NOT padded to 32.
+ *
+ * Layout:
+ *    0   32  domain separator (OTS_ENABLE_AGENT_SPEND_V1)
+ *   32   32  program_id
+ *   64   32  vault_pda
+ *   96    8  nonce  (u64 LE)
+ *  104    8  expiry (i64 LE)
+ *                                    ───
+ *                                    112
+ */
+export function enableAgentSpendMessage(args: EnableAgentSpendMessageArgs): Uint8Array {
+  const buf = new Uint8Array(112);
+  const view = new DataView(buf.buffer);
+  let o = 0;
+  buf.set(OTS_ENABLE_AGENT_SPEND_V1_DOMAIN, o); o += 32;
+  buf.set(args.programId.toBytes(), o); o += 32;
+  buf.set(args.vaultPda.toBytes(), o); o += 32;
+  view.setBigUint64(o, args.nonce, true); o += 8;
+  view.setBigInt64(o, args.expiry, true); o += 8;
+  if (o !== 112) {
+    throw new Error(`internal: enable agent-spend message wrong length ${o}, expected 112`);
   }
   return buf;
 }
