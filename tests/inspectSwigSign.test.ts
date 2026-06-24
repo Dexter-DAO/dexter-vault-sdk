@@ -5,7 +5,12 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { inspectSwigSignInstructions, isMasterSignSafe } from '../src/instructions/index.js';
+import {
+  inspectSwigSignInstructions,
+  isMasterSignSafe,
+  inspectSwigInstructions,
+  isSwigCoSignSafe,
+} from '../src/instructions/index.js';
 import { SWIG_PROGRAM_ID, USDC_MAINNET } from '../src/constants/index.js';
 
 // swig SignV1 = 4, SignV2 = 11 (u16 LE @0). Both share the SignV2Args header
@@ -99,5 +104,70 @@ describe('isMasterSignSafe (default-deny role policy)', () => {
 
   test('empty allowlist refuses every swig sign', () => {
     expect(isMasterSignSafe(v0TxFrom([swigSignIx(11, 3)]), [])).toBe(false);
+  });
+});
+
+// A bare swig instruction by discriminator (non-Sign ops carry no role_id).
+// SwigInstruction enum @ c2e8eb4: CreateV1=0, AddAuthorityV1=1, RemoveAuthorityV1=2,
+// UpdateAuthorityV1=3, SignV1=4, CreateSessionV1=5, SignV2=11.
+function swigIx(disc: number): TransactionInstruction {
+  const buf = Buffer.alloc(8);
+  buf.writeUInt16LE(disc, 0);
+  return new TransactionInstruction({ programId: SWIG_PROGRAM_ID, keys: [], data: buf });
+}
+
+describe('inspectSwigInstructions (full swig-instruction classifier)', () => {
+  test('reports discriminator for every swig ix; role_id only for Sign variants', () => {
+    const tx = v0TxFrom([swigIx(0), swigIx(1), swigSignIx(11, 3), swigSignIx(4, 2), nonSwigIx()]);
+    expect(inspectSwigInstructions(tx)).toEqual([
+      { discriminator: 0 }, // CreateV1 — no role_id
+      { discriminator: 1 }, // AddAuthorityV1 — no role_id
+      { discriminator: 11, roleId: 3 }, // SignV2 role 3
+      { discriminator: 4, roleId: 2 }, // SignV1 role 2
+    ]); // nonSwigIx ignored
+  });
+});
+
+describe('isSwigCoSignSafe (fee-payer co-sign allowlist — gates EVERY /sign-transaction call)', () => {
+  const OPTS = { allowedSignV2Roles: [3], allowCreate: true };
+
+  test('allows the tab settle (SignV2 role 3)', () => {
+    expect(isSwigCoSignSafe(v0TxFrom([swigSignIx(11, 3)]), OPTS)).toBe(true);
+  });
+
+  test('allows vault creation (CreateV1) when allowCreate', () => {
+    expect(isSwigCoSignSafe(v0TxFrom([swigIx(0)]), OPTS)).toBe(true);
+  });
+
+  test('allows a tx with no swig ix at all', () => {
+    expect(isSwigCoSignSafe(v0TxFrom([nonSwigIx()]), OPTS)).toBe(true);
+  });
+
+  test('REFUSES AddAuthorityV1 (the uncapped-role-grant escalation)', () => {
+    expect(isSwigCoSignSafe(v0TxFrom([swigIx(1)]), OPTS)).toBe(false);
+  });
+
+  test('REFUSES RemoveAuthorityV1', () => {
+    expect(isSwigCoSignSafe(v0TxFrom([swigIx(2)]), OPTS)).toBe(false);
+  });
+
+  test('REFUSES CreateSessionV1 (arming a new session off-path)', () => {
+    expect(isSwigCoSignSafe(v0TxFrom([swigIx(5)]), OPTS)).toBe(false);
+  });
+
+  test('REFUSES the role-2 spend (SignV2 role 2)', () => {
+    expect(isSwigCoSignSafe(v0TxFrom([swigSignIx(11, 2)]), OPTS)).toBe(false);
+  });
+
+  test('REFUSES any SignV1', () => {
+    expect(isSwigCoSignSafe(v0TxFrom([swigSignIx(4, 3)]), OPTS)).toBe(false);
+  });
+
+  test('REFUSES CreateV1 when allowCreate is false', () => {
+    expect(isSwigCoSignSafe(v0TxFrom([swigIx(0)]), { allowedSignV2Roles: [3], allowCreate: false })).toBe(false);
+  });
+
+  test('REFUSES a mixed tx smuggling AddAuthority behind a legit CreateV1', () => {
+    expect(isSwigCoSignSafe(v0TxFrom([swigIx(0), swigIx(1)]), OPTS)).toBe(false);
   });
 });
