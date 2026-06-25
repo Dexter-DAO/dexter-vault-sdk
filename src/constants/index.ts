@@ -55,6 +55,16 @@ export const LOCKED_CLAIM_DISCRIMINATOR_B58 = 'Ra2KzfH1LnQ';
 // fixed size constant and no dataSize gPA filter — see lockedClaimReader.ts.
 export const LOCKED_CLAIM_VAULT_OFFSET = 10;
 
+// ── Vault account (the primary per-user account) ──────────────────────────
+// Anchor account discriminator for Vault (sha256("account:Vault")[..8], cross-
+// checked against the V6 IDL). Used as the gPA memcmp filter at offset 0 to
+// enumerate ALL vaults of the program (scanCreditBook). Vault is VARIABLE-LENGTH
+// (pending_withdrawal + standby_backer Options), so there is NO dataSize filter —
+// decode each and filter in code. b58 precomputed (no runtime bs58 import in the
+// fetch path); a unit test pins it against bs58.encode(VAULT_ACCOUNT_DISCRIMINATOR).
+export const VAULT_ACCOUNT_DISCRIMINATOR = Uint8Array.from([211, 8, 232, 43, 2, 152, 117, 119]);
+export const VAULT_ACCOUNT_DISCRIMINATOR_B58 = 'cJJWPqNMczr';
+
 // ── Credit-identity accounts (CreditRoot / CreditEvent) ───────────────────
 // Anchor account discriminators: sha256("account:<Name>")[..8]. Used as gPA
 // memcmp filters at offset 0. b58 strings are precomputed (no runtime bs58
@@ -132,8 +142,17 @@ export const DISCRIMINATORS = Object.freeze({
   close_session:           Uint8Array.from([68, 114, 178, 140, 222, 38, 248, 211]),
   close_locked_claim:      Uint8Array.from([231, 142, 174, 161, 156, 183, 26, 60]),
   establish_credit_root:   Uint8Array.from([182, 245, 97, 77, 108, 145, 37, 247]),
+  establish_credit_root_trusted: Uint8Array.from([216, 195, 195, 65, 213, 117, 68, 238]),
   record_credit_event:     Uint8Array.from([192, 207, 202, 39, 125, 52, 240, 255]),
 });
+
+// The trusted operator/upgrade authority gated to post interim World ID roots
+// AND establish trusted (off-chain-verified) CreditRoots (establish_credit_root_trusted).
+// The on-chain handler rejects any other signer. This is the SAME key the program
+// pins as INTERIM_ROOT_AUTHORITY in programs/dexter-vault/src/constants.rs.
+export const INTERIM_ROOT_AUTHORITY = new PublicKey(
+  'X4o2kSLzqEQjnAzhq3L3BW92aawMV2n2F37EXd2GMpy',
+);
 
 // ── Domain separators (32 bytes each, NUL-padded) ────────────────────────
 

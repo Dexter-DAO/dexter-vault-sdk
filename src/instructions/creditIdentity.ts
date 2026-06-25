@@ -1,6 +1,6 @@
 // src/instructions/creditIdentity.ts
 import { PublicKey, TransactionInstruction, SystemProgram } from "@solana/web3.js";
-import { DEXTER_VAULT_PROGRAM_ID, DISCRIMINATORS } from "../constants/index.js";
+import { DEXTER_VAULT_PROGRAM_ID, DISCRIMINATORS, INTERIM_ROOT_AUTHORITY } from "../constants/index.js";
 import { deriveCreditRootPda, deriveCreditEventPda } from "../credit/derive.js";
 
 const WORLD_ID_ROOT_SEED = "world_id_root";
@@ -30,6 +30,51 @@ export function buildEstablishCreditRootInstruction(p: EstablishCreditRootParams
       { pubkey: rootCachePda(DEXTER_VAULT_PROGRAM_ID), isSigner: false, isWritable: false },
       { pubkey: creditRoot, isSigner: false, isWritable: true },
       { pubkey: p.payer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data,
+  });
+}
+
+export interface EstablishCreditRootTrustedParams {
+  /** The off-chain-verified World ID nullifier (32 bytes) — the CreditRoot PDA
+   *  seed AND the stored key. (For a v3 Orb proof checked off-chain.) */
+  nullifier: Uint8Array;
+  /** Trusted operator + rent payer + the ONLY valid signer. Defaults to
+   *  INTERIM_ROOT_AUTHORITY; the on-chain handler rejects any other key. */
+  authority?: PublicKey;
+}
+
+/**
+ * Build `establish_credit_root_trusted` — the authority-attested (off-chain
+ * verified) personhood → CreditRoot path. This is the instruction that actually
+ * rooted the first mainnet Orb; it had no SDK builder, so the rooting was a
+ * one-off ad-hoc ix (open-D punch-list #1). Sibling of
+ * buildEstablishCreditRootInstruction (the trustless groth16 path): it writes
+ * the SAME CreditRoot PDA (seed = nullifier), byte-identical layout, with
+ * `version = 2` marking the trusted attestation. NO on-chain groth16, NO
+ * root-cache account — just the operator's signature.
+ *
+ * Accounts (per IDL — NOTE only 3, no root_cache):
+ *   [0] credit_root      (writable)         — PDA [credit_root, nullifier], init
+ *   [1] authority        (writable, signer) — INTERIM_ROOT_AUTHORITY, pays rent
+ *   [2] system_program
+ */
+export function buildEstablishCreditRootTrustedInstruction(
+  p: EstablishCreditRootTrustedParams,
+): TransactionInstruction {
+  const nullifier = fixed(p.nullifier, 32, "nullifier");
+  const authority = p.authority ?? INTERIM_ROOT_AUTHORITY;
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.establish_credit_root_trusted),
+    nullifier,
+  ]);
+  const [creditRoot] = deriveCreditRootPda(p.nullifier);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: creditRoot, isSigner: false, isWritable: true },
+      { pubkey: authority, isSigner: true, isWritable: true },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
     data,

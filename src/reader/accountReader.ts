@@ -114,14 +114,14 @@ export async function readVaultOnchain(
   return { exists: true, pendingVoucherCount, pendingWithdrawal };
 }
 
-/** Full read — adds swigAddress, dexterAuthority, liveSessionCount. The /tab/settle path. */
-export async function readVaultFull(
-  conn: Connection,
-  vaultPda: PublicKey,
-): Promise<VaultStateFull> {
-  const account = await conn.getAccountInfo(vaultPda, 'confirmed');
-  if (!account) return EMPTY_FULL;
-  const data = account.data;
+/**
+ * Pure decoder for a Vault account's raw data — the body of readVaultFull with
+ * NO RPC. Exported so a caller that already holds the bytes (a
+ * getProgramAccounts scan — see scanCreditBook) decodes without an extra
+ * getAccountInfo round-trip per vault. Returns EMPTY_FULL (exists:false) for
+ * data too short to be a V6 vault. The caller supplies the account address.
+ */
+export function decodeVaultFull(data: Buffer): VaultStateFull {
   if (data.length < SWIG_ADDRESS_OFFSET + PUBKEY_LEN) return EMPTY_FULL;
 
   const version = data.readUInt8(VERSION_OFFSET);
@@ -193,4 +193,14 @@ export async function readVaultFull(
     standbyCap,
     borrowRecoveryAt,
   };
+}
+
+/** Full read — adds swigAddress, dexterAuthority, liveSessionCount. The /tab/settle path. */
+export async function readVaultFull(
+  conn: Connection,
+  vaultPda: PublicKey,
+): Promise<VaultStateFull> {
+  const account = await conn.getAccountInfo(vaultPda, 'confirmed');
+  if (!account) return EMPTY_FULL;
+  return decodeVaultFull(account.data);
 }
