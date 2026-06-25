@@ -108,6 +108,14 @@ export interface RevokeAgentSpendMessageArgs {
  * backend-side, then sets armingAllowed=false. No on-chain instruction reads
  * these bytes — verification is backend-only.
  *
+ * SIGNING CONVENTION (load-bearing — see dexter-api dfffa397): backend-verified
+ * ops (this + enableAgentSpendMessage) sign the RAW domain-separated message as
+ * the WebAuthn challenge — NOT sha256(message). On-chain ops sign sha256(message)
+ * because the secp256r1 precompile requires the hash; these have no precompile in
+ * the loop, so they don't. The 32-byte domain separator (first field) is what
+ * prevents a signature for one op being replayed as another — every NEW
+ * backend-verified op-message MUST lead with its own unique 32-byte domain.
+ *
  * Idempotent — NO nonce. Revoke is the fail-closed direction: replaying a
  * captured off-signature just turns it off again (harmless). Mirrors
  * sessionRevokeMessage. The on-switch (enableAgentSpendMessage) is the dangerous
