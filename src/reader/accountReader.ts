@@ -165,7 +165,14 @@ export function decodeVaultFull(data: Buffer): VaultStateFull {
   const nodeOffset = outstandingLockedOffset + 24; // skip outstanding, crystallized, settled
   let node: string | null = null;
   if (hasOutstanding && data.length >= nodeOffset + PUBKEY_LEN) {
-    node = new PublicKey(data.subarray(nodeOffset, nodeOffset + PUBKEY_LEN)).toBase58();
+    const nodePk = new PublicKey(data.subarray(nodeOffset, nodeOffset + PUBKEY_LEN));
+    // V6 `node` is a FIXED Pubkey (not an Option). An UNWELDED vault stores the
+    // default/all-zero pubkey here, which is NOT a real node. Map it to null so
+    // the documented `node: string | null` contract holds — otherwise a credit
+    // gate like `if (vault.node)` sees the truthy "111…111" string and treats a
+    // plain non-credit vault as credit-backed (reads a PrincipalNode at the
+    // system-program address -> throws / 409s the settle).
+    node = nodePk.equals(PublicKey.default) ? null : nodePk.toBase58();
   }
 
   return {

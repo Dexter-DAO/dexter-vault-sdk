@@ -58,4 +58,18 @@ describe('readVaultFull V6 graph tail', () => {
     expect(v.exists).toBe(true);
     expect(v.node).toBeNull();
   });
+
+  it('returns node = null for an UNWELDED V6 vault whose node field is the default/zero pubkey', async () => {
+    // V6 `node` is a FIXED Pubkey, not an Option. An unwelded vault stores
+    // PublicKey.default (all zeros) — NOT a real node. It MUST decode to null,
+    // else a credit gate (`if (vault.node)`) sees the truthy "111…111" string and
+    // treats a plain non-credit vault as credit-backed (the settle-500 bug).
+    const buf = buildVaultBuffer({
+      swig: SWIG, auth: AUTH, outstanding: 5n, crystallized: 0n, settled: 0n,
+      node: PublicKey.default,
+    });
+    const v = await readVaultFull(mockConn(buf), VAULT);
+    expect(v.exists).toBe(true);
+    expect(v.node).toBeNull();
+  });
 });

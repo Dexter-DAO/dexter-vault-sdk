@@ -100,7 +100,12 @@ export async function ensureRootAlt(
   }
 
   // ── create path: derive a fresh ALT off a recent slot, then extend ────────
-  const recentSlot = await connection.getSlot('finalized');
+  // Use 'confirmed', NOT 'finalized'. The ALT program requires recentSlot to be
+  // in the recent SlotHashes window; a finalized slot lags the processed tip and
+  // is rejected as "<slot> is not a recent slot" (proven by the program e2e Test
+  // C). 'confirmed' tracks the tip closely and is always a real, recent slot.
+  // The returned create instruction must be submitted promptly (or re-derived).
+  const recentSlot = await connection.getSlot('confirmed');
   const [createIx, altAddress] = AddressLookupTableProgram.createLookupTable({
     authority: opts.authority,
     payer,
