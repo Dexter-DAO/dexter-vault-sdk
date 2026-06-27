@@ -22,7 +22,12 @@
  *    164/116 32  dexter_authority  (164 if withdrawal present, else 116)
  *    196/148  1  live_session_count u8
  *    197/149  8  outstanding_locked_amount u64 (sum of unsettled LockedClaims)
- *            ... further odometer/credit fields follow on-chain; not decoded here.
+ *             8  total_crystallized u64   (odometer; skipped, not surfaced)
+ *             8  total_settled u64        (odometer; skipped, not surfaced)
+ *            32  node pubkey              (welded PrincipalNode; DECODED below as
+ *                                          `node`, null when default/unset)
+ *   The V6 graph tail is fixed-layout (no Option fields after the odometers) —
+ *   see the inline note near the `node` decode for the authoritative offsets.
  *
  * V5→V6 change: the byte after dexter_authority WAS an active_session Option
  * tag (+92-byte inline body); V6 replaced it with live_session_count u8 —
