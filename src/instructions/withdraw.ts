@@ -99,6 +99,13 @@ export interface FinalizeWithdrawalParams {
    * gate (isWritable false; the transfer is the separate Swig::SignV2 ix).
    */
   vaultUsdcAta: PublicKey;
+  /**
+   * The vault's welded PrincipalNode. REQUIRED iff the vault is welded
+   * (`vault.node != default`) so finalize_withdrawal can reserve the node's full
+   * credit liability (`subtree_draw`). Pass null/undefined for a plain non-credit
+   * vault — the builder emits the program-id None sentinel (Anchor optional acct).
+   */
+  node?: PublicKey | null;
   clientDataJSON: Uint8Array;
   authenticatorData: Uint8Array;
 }
@@ -108,8 +115,9 @@ export interface FinalizeWithdrawalParams {
  *   [0] swig                — required by Swig's ProgramExec validator + bound via Anchor `address`
  *   [1] swig_wallet_address — canonical PDA under the Swig program
  *   [2] vault               — the vault PDA being mutated
- *   [3] vault_usdc_ata      — swig wallet's USDC ATA, read for the Phase 1 reservation gate (read-only)
- *   [4] instructions_sysvar — for the secp256r1 precompile sibling lookup
+ *   [3] vault_usdc_ata      — swig wallet's USDC ATA, read for the reservation gate (read-only)
+ *   [4] node                — OPTIONAL: the welded PrincipalNode (credit-liability pin); program-id = None
+ *   [5] instructions_sysvar — for the secp256r1 precompile sibling lookup
  */
 export function buildFinalizeWithdrawalInstruction(
   p: FinalizeWithdrawalParams,
@@ -128,6 +136,8 @@ export function buildFinalizeWithdrawalInstruction(
       { pubkey: swigWalletAddress, isSigner: false, isWritable: false },
       { pubkey: p.vaultPda, isSigner: false, isWritable: true },
       { pubkey: p.vaultUsdcAta, isSigner: false, isWritable: false },
+      // Anchor optional account: the program id itself signals None (unwelded vault).
+      { pubkey: p.node ?? DEXTER_VAULT_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isSigner: false, isWritable: false },
     ],
     data,

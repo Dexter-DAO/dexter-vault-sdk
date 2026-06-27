@@ -435,7 +435,7 @@ describe('instruction data layouts', () => {
     expect(new Uint8Array(ix.data)).toMatchSnapshot('request_withdrawal data');
   });
 
-  test('finalize_withdrawal', () => {
+  test('finalize_withdrawal (no node — non-credit vault, None sentinel at idx 4)', () => {
     const ix = buildFinalizeWithdrawalInstruction({
       vaultPda: KNOWN_VAULT_PDA,
       swigAddress: KNOWN_VAULT_PDA,
@@ -445,10 +445,26 @@ describe('instruction data layouts', () => {
     });
     expect(new Uint8Array(ix.data)).toMatchSnapshot('finalize_withdrawal data');
     const finalizeKeys = ix.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable }));
-    // 5-account layout: swig, swig_wallet_address, vault, vault_usdc_ata (NEW, idx 3), instructions_sysvar
-    expect(finalizeKeys).toHaveLength(5);
+    // 6-account layout: swig, swig_wallet_address, vault, vault_usdc_ata(3), node(4 OPTIONAL), instructions_sysvar(5)
+    expect(finalizeKeys).toHaveLength(6);
     expect(finalizeKeys[3]).toEqual({ pubkey: KNOWN_VAULT_USDC_ATA.toBase58(), isSigner: false, isWritable: false });
+    // node omitted → Anchor None sentinel is the program id itself
+    expect(finalizeKeys[4].pubkey).toEqual(ix.programId.toBase58());
     expect(finalizeKeys).toMatchSnapshot('finalize_withdrawal keys');
+  });
+
+  test('finalize_withdrawal (welded vault — node Some at idx 4)', () => {
+    const ix = buildFinalizeWithdrawalInstruction({
+      vaultPda: KNOWN_VAULT_PDA,
+      swigAddress: KNOWN_VAULT_PDA,
+      vaultUsdcAta: KNOWN_VAULT_USDC_ATA,
+      node: KNOWN_DESTINATION, // stand-in pubkey for the welded PrincipalNode
+      clientDataJSON: KNOWN_CLIENT_DATA,
+      authenticatorData: KNOWN_AUTH_DATA,
+    });
+    const keys = ix.keys.map(k => k.pubkey.toBase58());
+    expect(keys).toHaveLength(6);
+    expect(keys[4]).toEqual(KNOWN_DESTINATION.toBase58());
   });
 
   test('force_release', () => {

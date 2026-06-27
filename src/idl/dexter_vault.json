@@ -1200,9 +1200,20 @@
           "docs": [
             "The swig wallet's USDC ATA — read live to enforce the reservation",
             "invariant per V0.3 Decision 1: post-withdrawal balance must remain",
-            "at or above `vault.outstanding_locked_amount`. The token account's",
-            "`owner` field must match the swig_wallet_address PDA."
+            "at or above `vault.outstanding_locked_amount` (+ credit liability below).",
+            "The token account's `owner` field must match the swig_wallet_address PDA."
           ]
+        },
+        {
+          "name": "node",
+          "docs": [
+            "The vault's welded `PrincipalNode` — REQUIRED iff this vault is welded",
+            "(`vault.node != Pubkey::default()`), so the withdrawal can reserve the",
+            "node's full credit liability (`subtree_draw`). Bound to `vault.node` in",
+            "the handler. Omitted (None — pass the program id sentinel) for a plain,",
+            "non-credit vault. Read-only."
+          ],
+          "optional": true
         },
         {
           "name": "instructions_sysvar",
@@ -2947,10 +2958,19 @@
           "name": "dexter_authority",
           "docs": [
             "The orchestration authority driving the cascade. There is no Vault here to",
-            "bind it to (the defaulter is a PrincipalNode, not a Vault); the real",
-            "consent is the deadline + the ANCESTOR swig's cascade marker + the",
-            "authenticated ancestry. Signer-only (mirrors the financier in draw_credit,",
-            "which is likewise not passkey-verified in v1)."
+            "bind it to (the defaulter is a PrincipalNode, not a Vault), so it is bound",
+            "to the GRAPH admin instead — the natural authority for a node-only verb.",
+            "WITHOUT this bind, `dexter_authority` was a bare signer and ANY signer",
+            "could drive a cascade that drains a marked ancestor swig (Critical). The",
+            "deadline + the ancestor swig's cascade marker + the authenticated ancestry",
+            "remain; this adds the trusted-orchestrator gate that draw_credit /",
+            "seize_collateral get via `vault.dexter_authority`.",
+            "",
+            "NOTE (deferred, system-wide): the inner SignV2 destination is still bound",
+            "only by amount, not address — \"financier-made-whole\" is enforced by the",
+            "trusted orchestrator, not on-chain, exactly as in draw_credit /",
+            "seize_collateral. Binding the destination to a recorded financier is the",
+            "financier-tier item tracked for draw+seize+cascade together, not here."
           ],
           "signer": true
         },
@@ -3249,10 +3269,11 @@
         {
           "name": "ancestor_node",
           "docs": [
-            "The proven STRICT ancestor authorizing the freeze — must be the rooted",
-            "ROOT of `target_node`'s chain (the handler requires the traverse's root ==",
-            "this account). Read-only; the traverse persists its (unchanged) state via",
-            "the matching `remaining_accounts` entry."
+            "The proven STRICT ancestor authorizing the freeze — ANY ancestor on",
+            "`target_node`'s authenticated upward path (the handler requires the",
+            "traverse to terminate AT this account), not necessarily the rooted root.",
+            "Read-only; the traverse persists its (unchanged) state via the matching",
+            "`remaining_accounts` entry."
           ]
         },
         {
@@ -4597,6 +4618,16 @@
       "code": 6066,
       "name": "NoUncoveredShortfall",
       "msg": "There is no uncovered shortfall to cascade"
+    },
+    {
+      "code": 6067,
+      "name": "NodeStillParented",
+      "msg": "Node still has a parent edge; re-root via emancipate, not attach_root"
+    },
+    {
+      "code": 6068,
+      "name": "CreditNodeRequired",
+      "msg": "This vault is welded to a credit node; its PrincipalNode must be supplied"
     }
   ],
   "types": [
