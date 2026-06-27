@@ -35,6 +35,8 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import type {
   PendingWithdrawal,
+  PrincipalNodeState,
+  RateCapState,
   VaultOnchainState,
   VaultStateFull,
 } from '../types.js';
@@ -79,10 +81,7 @@ const EMPTY_FULL: VaultStateFull = {
   pendingVoucherCount: 0,
   liveSessionCount: 0,
   outstandingLockedAmount: '0',
-  borrowed: '0',
-  standbyBacker: null,
-  standbyCap: '0',
-  borrowRecoveryAt: null,
+  node: null,
 };
 
 /** Slim read — the shape dexter-api's existing /status routes return. */
@@ -154,30 +153,14 @@ export function decodeVaultFull(data: Buffer): VaultStateFull {
     ? data.readBigUInt64LE(outstandingLockedOffset).toString()
     : '0';
 
-  // ── V5 credit tail (moving cursor: standby_backer is Option<Pubkey>) ──
-  // Defaults if the account is a pre-V5 layout / too short to carry the tail.
-  let borrowed = '0';
-  let standbyBacker: string | null = null;
-  let standbyCap = '0';
-  let borrowRecoveryAt: number | null = null;
-
-  const borrowedOffset = outstandingLockedOffset + 24; // skip outstanding, crystallized, settled
-  if (hasOutstanding && data.length >= borrowedOffset + 8) {
-    borrowed = data.readBigUInt64LE(borrowedOffset).toString();
-    // standby_backer: Option<Pubkey> — the one variable-length field. readOption
-    // returns the value and the offset AFTER it, so standby_cap reads correctly
-    // whether the pubkey was present (Some) or absent (None).
-    const [backer, afterBacker] = readOption(
-      data, borrowedOffset + 8, PUBKEY_LEN, (b) => new PublicKey(b).toBase58(),
-    );
-    standbyBacker = backer;
-    if (data.length >= afterBacker + 8) {
-      standbyCap = data.readBigUInt64LE(afterBacker).toString();
-      const [recoveryAt] = readOption(
-        data, afterBacker + 8, 8, (b) => Number(b.readBigInt64LE(0)),
-      );
-      borrowRecoveryAt = recoveryAt;
-    }
+  // ── V6 graph tail (fixed layout, no Option fields after the odometers) ──
+  //   outstanding_locked u64 | total_crystallized u64 | total_settled u64 | node pk
+  // The V5 inline credit tail (borrowed / standby_backer / standby_cap /
+  // borrow_recovery_at) is GONE — credit state moved onto the PrincipalNode graph.
+  const nodeOffset = outstandingLockedOffset + 24; // skip outstanding, crystallized, settled
+  let node: string | null = null;
+  if (hasOutstanding && data.length >= nodeOffset + PUBKEY_LEN) {
+    node = new PublicKey(data.subarray(nodeOffset, nodeOffset + PUBKEY_LEN)).toBase58();
   }
 
   return {
@@ -188,11 +171,109 @@ export function decodeVaultFull(data: Buffer): VaultStateFull {
     pendingVoucherCount,
     liveSessionCount,
     outstandingLockedAmount,
-    borrowed,
-    standbyBacker,
-    standbyCap,
-    borrowRecoveryAt,
+    node,
   };
+}
+
+// ── PrincipalNode (recourse graph) ─────────────────────────────────────────
+
+const PRINCIPAL_NODE_DISC_LEN = 8;
+
+/**
+ * Pure decoder for a PrincipalNode account's raw data (NO RPC). Field-for-field
+ * mirror of programs/dexter-vault/src/state.rs::PrincipalNode. Uses a moving
+ * cursor because `parent`, `root_attestation`, `cap.ceiling`, and
+ * `borrow_recovery_at` are borsh `Option`s (1 tag byte + body iff Some) — a
+ * missed tag-branch reads the rest of the struct off-by-`size`, the same hazard
+ * decodeVaultFull guards. Throws on data too short to be a PrincipalNode.
+ */
+export function decodePrincipalNode(data: Buffer): PrincipalNodeState {
+  let o = PRINCIPAL_NODE_DISC_LEN; // skip the 8-byte account discriminator
+  const u8 = () => { const v = data.readUInt8(o); o += 1; return v; };
+  const u16 = () => { const v = data.readUInt16LE(o); o += 2; return v; };
+  const u32 = () => { const v = data.readUInt32LE(o); o += 4; return v; };
+  const u64 = () => { const v = data.readBigUInt64LE(o).toString(); o += 8; return v; };
+  const i64 = () => { const v = Number(data.readBigInt64LE(o)); o += 8; return v; };
+  const pk = () => { const v = new PublicKey(data.subarray(o, o + PUBKEY_LEN)).toBase58(); o += PUBKEY_LEN; return v; };
+  const bytes32 = () => { const v = Uint8Array.from(data.subarray(o, o + 32)); o += 32; return v; };
+  const optPk = (): string | null => { const tag = u8(); return tag === 1 ? pk() : null; };
+  const optU64 = (): string | null => { const tag = u8(); return tag === 1 ? u64() : null; };
+  const optI64 = (): number | null => { const tag = u8(); return tag === 1 ? i64() : null; };
+
+  if (data.length < PRINCIPAL_NODE_DISC_LEN + 2 + 32 + 32) {
+    throw new Error('decodePrincipalNode: data too short');
+  }
+
+  const version = u8();
+  const bump = u8();
+  const nodeId = bytes32();
+  const controller = pk();
+  const parent = optPk();
+  const rootAttestation = optPk();
+  const cap: RateCapState = {
+    rateAmount: u64(),
+    periodSecs: u32(),
+    bucket: u64(),
+    lastRefill: i64(),
+    ceiling: optU64(),
+    burstMultiple: u8(),
+  };
+  const borrowed = u64();
+  const subtreeDraw = u64();
+  const borrowRecoveryAt = optI64();
+  const shortfall = u64();
+  const frozen = u8() === 1;
+  const childCount = u32();
+  const accruedFee = u64();
+  const rateBps = u16();
+  const lastAccrual = i64();
+
+  return {
+    version, bump, nodeId, controller, parent, rootAttestation, cap,
+    borrowed, subtreeDraw, borrowRecoveryAt, shortfall, frozen,
+    childCount, accruedFee, rateBps, lastAccrual,
+  };
+}
+
+/** Fetch + decode a single PrincipalNode by PDA. Returns null if absent. */
+export async function readPrincipalNode(
+  conn: Connection,
+  nodePda: PublicKey,
+): Promise<PrincipalNodeState | null> {
+  const account = await conn.getAccountInfo(nodePda, 'confirmed');
+  if (!account) return null;
+  return decodePrincipalNode(account.data);
+}
+
+/**
+ * Walk the delegation graph UP from `nodePda` following stored `parent` pointers
+ * until a parent-less root, returning the FULL path leaf→…→root INCLUSIVE of the
+ * starting node (child→parent order). This is the off-chain mirror of the
+ * on-chain `traverse_authenticated` chain; builders that need the program's
+ * `remaining_accounts` (which EXCLUDES the leaf) take `path.slice(1)` — the
+ * GraphClient facade does that slice in ONE place (anti-bypass-drift).
+ *
+ * A cycle guard (max depth) prevents an infinite loop on corrupt data.
+ */
+export async function walkAncestors(
+  conn: Connection,
+  nodePda: PublicKey,
+  maxDepth = 64,
+): Promise<PublicKey[]> {
+  const path: PublicKey[] = [];
+  const seen = new Set<string>();
+  let current: PublicKey | null = nodePda;
+  while (current) {
+    const key = current.toBase58();
+    if (seen.has(key)) throw new Error(`walkAncestors: cycle detected at ${key}`);
+    if (path.length >= maxDepth) throw new Error('walkAncestors: max depth exceeded');
+    seen.add(key);
+    path.push(current);
+    const node = await readPrincipalNode(conn, current);
+    if (!node) throw new Error(`walkAncestors: node ${key} not found`);
+    current = node.parent ? new PublicKey(node.parent) : null;
+  }
+  return path;
 }
 
 /** Full read — adds swigAddress, dexterAuthority, liveSessionCount. The /tab/settle path. */

@@ -10,10 +10,22 @@ export { settleTab } from './settleTab.js';
 export type { SettleTabParams } from './settleTab.js';
 export { readTabMeter } from './readTabMeter.js';
 export type { TabMeter } from './readTabMeter.js';
-export { drawCredit, repayCredit, seizeCollateral } from './credit.js';
+export { drawCredit, repayCredit, seizeCollateral, resolveDrawChain } from './credit.js';
 export type { DrawCreditParams, RepayCreditParams, SeizeCollateralParams } from './credit.js';
 export { setStandbyReserve, closeStandby } from './credit.js';
 export type { SetStandbyReserveArgs, CloseStandbyArgs } from './credit.js';
+export { GraphClient } from './credit.js';
+export type {
+  GraphCreateNodeParams,
+  GraphFreezeParams,
+  GraphEmancipateParams,
+  SimulateDrawParams,
+  CascadeStep,
+  CascadeSeizeParams,
+  CascadeSeizeResult,
+} from './credit.js';
+export { ensureRootAlt } from './altManager.js';
+export type { EnsureRootAltOptions, EnsureRootAltResult } from './altManager.js';
 export { defaultAssembleSignV2 } from './assembleSignV2.js';
 export type { AssembleSignV2, AssembleSignV2Args } from './assembleSignV2.js';
 export { defaultAssembleStandbyReserveSignV2, patchSwigWalletSigner } from './assembleStandbyReserveSignV2.js';

@@ -9,7 +9,11 @@ import {
   deriveStandbyBackerPda,
 } from '../src/instructions/credit.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
+import { deriveGraphConfigPda, deriveEventAuthorityPda } from '../src/credit/derive.js';
 import { DEXTER_VAULT_PROGRAM_ID, DISCRIMINATORS, INSTRUCTIONS_SYSVAR_ID } from '../src/constants/index.js';
+
+const [GRAPH_CONFIG] = deriveGraphConfigPda();
+const [EVENT_AUTHORITY] = deriveEventAuthorityPda();
 
 // Distinct valid base58 pubkeys so positional assertions stay unambiguous.
 const RENT = new PublicKey('SysvarRent111111111111111111111111111111111');
@@ -61,112 +65,120 @@ describe('openStandby', () => {
   });
 });
 
-describe('drawCredit', () => {
-  it('emits 5 accounts in canonical order with u64 amount + i64 recovery window', () => {
+// Distinct nodes for the graph layout assertions.
+const DRAWING_NODE = new PublicKey('SysvarS1otHashes111111111111111111111111111');
+const SELLER_DEST = new PublicKey('SysvarS1otHistory11111111111111111111111111');
+const COLLATERAL = new PublicKey('SysvarStakeHistory1111111111111111111111111');
+const ANC1 = new PublicKey('SysvarEpochSchedu1e111111111111111111111111');
+const ANC2 = new PublicKey('SysvarRecentB1ockHashes11111111111111111111');
+
+describe('drawCredit (depth-N graph)', () => {
+  it('emits 10 fixed accounts + appended chain, with u64 amount + i64 recovery', () => {
     const ix = buildDrawCreditInstruction({
       financierSwig: RENT,
       vaultPda: CLOCK,
+      drawingNode: DRAWING_NODE,
+      sellerDestination: SELLER_DEST,
       dexterAuthority: WSOL,
       amount: 2_500_000n,
       recoveryWindowSeconds: 86_400n,
+      chain: [ANC1, ANC2],
     });
     expect(ix.programId.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);
-    expect(ix.keys.length).toBe(5);
-    // [0] financier_swig (readonly, not signer)
-    expect(ix.keys[0].pubkey.equals(RENT)).toBe(true);
+    expect(ix.keys.length).toBe(12); // 10 fixed + 2 chain
+    expect(ix.keys[0].pubkey.equals(RENT)).toBe(true);                              // financier_swig (ro)
     expect(ix.keys[0].isWritable).toBe(false);
-    expect(ix.keys[0].isSigner).toBe(false);
-    // [1] financier_swig_wallet_address (readonly, derived)
-    expect(ix.keys[1].pubkey.equals(deriveSwigWalletAddress(RENT))).toBe(true);
-    expect(ix.keys[1].isWritable).toBe(false);
-    expect(ix.keys[1].isSigner).toBe(false);
-    // [2] vault (writable)
-    expect(ix.keys[2].pubkey.equals(CLOCK)).toBe(true);
-    expect(ix.keys[2].isWritable).toBe(true);
-    expect(ix.keys[2].isSigner).toBe(false);
-    // [3] dexter_authority (signer, not writable)
-    expect(ix.keys[3].pubkey.equals(WSOL)).toBe(true);
-    expect(ix.keys[3].isSigner).toBe(true);
-    expect(ix.keys[3].isWritable).toBe(false);
-    // [4] instructions_sysvar (readonly)
-    expect(ix.keys[4].pubkey.equals(INSTRUCTIONS_SYSVAR_ID)).toBe(true);
-    expect(ix.keys[4].isWritable).toBe(false);
-    expect(ix.keys[4].isSigner).toBe(false);
+    expect(ix.keys[1].pubkey.equals(deriveSwigWalletAddress(RENT))).toBe(true);     // financier_swig_wallet (ro)
+    expect(ix.keys[2].pubkey.equals(CLOCK)).toBe(true);                             // vault — now READONLY
+    expect(ix.keys[2].isWritable).toBe(false);
+    expect(ix.keys[3].pubkey.equals(DRAWING_NODE)).toBe(true);                      // drawing_node (w)
+    expect(ix.keys[3].isWritable).toBe(true);
+    expect(ix.keys[4].pubkey.equals(GRAPH_CONFIG)).toBe(true);                      // graph_config
+    expect(ix.keys[5].pubkey.equals(SELLER_DEST)).toBe(true);                       // seller_destination
+    expect(ix.keys[6].pubkey.equals(WSOL)).toBe(true);                             // dexter_authority (signer)
+    expect(ix.keys[6].isSigner).toBe(true);
+    expect(ix.keys[7].pubkey.equals(INSTRUCTIONS_SYSVAR_ID)).toBe(true);            // instructions_sysvar
+    expect(ix.keys[8].pubkey.equals(EVENT_AUTHORITY)).toBe(true);                   // event_authority
+    expect(ix.keys[9].pubkey.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);           // program
+    // chain appended writable, non-signer, in child→parent order
+    expect(ix.keys[10].pubkey.equals(ANC1)).toBe(true);
+    expect(ix.keys[10].isWritable).toBe(true);
+    expect(ix.keys[10].isSigner).toBe(false);
+    expect(ix.keys[11].pubkey.equals(ANC2)).toBe(true);
     // data: disc(8) + amount u64(8) + recovery i64(8) = 24
     expect(ix.data.length).toBe(24);
     expect(Buffer.from(ix.data.subarray(0, 8))).toEqual(Buffer.from(DISCRIMINATORS.draw_credit));
     expect(ix.data.readBigUInt64LE(8)).toBe(2_500_000n);
     expect(ix.data.readBigInt64LE(16)).toBe(86_400n);
   });
+
+  it('omits the chain for a depth-1 rooted leaf', () => {
+    const ix = buildDrawCreditInstruction({
+      financierSwig: RENT, vaultPda: CLOCK, drawingNode: DRAWING_NODE,
+      sellerDestination: SELLER_DEST, dexterAuthority: WSOL,
+      amount: 1n, recoveryWindowSeconds: 0n,
+    });
+    expect(ix.keys.length).toBe(10);
+  });
 });
 
-describe('repayCredit', () => {
-  it('emits 5 accounts in canonical order with a single u64 amount arg', () => {
+describe('repayCredit (depth-N graph)', () => {
+  it('emits 9 fixed accounts + appended chain with a single u64 amount arg', () => {
     const ix = buildRepayCreditInstruction({
       swigAddress: RENT,
       vaultPda: CLOCK,
+      drawingNode: DRAWING_NODE,
       dexterAuthority: WSOL,
       amount: 1_000_000n,
+      chain: [ANC1],
     });
-    expect(ix.programId.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);
-    expect(ix.keys.length).toBe(5);
-    // [0] swig (readonly, not signer)
-    expect(ix.keys[0].pubkey.equals(RENT)).toBe(true);
-    expect(ix.keys[0].isWritable).toBe(false);
-    expect(ix.keys[0].isSigner).toBe(false);
-    // [1] swig_wallet_address (readonly, derived)
-    expect(ix.keys[1].pubkey.equals(deriveSwigWalletAddress(RENT))).toBe(true);
-    expect(ix.keys[1].isWritable).toBe(false);
-    expect(ix.keys[1].isSigner).toBe(false);
-    // [2] vault (writable)
-    expect(ix.keys[2].pubkey.equals(CLOCK)).toBe(true);
-    expect(ix.keys[2].isWritable).toBe(true);
-    expect(ix.keys[2].isSigner).toBe(false);
-    // [3] dexter_authority (signer, not writable)
-    expect(ix.keys[3].pubkey.equals(WSOL)).toBe(true);
-    expect(ix.keys[3].isSigner).toBe(true);
-    expect(ix.keys[3].isWritable).toBe(false);
-    // [4] instructions_sysvar (readonly)
-    expect(ix.keys[4].pubkey.equals(INSTRUCTIONS_SYSVAR_ID)).toBe(true);
-    expect(ix.keys[4].isWritable).toBe(false);
-    expect(ix.keys[4].isSigner).toBe(false);
-    // data: disc(8) + amount u64(8) = 16
+    expect(ix.keys.length).toBe(10); // 9 fixed + 1 chain
+    expect(ix.keys[0].pubkey.equals(RENT)).toBe(true);                          // swig (ro)
+    expect(ix.keys[1].pubkey.equals(deriveSwigWalletAddress(RENT))).toBe(true); // swig_wallet (ro)
+    expect(ix.keys[2].pubkey.equals(CLOCK)).toBe(true);                         // vault (ro)
+    expect(ix.keys[2].isWritable).toBe(false);
+    expect(ix.keys[3].pubkey.equals(DRAWING_NODE)).toBe(true);                  // drawing_node (w)
+    expect(ix.keys[3].isWritable).toBe(true);
+    expect(ix.keys[4].pubkey.equals(GRAPH_CONFIG)).toBe(true);                  // graph_config
+    expect(ix.keys[5].pubkey.equals(WSOL)).toBe(true);                         // dexter_authority (signer)
+    expect(ix.keys[5].isSigner).toBe(true);
+    expect(ix.keys[6].pubkey.equals(INSTRUCTIONS_SYSVAR_ID)).toBe(true);        // instructions_sysvar
+    expect(ix.keys[7].pubkey.equals(EVENT_AUTHORITY)).toBe(true);               // event_authority
+    expect(ix.keys[8].pubkey.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);       // program
+    expect(ix.keys[9].pubkey.equals(ANC1)).toBe(true);                         // chain
+    expect(ix.keys[9].isWritable).toBe(true);
     expect(ix.data.length).toBe(16);
     expect(Buffer.from(ix.data.subarray(0, 8))).toEqual(Buffer.from(DISCRIMINATORS.repay_credit));
     expect(ix.data.readBigUInt64LE(8)).toBe(1_000_000n);
   });
 });
 
-describe('seizeCollateral', () => {
-  it('emits 5 accounts in canonical order, empty args (discriminator only)', () => {
+describe('seizeCollateral (depth-N graph)', () => {
+  it('emits 10 fixed accounts + appended chain, empty args (discriminator only)', () => {
     const ix = buildSeizeCollateralInstruction({
       swigAddress: RENT,
       vaultPda: CLOCK,
+      drawingNode: DRAWING_NODE,
+      collateralAta: COLLATERAL,
       dexterAuthority: WSOL,
+      chain: [ANC1, ANC2],
     });
-    expect(ix.programId.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);
-    expect(ix.keys.length).toBe(5);
-    // [0] swig (readonly, not signer)
-    expect(ix.keys[0].pubkey.equals(RENT)).toBe(true);
-    expect(ix.keys[0].isWritable).toBe(false);
-    expect(ix.keys[0].isSigner).toBe(false);
-    // [1] swig_wallet_address (readonly, derived)
-    expect(ix.keys[1].pubkey.equals(deriveSwigWalletAddress(RENT))).toBe(true);
-    expect(ix.keys[1].isWritable).toBe(false);
-    expect(ix.keys[1].isSigner).toBe(false);
-    // [2] vault (writable)
-    expect(ix.keys[2].pubkey.equals(CLOCK)).toBe(true);
-    expect(ix.keys[2].isWritable).toBe(true);
-    expect(ix.keys[2].isSigner).toBe(false);
-    // [3] dexter_authority (signer, not writable)
-    expect(ix.keys[3].pubkey.equals(WSOL)).toBe(true);
-    expect(ix.keys[3].isSigner).toBe(true);
-    expect(ix.keys[3].isWritable).toBe(false);
-    // [4] instructions_sysvar (readonly)
-    expect(ix.keys[4].pubkey.equals(INSTRUCTIONS_SYSVAR_ID)).toBe(true);
-    expect(ix.keys[4].isWritable).toBe(false);
-    expect(ix.keys[4].isSigner).toBe(false);
-    // data: disc(8) only
+    expect(ix.keys.length).toBe(12); // 10 fixed + 2 chain
+    expect(ix.keys[0].pubkey.equals(RENT)).toBe(true);                          // swig
+    expect(ix.keys[1].pubkey.equals(deriveSwigWalletAddress(RENT))).toBe(true); // swig_wallet
+    expect(ix.keys[2].pubkey.equals(CLOCK)).toBe(true);                         // vault (ro)
+    expect(ix.keys[2].isWritable).toBe(false);
+    expect(ix.keys[3].pubkey.equals(DRAWING_NODE)).toBe(true);                  // drawing_node (w)
+    expect(ix.keys[3].isWritable).toBe(true);
+    expect(ix.keys[4].pubkey.equals(COLLATERAL)).toBe(true);                    // collateral_ata
+    expect(ix.keys[5].pubkey.equals(GRAPH_CONFIG)).toBe(true);                  // graph_config
+    expect(ix.keys[6].pubkey.equals(WSOL)).toBe(true);                         // dexter_authority (signer)
+    expect(ix.keys[6].isSigner).toBe(true);
+    expect(ix.keys[7].pubkey.equals(INSTRUCTIONS_SYSVAR_ID)).toBe(true);        // instructions_sysvar
+    expect(ix.keys[8].pubkey.equals(EVENT_AUTHORITY)).toBe(true);               // event_authority
+    expect(ix.keys[9].pubkey.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);       // program
+    expect(ix.keys[10].pubkey.equals(ANC1)).toBe(true);
+    expect(ix.keys[11].pubkey.equals(ANC2)).toBe(true);
     expect(ix.data.length).toBe(8);
     expect(Buffer.from(ix.data)).toEqual(Buffer.from(DISCRIMINATORS.seize_collateral));
   });

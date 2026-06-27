@@ -5,12 +5,22 @@
  * seize_collateral,migrate_v4_to_v5}.rs. Account ordering is consensus-critical
  * and MUST match the program exactly.
  */
-import { PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
+import {
+  AccountMeta,
+  PublicKey,
+  SystemProgram,
+  TransactionInstruction,
+} from '@solana/web3.js';
 import {
   DEXTER_VAULT_PROGRAM_ID,
   DISCRIMINATORS,
   INSTRUCTIONS_SYSVAR_ID,
 } from '../constants/index.js';
+import {
+  derivePrincipalNodePda,
+  deriveGraphConfigPda,
+  deriveEventAuthorityPda,
+} from '../credit/derive.js';
 import { deriveSwigWalletAddress } from './withdraw.js';
 
 // ── local encoding helpers (per-file convention, matches lockedClaim.ts) ──
@@ -30,6 +40,76 @@ function encodeI64(value: bigint): Buffer {
   const out = Buffer.alloc(8);
   out.writeBigInt64LE(value, 0);
   return out;
+}
+
+function encodeU32(value: number): Buffer {
+  const out = Buffer.alloc(4);
+  out.writeUInt32LE(value, 0);
+  return out;
+}
+
+function encodeBytes32(b: Uint8Array): Buffer {
+  if (b.length !== 32) throw new Error('expected 32 bytes');
+  return Buffer.from(b);
+}
+
+/** borsh Option<Pubkey>: 1 tag byte + 32 body iff Some. */
+function encodeOptionPubkey(pk: PublicKey | null): Buffer {
+  return pk ? Buffer.concat([Buffer.from([1]), pk.toBuffer()]) : Buffer.from([0]);
+}
+
+/** borsh Option<[u8;32]>: 1 tag byte + 32 body iff Some. */
+function encodeOptionBytes32(b: Uint8Array | null): Buffer {
+  return b ? Buffer.concat([Buffer.from([1]), encodeBytes32(b)]) : Buffer.from([0]);
+}
+
+/** borsh Option<u64>: 1 tag byte + 8 LE body iff Some. */
+function encodeOptionU64(v: bigint | null): Buffer {
+  return v !== null ? Buffer.concat([Buffer.from([1]), encodeU64(v)]) : Buffer.from([0]);
+}
+
+/** The on-chain RateCap struct (velocity bucket + optional hard ceiling). */
+export interface RateCapInput {
+  rateAmount: bigint;       // u64
+  periodSecs: number;       // u32 (must be != 0 — RateCapZero)
+  bucket: bigint;           // u64 initial available velocity
+  lastRefill: bigint;       // i64 unix seconds
+  ceiling: bigint | null;   // Option<u64> absolute outstanding ceiling
+  burstMultiple: number;    // u8
+}
+
+function encodeRateCap(cap: RateCapInput): Buffer {
+  return Buffer.concat([
+    encodeU64(cap.rateAmount),
+    encodeU32(cap.periodSecs),
+    encodeU64(cap.bucket),
+    encodeI64(cap.lastRefill),
+    encodeOptionU64(cap.ceiling),
+    Buffer.from([cap.burstMultiple & 0xff]),
+  ]);
+}
+
+/**
+ * The trailing (event_authority, program) pair every `#[event_cpi]` instruction
+ * requires as its LAST two accounts (Anchor's emit_cpi! convention). Centralized
+ * so every emitting builder appends an identical pair.
+ */
+function eventAccounts(): AccountMeta[] {
+  const [eventAuthority] = deriveEventAuthorityPda();
+  return [
+    { pubkey: eventAuthority, isSigner: false, isWritable: false },
+    { pubkey: DEXTER_VAULT_PROGRAM_ID, isSigner: false, isWritable: false },
+  ];
+}
+
+/**
+ * The authenticated ancestor chain, appended as trailing writable, non-signer
+ * `remaining_accounts` (child→parent, EXCLUDING the leaf — exactly what
+ * traverse_authenticated walks). `chain` comes from `walkAncestors(...).slice(1)`;
+ * the GraphClient facade does that slice in ONE place (anti-bypass-drift).
+ */
+function chainKeys(chain: PublicKey[]): AccountMeta[] {
+  return chain.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
 }
 
 export function deriveStandbyBackerPda(financierSwig: PublicKey): PublicKey {
@@ -169,18 +249,32 @@ export function buildCloseStandbyInstruction(p: CloseStandbyParams): Transaction
 export interface DrawCreditParams {
   financierSwig: PublicKey;
   vaultPda: PublicKey;
+  /** The drawing leaf — must equal vault.node. */
+  drawingNode: PublicKey;
+  /** The booked seller destination ATA — must equal the wrapped SignV2 transfer's destination. */
+  sellerDestination: PublicKey;
   dexterAuthority: PublicKey;
   amount: bigint;
   recoveryWindowSeconds: bigint;
+  /** The drawing leaf's authenticated ancestor chain (child→parent, EXCLUDING the
+   *  leaf) — appended as trailing writable remaining_accounts. Empty for a depth-1
+   *  rooted leaf (the leaf must itself be rooted). */
+  chain?: PublicKey[];
 }
 
 /**
- * Account order MUST match the on-chain struct:
+ * Account order MUST match the rebuilt on-chain struct (DrawCredit, depth-N):
  *   [0] financier_swig                (readonly)
  *   [1] financier_swig_wallet_address (readonly, PDA derived from financier_swig)
- *   [2] vault                         (writable)
- *   [3] dexter_authority              (signer)
- *   [4] instructions_sysvar           (readonly)
+ *   [2] vault                         (readonly — credit state lives on the node now)
+ *   [3] drawing_node                  (writable, == vault.node)
+ *   [4] graph_config                  (readonly, PDA [b"graph_config"])
+ *   [5] seller_destination            (readonly, == wrapped transfer destination)
+ *   [6] dexter_authority              (signer)
+ *   [7] instructions_sysvar           (readonly)
+ *   [8] event_authority               (readonly, PDA [b"__event_authority"])
+ *   [9] program                       (readonly, == program id)
+ *   [10..] ancestor chain             (writable, child→parent, excl. leaf)
  * Data: disc || amount(u64) || recovery_window_seconds(i64).
  */
 export function buildDrawCreditInstruction(p: DrawCreditParams): TransactionInstruction {
@@ -190,14 +284,20 @@ export function buildDrawCreditInstruction(p: DrawCreditParams): TransactionInst
     encodeI64(p.recoveryWindowSeconds),
   ]);
   const financierSwigWalletAddress = deriveSwigWalletAddress(p.financierSwig);
+  const [graphConfig] = deriveGraphConfigPda();
   return new TransactionInstruction({
     programId: DEXTER_VAULT_PROGRAM_ID,
     keys: [
       { pubkey: p.financierSwig, isSigner: false, isWritable: false },
       { pubkey: financierSwigWalletAddress, isSigner: false, isWritable: false },
-      { pubkey: p.vaultPda, isSigner: false, isWritable: true },
+      { pubkey: p.vaultPda, isSigner: false, isWritable: false },
+      { pubkey: p.drawingNode, isSigner: false, isWritable: true },
+      { pubkey: graphConfig, isSigner: false, isWritable: false },
+      { pubkey: p.sellerDestination, isSigner: false, isWritable: false },
       { pubkey: p.dexterAuthority, isSigner: true, isWritable: false },
       { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+      ...eventAccounts(),
+      ...chainKeys(p.chain ?? []),
     ],
     data,
   });
@@ -208,17 +308,27 @@ export function buildDrawCreditInstruction(p: DrawCreditParams): TransactionInst
 export interface RepayCreditParams {
   swigAddress: PublicKey;
   vaultPda: PublicKey;
+  /** The drawing leaf whose `borrowed` is paid down — must equal vault.node. */
+  drawingNode: PublicKey;
   dexterAuthority: PublicKey;
   amount: bigint;
+  /** The drawing leaf's authenticated ancestor chain (child→parent, EXCLUDING the
+   *  leaf) — the Decrement traverse lowers each ancestor's subtree_draw. */
+  chain?: PublicKey[];
 }
 
 /**
- * Account order MUST match the on-chain struct:
+ * Account order MUST match the rebuilt on-chain struct (RepayCredit, depth-N):
  *   [0] swig                (readonly, the USER's swig)
  *   [1] swig_wallet_address (readonly, PDA derived from swig)
- *   [2] vault               (writable)
- *   [3] dexter_authority    (signer)
- *   [4] instructions_sysvar (readonly)
+ *   [2] vault               (readonly)
+ *   [3] drawing_node        (writable, == vault.node)
+ *   [4] graph_config        (readonly, PDA)
+ *   [5] dexter_authority    (signer)
+ *   [6] instructions_sysvar (readonly)
+ *   [7] event_authority     (readonly, PDA)
+ *   [8] program             (readonly)
+ *   [9..] ancestor chain    (writable, child→parent, excl. leaf)
  * Data: disc || amount(u64).
  */
 export function buildRepayCreditInstruction(p: RepayCreditParams): TransactionInstruction {
@@ -227,14 +337,19 @@ export function buildRepayCreditInstruction(p: RepayCreditParams): TransactionIn
     encodeU64(p.amount),
   ]);
   const swigWalletAddress = deriveSwigWalletAddress(p.swigAddress);
+  const [graphConfig] = deriveGraphConfigPda();
   return new TransactionInstruction({
     programId: DEXTER_VAULT_PROGRAM_ID,
     keys: [
       { pubkey: p.swigAddress, isSigner: false, isWritable: false },
       { pubkey: swigWalletAddress, isSigner: false, isWritable: false },
-      { pubkey: p.vaultPda, isSigner: false, isWritable: true },
+      { pubkey: p.vaultPda, isSigner: false, isWritable: false },
+      { pubkey: p.drawingNode, isSigner: false, isWritable: true },
+      { pubkey: graphConfig, isSigner: false, isWritable: false },
       { pubkey: p.dexterAuthority, isSigner: true, isWritable: false },
       { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+      ...eventAccounts(),
+      ...chainKeys(p.chain ?? []),
     ],
     data,
   });
@@ -245,29 +360,350 @@ export function buildRepayCreditInstruction(p: RepayCreditParams): TransactionIn
 export interface SeizeCollateralParams {
   swigAddress: PublicKey;
   vaultPda: PublicKey;
+  /** The PrincipalNode being liquidated — must equal vault.node. */
+  drawingNode: PublicKey;
+  /** The user swig's collateral ATA (owner == swig_wallet_address). */
+  collateralAta: PublicKey;
   dexterAuthority: PublicKey;
+  /** The leaf's authenticated ancestor chain (child→parent, EXCLUDING the leaf). */
+  chain?: PublicKey[];
 }
 
 /**
- * Account order MUST match the on-chain struct:
+ * Account order MUST match the rebuilt on-chain struct (SeizeCollateral, depth-N):
  *   [0] swig                (readonly, the USER's swig)
  *   [1] swig_wallet_address (readonly, PDA derived from swig)
- *   [2] vault               (writable)
- *   [3] dexter_authority    (signer)
- *   [4] instructions_sysvar (readonly)
+ *   [2] vault               (readonly)
+ *   [3] drawing_node        (writable, == vault.node)
+ *   [4] collateral_ata      (readonly)
+ *   [5] graph_config        (readonly, PDA)
+ *   [6] dexter_authority    (signer)
+ *   [7] instructions_sysvar (readonly)
+ *   [8] event_authority     (readonly, PDA)
+ *   [9] program             (readonly)
+ *   [10..] ancestor chain   (writable, child→parent, excl. leaf)
  * Data: discriminator only (SeizeCollateralArgs is empty).
  */
 export function buildSeizeCollateralInstruction(p: SeizeCollateralParams): TransactionInstruction {
   const data = Buffer.from(DISCRIMINATORS.seize_collateral);
   const swigWalletAddress = deriveSwigWalletAddress(p.swigAddress);
+  const [graphConfig] = deriveGraphConfigPda();
   return new TransactionInstruction({
     programId: DEXTER_VAULT_PROGRAM_ID,
     keys: [
       { pubkey: p.swigAddress, isSigner: false, isWritable: false },
       { pubkey: swigWalletAddress, isSigner: false, isWritable: false },
-      { pubkey: p.vaultPda, isSigner: false, isWritable: true },
+      { pubkey: p.vaultPda, isSigner: false, isWritable: false },
+      { pubkey: p.drawingNode, isSigner: false, isWritable: true },
+      { pubkey: p.collateralAta, isSigner: false, isWritable: false },
+      { pubkey: graphConfig, isSigner: false, isWritable: false },
       { pubkey: p.dexterAuthority, isSigner: true, isWritable: false },
       { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+      ...eventAccounts(),
+      ...chainKeys(p.chain ?? []),
+    ],
+    data,
+  });
+}
+
+// ── Recourse graph builders (create_node / attach / emancipate / freeze / pause /
+//    seize_ancestor / init_graph_config) ───────────────────────────────────────
+
+export interface InitGraphConfigParams {
+  authority: PublicKey;        // signer + payer (rent)
+  adminAuthority: PublicKey;   // cold key recorded as admin_authority
+  pauseAuthority: PublicKey;   // hot key recorded as pause_authority (pause ONLY)
+  maxDepthOverride?: number;   // 0 ⇒ use the MAX_DEPTH const
+}
+
+/**
+ * init_graph_config (admin one-time). Order:
+ *   [0] graph_config (writable, PDA) [1] authority (signer, writable) [2] system_program
+ * Data: disc || admin_authority(pk) || pause_authority(pk) || max_depth_override(u8).
+ */
+export function buildInitGraphConfigInstruction(p: InitGraphConfigParams): TransactionInstruction {
+  const [graphConfig] = deriveGraphConfigPda();
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.init_graph_config),
+    p.adminAuthority.toBuffer(),
+    p.pauseAuthority.toBuffer(),
+    Buffer.from([(p.maxDepthOverride ?? 0) & 0xff]),
+  ]);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: graphConfig, isSigner: false, isWritable: true },
+      { pubkey: p.authority, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data,
+  });
+}
+
+export interface CreateNodeParams {
+  nodeId: Uint8Array;           // 32-byte stable identity (PDA seed)
+  controller: PublicKey;        // signer — consents to own this node
+  payer: PublicKey;             // signer, writable — rent
+  cap: RateCapInput;
+  /** Delegate create: the PARENT node PDA. Some ⇒ parent_controller must sign +
+   *  the child cap must fit under the parent's. undefined ⇒ anonymous root-less node. */
+  parentNode?: PublicKey;
+  /** The parent node's controller (required + signing iff parentNode is set). */
+  parentController?: PublicKey;
+}
+
+/**
+ * create_node. Order (Anchor optional accounts → program id sentinel when None):
+ *   [0] node (writable, PDA [b"principal", node_id])
+ *   [1] controller (signer)
+ *   [2] payer (signer, writable)
+ *   [3] parent_node (writable | program-id sentinel)
+ *   [4] parent_controller (signer | program-id sentinel)
+ *   [5] graph_config (readonly, PDA)
+ *   [6] system_program
+ *   [7] event_authority (readonly, PDA) [8] program
+ * Data: disc || node_id[32] || RateCap || Option<pubkey>(parent).
+ */
+export function buildCreateNodeInstruction(p: CreateNodeParams): TransactionInstruction {
+  if (p.nodeId.length !== 32) throw new Error('nodeId must be 32 bytes');
+  const isDelegate = !!p.parentNode;
+  if (isDelegate && !p.parentController) {
+    throw new Error('create_node delegate requires parentController');
+  }
+  const [node] = derivePrincipalNodePda(p.nodeId);
+  const [graphConfig] = deriveGraphConfigPda();
+  // Anchor Option<Account> sentinel: pass the program id when the account is None.
+  const parentNodeKey = p.parentNode ?? DEXTER_VAULT_PROGRAM_ID;
+  const parentControllerKey = p.parentController ?? DEXTER_VAULT_PROGRAM_ID;
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.create_node),
+    encodeBytes32(p.nodeId),
+    encodeRateCap(p.cap),
+    encodeOptionPubkey(p.parentNode ?? null),
+  ]);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: node, isSigner: false, isWritable: true },
+      { pubkey: p.controller, isSigner: true, isWritable: false },
+      { pubkey: p.payer, isSigner: true, isWritable: true },
+      { pubkey: parentNodeKey, isSigner: false, isWritable: isDelegate },
+      { pubkey: parentControllerKey, isSigner: isDelegate, isWritable: false },
+      { pubkey: graphConfig, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ...eventAccounts(),
+    ],
+    data,
+  });
+}
+
+export interface AttachNodeParams {
+  vaultPda: PublicKey;          // writable — vault.node is set to `node`
+  node: PublicKey;              // the PrincipalNode being welded to the vault
+  clientDataJSON: Uint8Array;   // WebAuthn clientDataJSON (challenge = sha256(op_message))
+  authenticatorData: Uint8Array;
+}
+
+/**
+ * attach_node — weld a node to a vault (passkey-authorized). Order:
+ *   [0] vault (writable) [1] node (readonly) [2] instructions_sysvar
+ *   [3] event_authority (PDA) [4] program
+ * Data: disc || vec(client_data_json) || vec(authenticator_data).
+ */
+export function buildAttachNodeInstruction(p: AttachNodeParams): TransactionInstruction {
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.attach_node),
+    encodeBytesVec(p.clientDataJSON),
+    encodeBytesVec(p.authenticatorData),
+  ]);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: p.vaultPda, isSigner: false, isWritable: true },
+      { pubkey: p.node, isSigner: false, isWritable: false },
+      { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+      ...eventAccounts(),
+    ],
+    data,
+  });
+}
+
+export interface AttachRootParams {
+  node: PublicKey;              // writable — root_attestation is set
+  nodeController: PublicKey;    // signer
+  creditRoot: PublicKey;        // the CreditRoot PDA bound to [CREDIT_ROOT_SEED, nullifier]
+  nullifier: Uint8Array;        // 32-byte human nullifier (CreditRoot seed component)
+}
+
+/**
+ * attach_root — root a node against a human CreditRoot. Order:
+ *   [0] node (writable) [1] node_controller (signer) [2] credit_root (readonly)
+ *   [3] event_authority (PDA) [4] program
+ * Data: disc || nullifier[32].
+ */
+export function buildAttachRootInstruction(p: AttachRootParams): TransactionInstruction {
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.attach_root),
+    encodeBytes32(p.nullifier),
+  ]);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: p.node, isSigner: false, isWritable: true },
+      { pubkey: p.nodeController, isSigner: true, isWritable: false },
+      { pubkey: p.creditRoot, isSigner: false, isWritable: false },
+      ...eventAccounts(),
+    ],
+    data,
+  });
+}
+
+export interface EmancipateParams {
+  node: PublicKey;              // writable — parent edge cut
+  parentNode: PublicKey;        // writable — child_count decremented
+  parentController: PublicKey;  // signer
+  nodeController: PublicKey;    // signer
+  /** The CreditRoot to acquire (when newNullifier is Some). Anchor optional →
+   *  program-id sentinel when not acquiring a root. */
+  creditRoot?: PublicKey;
+  /** Some ⇒ acquire the human CreditRoot at [CREDIT_ROOT_SEED, N] while cutting the
+   *  edge; None ⇒ cut the edge and keep any existing attestation. */
+  newNullifier?: Uint8Array;
+}
+
+/**
+ * emancipate — cut the parent edge (gated on zero outstanding) + optionally
+ * acquire/keep a root. Order:
+ *   [0] node (writable) [1] parent_node (writable) [2] parent_controller (signer)
+ *   [3] node_controller (signer) [4] credit_root (readonly | sentinel)
+ *   [5] graph_config (readonly) [6] event_authority (PDA) [7] program
+ * Data: disc || Option<[u8;32]>(new_nullifier).
+ */
+export function buildEmancipateInstruction(p: EmancipateParams): TransactionInstruction {
+  const [graphConfig] = deriveGraphConfigPda();
+  const creditRootKey = p.creditRoot ?? DEXTER_VAULT_PROGRAM_ID;
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.emancipate),
+    encodeOptionBytes32(p.newNullifier ?? null),
+  ]);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: p.node, isSigner: false, isWritable: true },
+      { pubkey: p.parentNode, isSigner: false, isWritable: true },
+      { pubkey: p.parentController, isSigner: true, isWritable: false },
+      { pubkey: p.nodeController, isSigner: true, isWritable: false },
+      { pubkey: creditRootKey, isSigner: false, isWritable: false },
+      { pubkey: graphConfig, isSigner: false, isWritable: false },
+      ...eventAccounts(),
+    ],
+    data,
+  });
+}
+
+export interface SetFreezeParams {
+  targetNode: PublicKey;        // writable — frozen flag set
+  ancestorNode: PublicKey;      // the controlling node (self or an ancestor)
+  ancestorController: PublicKey;// signer
+  frozen: boolean;
+}
+
+/**
+ * set_freeze — freeze/thaw a subtree. Order:
+ *   [0] target_node (writable) [1] ancestor_node (readonly) [2] ancestor_controller (signer)
+ *   [3] graph_config (readonly, PDA) [4] event_authority (PDA) [5] program
+ * Data: disc || frozen(bool).
+ */
+export function buildSetFreezeInstruction(p: SetFreezeParams): TransactionInstruction {
+  const [graphConfig] = deriveGraphConfigPda();
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.set_freeze),
+    Buffer.from([p.frozen ? 1 : 0]),
+  ]);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: p.targetNode, isSigner: false, isWritable: true },
+      { pubkey: p.ancestorNode, isSigner: false, isWritable: false },
+      { pubkey: p.ancestorController, isSigner: true, isWritable: false },
+      { pubkey: graphConfig, isSigner: false, isWritable: false },
+      ...eventAccounts(),
+    ],
+    data,
+  });
+}
+
+export interface SetPauseParams {
+  authority: PublicKey;         // signer (admin_authority unpause/tune; pause_authority pause-only)
+  paused: boolean;
+  reason?: number;              // u8 opaque reason code (ignored on unpause)
+}
+
+/**
+ * set_pause — flip the global pause flag. Order:
+ *   [0] graph_config (writable, PDA) [1] authority (signer)
+ * Data: disc || paused(bool) || reason(u8). NO event accounts (not an emit_cpi! ix).
+ */
+export function buildSetPauseInstruction(p: SetPauseParams): TransactionInstruction {
+  const [graphConfig] = deriveGraphConfigPda();
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.set_pause),
+    Buffer.from([p.paused ? 1 : 0]),
+    Buffer.from([(p.reason ?? 0) & 0xff]),
+  ]);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: graphConfig, isSigner: false, isWritable: true },
+      { pubkey: p.authority, isSigner: true, isWritable: false },
+    ],
+    data,
+  });
+}
+
+export interface SeizeAncestorParams {
+  ancestorSwig: PublicKey;      // the ancestor's swig — funds the cascade slice
+  ancestorNode: PublicKey;      // the ancestor covering this slice (one chain hop)
+  defaultedNode: PublicKey;     // writable — the defaulted leaf carrying the shortfall
+  dexterAuthority: PublicKey;   // signer
+  amount: bigint;               // slice of the shortfall this ancestor covers
+  /** The DEFAULTED leaf's authenticated ancestor chain (child→parent, EXCLUDING the
+   *  leaf). ancestorNode MUST be one of these. */
+  chain?: PublicKey[];
+}
+
+/**
+ * seize_ancestor (RUNG-3 cascade). Order:
+ *   [0] ancestor_swig (readonly)
+ *   [1] ancestor_swig_wallet_address (readonly, PDA derived from ancestor_swig)
+ *   [2] ancestor_node (readonly)
+ *   [3] defaulted_node (writable)
+ *   [4] graph_config (readonly, PDA)
+ *   [5] dexter_authority (signer)
+ *   [6] instructions_sysvar (readonly)
+ *   [7] event_authority (PDA) [8] program
+ *   [9..] defaulted leaf's ancestor chain (writable, child→parent, excl. leaf)
+ * Data: disc || amount(u64).
+ */
+export function buildSeizeAncestorInstruction(p: SeizeAncestorParams): TransactionInstruction {
+  const ancestorSwigWalletAddress = deriveSwigWalletAddress(p.ancestorSwig);
+  const [graphConfig] = deriveGraphConfigPda();
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.seize_ancestor),
+    encodeU64(p.amount),
+  ]);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: p.ancestorSwig, isSigner: false, isWritable: false },
+      { pubkey: ancestorSwigWalletAddress, isSigner: false, isWritable: false },
+      { pubkey: p.ancestorNode, isSigner: false, isWritable: false },
+      { pubkey: p.defaultedNode, isSigner: false, isWritable: true },
+      { pubkey: graphConfig, isSigner: false, isWritable: false },
+      { pubkey: p.dexterAuthority, isSigner: true, isWritable: false },
+      { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+      ...eventAccounts(),
+      ...chainKeys(p.chain ?? []),
     ],
     data,
   });

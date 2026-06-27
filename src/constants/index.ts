@@ -81,6 +81,26 @@ export const CREDIT_EVENT_NULLIFIER_OFFSET = 10; // 8 disc + 1 version + 1 bump
 export const CREDIT_ROOT_SEED = 'credit_root';
 export const CREDIT_EVENT_SEED = 'credit_event';
 
+// ── Recourse graph accounts (PrincipalNode / GraphConfig) ─────────────────
+// Anchor account discriminators: sha256("account:<Name>")[..8]. PrincipalNode is
+// the per-node delegation graph account; GraphConfig is the admin singleton.
+// b58 strings are precomputed (no runtime bs58 import in the fetch path) and
+// pinned by a unit test against bs58.encode(...).
+export const PRINCIPAL_NODE_DISCRIMINATOR = Uint8Array.from([241, 39, 115, 201, 73, 181, 48, 34]);
+export const PRINCIPAL_NODE_DISCRIMINATOR_B58 = 'hLVpkfC7eFb';
+export const GRAPH_CONFIG_DISCRIMINATOR = Uint8Array.from([110, 207, 45, 223, 224, 81, 35, 66]);
+export const GRAPH_CONFIG_DISCRIMINATOR_B58 = 'KXzMqvArJaD';
+
+// PrincipalNode PDA seed: [PRINCIPAL_NODE_SEED, node_id]. node_id is the stable
+// identity that survives re-rooting. Matches programs/.../constants.rs (b"principal").
+export const PRINCIPAL_NODE_SEED = 'principal';
+// GraphConfig singleton PDA seed: [GRAPH_CONFIG_SEED]. Matches b"graph_config".
+export const GRAPH_CONFIG_SEED = 'graph_config';
+// Anchor #[event_cpi] authority PDA seed: [b"__event_authority"]. Every emitting
+// instruction takes (event_authority PDA, program=program_id) as its last two
+// accounts; these are byte-identical across all emit_cpi! instructions.
+export const EVENT_AUTHORITY_SEED = '__event_authority';
+
 // Total account sizes (8 disc + INIT_SPACE). gPA dataSize filters.
 export const CREDIT_ROOT_SIZE = 58;   // 8+1+1+32+8+8
 export const CREDIT_EVENT_SIZE = 99;  // 8+1+1+32+8+32+8+1+8
@@ -144,6 +164,15 @@ export const DISCRIMINATORS = Object.freeze({
   establish_credit_root:   Uint8Array.from([182, 245, 97, 77, 108, 145, 37, 247]),
   establish_credit_root_trusted: Uint8Array.from([216, 195, 195, 65, 213, 117, 68, 238]),
   record_credit_event:     Uint8Array.from([192, 207, 202, 39, 125, 52, 240, 255]),
+  // Recourse graph (depth-N delegation) — sha256("global:<ix>")[..8].
+  init_graph_config:       Uint8Array.from([113, 201, 219, 155, 244, 86, 150, 155]),
+  create_node:             Uint8Array.from([20, 183, 134, 233, 51, 51, 115, 83]),
+  attach_node:             Uint8Array.from([222, 53, 143, 98, 138, 62, 148, 196]),
+  attach_root:             Uint8Array.from([195, 137, 100, 253, 213, 219, 89, 228]),
+  emancipate:              Uint8Array.from([137, 136, 7, 92, 28, 52, 63, 6]),
+  set_freeze:              Uint8Array.from([202, 80, 109, 208, 130, 144, 26, 233]),
+  set_pause:               Uint8Array.from([63, 32, 154, 2, 56, 103, 79, 45]),
+  seize_ancestor:          Uint8Array.from([84, 38, 138, 134, 2, 144, 8, 218]),
 });
 
 // The trusted operator/upgrade authority gated to post interim World ID roots

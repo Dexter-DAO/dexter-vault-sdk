@@ -33,14 +33,44 @@ export interface VaultStateFull {
   pendingVoucherCount: number;
   liveSessionCount: number;
   outstandingLockedAmount: string;  // atomic, u64 stringified (sum of unsettled LockedClaim amounts)
-  /** V5 credit tail. Atomic u64 stringified. Outstanding draw not yet repaid. */
-  borrowed: string;
-  /** V5: financier swig backing this vault past the user's balance; null = no line open. */
-  standbyBacker: string | null;
-  /** V5: ceiling the financier committed. Atomic u64 stringified. `borrowed <= standbyCap`. */
-  standbyCap: string;
-  /** V5: unix seconds after which the financier may seize; null = nothing borrowed. */
-  borrowRecoveryAt: number | null;
+  /** V6 graph: the PrincipalNode that anchors this vault's credit (vault.node).
+   *  Credit state (borrowed/cap/recovery) now lives on the node, not the vault —
+   *  read it with decodePrincipalNode(derivePrincipalNodePda(...)). null pre-graph. */
+  node: string | null;
+}
+
+// ── Recourse graph (PrincipalNode delegation node) ────────────────────────
+
+/** RateCap — velocity bucket + optional hard ceiling. Mirrors the on-chain
+ *  RateCap struct. u64 fields as strings; time fields as numbers (unix seconds). */
+export interface RateCapState {
+  rateAmount: string;        // u64: tokens added to the bucket each period
+  periodSecs: number;        // u32: refill period
+  bucket: string;            // u64: current available velocity
+  lastRefill: number;        // i64: unix seconds of last refill
+  ceiling: string | null;    // Option<u64>: absolute outstanding-draw ceiling
+  burstMultiple: number;     // u8: bucket may accumulate up to rate*burst
+}
+
+/** Decoded PrincipalNode — field-for-field mirror of the on-chain struct.
+ *  Pubkeys base58; u64 as string; i64 as number (unix seconds); Options → null. */
+export interface PrincipalNodeState {
+  version: number;
+  bump: number;
+  nodeId: Uint8Array;            // 32-byte stable identity
+  controller: string;            // grants downward + may freeze this subtree
+  parent: string | null;         // parent node PDA; null ⇒ root candidate
+  rootAttestation: string | null;// CreditRoot PDA rooting this node; null ⇒ unrooted
+  cap: RateCapState;
+  borrowed: string;              // u64: this node's OWN outstanding draw
+  subtreeDraw: string;           // u64: rolled-up subtree draw
+  borrowRecoveryAt: number | null; // i64 Option: seize deadline; null ⇒ none armed
+  shortfall: string;             // u64: uncovered remainder awaiting ancestor cascade
+  frozen: boolean;               // subtree frozen flag
+  childCount: number;            // u32
+  accruedFee: string;            // u64
+  rateBps: number;               // u16
+  lastAccrual: number;           // i64 unix seconds
 }
 
 // ── LockedClaim (crystallized, buyer-irrevocable reservation tier) ────────

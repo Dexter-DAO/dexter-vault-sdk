@@ -8,6 +8,182 @@
   },
   "instructions": [
     {
+      "name": "attach_node",
+      "docs": [
+        "Task 10 — `attach_node`: set the wallet↔node POSSESSION link",
+        "(`Vault.node`). The USER's vault passkey MUST sign a domain-bound",
+        "op-message (`b\"attach_node\" || vault || node`), verified via the",
+        "SIMD-0075 precompile sibling. Link-once: re-link is rejected."
+      ],
+      "discriminator": [
+        222,
+        53,
+        143,
+        98,
+        138,
+        62,
+        148,
+        196
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "The USER's vault — receives the `node` link. Mutated, no signer required:",
+            "the user's passkey signature (verified via the SIMD-0075 precompile",
+            "sibling) is what authorizes the mutation."
+          ],
+          "writable": true
+        },
+        {
+          "name": "node",
+          "docs": [
+            "The node this vault is being linked to. Read-only here — `attach_node`",
+            "only writes the pointer onto the vault. Must already exist (a",
+            "`PrincipalNode` created by `create_node`)."
+          ]
+        },
+        {
+          "name": "instructions_sysvar",
+          "docs": [
+            "instruction in the transaction MUST be a secp256r1_verify call carrying",
+            "the USER's passkey signature over the op-message."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "AttachNodeArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "attach_root",
+      "docs": [
+        "Task 10 — `attach_root`: point an EXISTING node UP at an existing human",
+        "`CreditRoot` (wallet-first acquire-a-root). The node's controller signs;",
+        "`node.parent = None` and `root_attestation = Some(credit_root)`. Multiple",
+        "nodes on the SAME root aggregate under it (one-human-one-root by",
+        "aggregation). Non-transferable: never cleared once set."
+      ],
+      "discriminator": [
+        195,
+        137,
+        100,
+        253,
+        213,
+        219,
+        89,
+        228
+      ],
+      "accounts": [
+        {
+          "name": "node",
+          "docs": [
+            "The node being rooted in place. Mutated (`parent` + `root_attestation`)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "node_controller",
+          "docs": [
+            "The node's controller — must sign (possession of the node). Bound to",
+            "`node.controller` so only the controller may root this node."
+          ],
+          "signer": true
+        },
+        {
+          "name": "credit_root",
+          "docs": [
+            "The human `CreditRoot`. MUST already exist — `Account<CreditRoot>` with",
+            "seeds `[CREDIT_ROOT_SEED, nullifier]` + the stored bump deserializes an",
+            "existing account; a missing one fails to load. NOT init: this instruction",
+            "only POINTS at an existing root, never creates one."
+          ]
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "AttachRootArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "close_locked_claim",
       "discriminator": [
         231,
@@ -157,6 +333,13 @@
     },
     {
       "name": "close_standby",
+      "docs": [
+        "Task 5 — `close_standby` → CUT-EDGE: prune a child edge. The immediate",
+        "parent's controller signs (SHRINK); the child must have ZERO outstanding",
+        "draw (`borrowed == 0 && subtree_draw == 0`) — the anti-liability-shed gate",
+        "the recourse cascade depends on. Sets `node.parent = None`, decrements",
+        "`parent.child_count`."
+      ],
       "discriminator": [
         218,
         35,
@@ -169,150 +352,59 @@
       ],
       "accounts": [
         {
-          "name": "financier_swig",
+          "name": "node",
           "docs": [
-            "The FINANCIER's swig (identity + authority). On the FINANCIER leg the handler",
-            "requires this equals `vault.standby_backer` (the right financier). On the USER",
-            "leg it's harmless — the passkey verifier reads the instructions_sysvar, not",
-            "account positions, and the user knows the financier swig regardless (it's",
-            "recorded on their vault).",
-            "recorded backer is enforced in the handler."
-          ]
-        },
-        {
-          "name": "financier_swig_wallet_address",
-          "docs": [
-            "The financier's swig_wallet PDA, derived from `financier_swig`. On the",
-            "FINANCIER leg this PDA MUST SIGN (mechanism B consent — checked in-handler via",
-            "`is_signer`): the close runs only as the inner CPI of the financier's swig",
-            "SignV2, which invoke_signed's this PDA. It is NOT typed `Signer` at the struct",
-            "level because the USER leg shares this struct and does not sign it; the seeds",
-            "prove it's the right financier's wallet PDA when it IS the signer."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  119,
-                  105,
-                  103,
-                  45,
-                  119,
-                  97,
-                  108,
-                  108,
-                  101,
-                  116,
-                  45,
-                  97,
-                  100,
-                  100,
-                  114,
-                  101,
-                  115,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "financier_swig"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                13,
-                12,
-                233,
-                66,
-                225,
-                231,
-                197,
-                6,
-                226,
-                24,
-                223,
-                13,
-                125,
-                241,
-                197,
-                47,
-                175,
-                220,
-                53,
-                41,
-                228,
-                141,
-                103,
-                77,
-                29,
-                178,
-                76,
-                117,
-                181,
-                76,
-                204,
-                190
-              ]
-            }
-          }
-        },
-        {
-          "name": "vault",
-          "docs": [
-            "The USER's vault — credit terms cleared here (standby_backer = None,",
-            "standby_cap = 0). Mutated."
+            "The CHILD node being cut from its parent. Mutated: `parent` → None."
           ],
           "writable": true
         },
         {
-          "name": "standby_backer",
+          "name": "parent_node",
           "docs": [
-            "The financier's reserve ledger. `aggregate_promised` is decremented by this",
-            "vault's cap here. PDA-bound to `financier_swig`; the handler additionally",
-            "requires `standby_backer.financier_swig == vault.standby_backer` so the",
-            "ledger ties to the vault's recorded backer. Mutated."
+            "The immediate PARENT. Mutated: `child_count` and `subtree_draw` decrement."
           ],
-          "writable": true,
+          "writable": true
+        },
+        {
+          "name": "parent_controller",
+          "docs": [
+            "The parent's controller — SHRINK consent. Address-constrained to",
+            "`parent_node.controller` and required to SIGN: only the parent that took",
+            "recourse for this child may release it."
+          ],
+          "signer": true
+        },
+        {
+          "name": "event_authority",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  116,
-                  97,
-                  110,
-                  100,
-                  98,
-                  121,
-                  45,
-                  98,
-                  97,
-                  99,
-                  107,
+                  95,
+                  95,
                   101,
-                  114
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "financier_swig"
               }
             ]
           }
         },
         {
-          "name": "instructions_sysvar",
-          "docs": [
-            "`verify_passkey_signed` reads the PREVIOUS instruction (current_index - 1),",
-            "the secp256r1_verify carrying the user's passkey signature. The FINANCIER leg",
-            "does NOT read it — its consent is the swig_wallet signer (mechanism B), not an",
-            "adjacent instruction."
-          ],
-          "address": "Sysvar1nstructions1111111111111111111111111"
+          "name": "program"
         }
       ],
       "args": [
@@ -321,6 +413,129 @@
           "type": {
             "defined": {
               "name": "CloseStandbyArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_node",
+      "docs": [
+        "Task 3 — create a `PrincipalNode`: an anonymous root-less node",
+        "(`args.parent == None`) or a delegate (`Some` ⇒ parent's controller must",
+        "sign = GROW consent, child cap fits under the parent). `init` so each",
+        "node_id can be created at most once."
+      ],
+      "discriminator": [
+        20,
+        183,
+        134,
+        233,
+        51,
+        51,
+        115,
+        83
+      ],
+      "accounts": [
+        {
+          "name": "node",
+          "docs": [
+            "The new node. `init` (NOT init_if_needed): existence per node_id is the",
+            "uniqueness guard."
+          ],
+          "writable": true
+        },
+        {
+          "name": "controller",
+          "docs": [
+            "The new node's controller — must sign (it is consenting to own this node)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Rent payer for the new node account."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "parent_node",
+          "docs": [
+            "The parent node, present ONLY for a delegate (args.parent == Some). Its",
+            "`controller` must sign via `parent_controller` (GROW consent, S1 D3)."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "parent_controller",
+          "docs": [
+            "The parent node's controller — GROW consent. Present (and signing) ONLY",
+            "for a delegate. The address constraint binds it to the supplied",
+            "`parent_node.controller`, so an attacker cannot pass an arbitrary signer.",
+            "Omitting it on a delegate create makes the tx unsigned for the parent →",
+            "hard reject (the handler requires it Present on the delegate path).",
+            "When BOTH are None (root-less create) the constraint is a no-op.",
+            "NOTE: within an `Option<Signer>` account constraint, Anchor evaluates the",
+            "expression ONLY when the account is present, and `parent_controller` here",
+            "is the inner `AccountInfo` (not the Option). So this binds a PRESENT",
+            "parent_controller to the parent's controller; absence is handled in the",
+            "handler (delegate path requires it Present)."
+          ],
+          "signer": true,
+          "optional": true
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "The graph admin spine — read for the global pause flag."
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "CreateNodeArgs"
             }
           }
         }
@@ -342,20 +557,15 @@
         {
           "name": "financier_swig",
           "docs": [
-            "Position 0 — required at this index by Swig's ProgramExec validator.",
-            "This is the FINANCIER's swig, NOT the user's `vault.swig_address`. It",
-            "must equal `vault.standby_backer`; because that field is `Option<Pubkey>`",
-            "the equality is enforced in the handler (an `#[account(address = ...)]`",
-            "constraint can't bind to an Option).",
-            "never deref."
+            "Position 0 — the FINANCIER's swig (required at this index by swig's",
+            "ProgramExec validator). The money for the draw comes from here."
           ]
         },
         {
           "name": "financier_swig_wallet_address",
           "docs": [
-            "Position 1 — required by Swig's ProgramExec validator. Derives from the",
-            "FINANCIER's swig, so the following SignV2 spends the FINANCIER's",
-            "swig_wallet ATA."
+            "Position 1 — the financier's swig_wallet_address PDA. The following SignV2",
+            "spends THIS ATA's owner."
           ],
           "pda": {
             "seeds": [
@@ -430,25 +640,99 @@
         {
           "name": "vault",
           "docs": [
-            "The USER's vault — borrowed accumulator rises here, recovery deadline is",
-            "armed here. Mutated."
+            "The USER's vault. Bound to the drawing node via `vault.node`."
+          ]
+        },
+        {
+          "name": "drawing_node",
+          "docs": [
+            "The PrincipalNode whose `RateCap` authorizes (and whose `borrowed`",
+            "accumulates) this draw. Must equal `vault.node`. Depth-1: this node must",
+            "itself be rooted (`root_attestation.is_some()`); the N-level authenticated",
+            "ancestor traverse lands in Task 6."
           ],
           "writable": true
         },
         {
+          "name": "graph_config",
+          "docs": [
+            "Graph admin spine — read for the global pause gate."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller_destination",
+          "docs": [
+            "The booked seller destination ATA. The following SignV2 TransferChecked's",
+            "destination MUST equal this key, else `DebtTransferMismatch`. Bound by key",
+            "only; this instruction never reads its data."
+          ]
+        },
+        {
           "name": "dexter_authority",
           "docs": [
-            "The orchestration authority driving the draw under the financier's",
-            "standing standby authorization. Matches settle_locked_voucher's fee gate."
+            "The orchestration authority driving the draw. Matches settle_locked_voucher."
           ],
           "signer": true
         },
         {
           "name": "instructions_sysvar",
           "docs": [
-            "instruction is the swig::SignV2 that introspects this one."
+            "instruction is the swig::SignV2 this handler introspects for the money leg."
           ],
           "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -457,6 +741,123 @@
           "type": {
             "defined": {
               "name": "DrawCreditArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "emancipate",
+      "docs": [
+        "Task 9 — `emancipate`: a node cuts its parent edge and re-roots itself.",
+        "`close_standby` (cut-edge) + `attach_root` (acquire-a-root) fused: both",
+        "controllers sign (parent RELEASES, node ACCEPTS); gated on zero outstanding",
+        "(`subtree_draw == 0 && borrowed == 0` — the anti-liability-shed invariant",
+        "the cascade depends on). `new_nullifier == Some` ⇒ acquire the human",
+        "`CreditRoot` at `[CREDIT_ROOT_SEED, nullifier]`; `None` ⇒ keep any existing",
+        "attestation. Sets `node.parent = None`, decrements `parent.child_count`.",
+        "Non-transferable: only ever sets `root_attestation` from None."
+      ],
+      "discriminator": [
+        137,
+        136,
+        7,
+        92,
+        28,
+        52,
+        63,
+        6
+      ],
+      "accounts": [
+        {
+          "name": "node",
+          "docs": [
+            "The node emancipating. Mutated: `parent` → None, and (Some path)",
+            "`root_attestation` → the acquired credit root."
+          ],
+          "writable": true
+        },
+        {
+          "name": "parent_node",
+          "docs": [
+            "The immediate PARENT being cut. Mutated: `child_count` and `subtree_draw`",
+            "decrement. Must be the node's current parent (the edge we're cutting)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "parent_controller",
+          "docs": [
+            "The parent's controller — SHRINK RELEASE consent. Bound to",
+            "`parent_node.controller` and required to SIGN."
+          ],
+          "signer": true
+        },
+        {
+          "name": "node_controller",
+          "docs": [
+            "The node's own controller — ACCEPT consent. Bound to `node.controller` and",
+            "required to SIGN (the node accepts being emancipated / re-rooted)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "credit_root",
+          "docs": [
+            "The human `CreditRoot` to acquire. Present (and bound in the handler to",
+            "`[CREDIT_ROOT_SEED, new_nullifier]`) ONLY on the `new_nullifier == Some`",
+            "path. `Account<CreditRoot>` already enforces owner + discriminator; the",
+            "handler additionally binds it to the declared nullifier."
+          ],
+          "optional": true
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "The graph admin spine. De-risking verbs (cut-edge, repay, seize,",
+            "emancipate) stay LIVE through pause/freeze — exactly when an operator most",
+            "needs to unwind exposure — so this is read for context, NOT a pause gate."
+          ]
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "EmancipateArgs"
             }
           }
         }
@@ -850,6 +1251,73 @@
           "type": {
             "defined": {
               "name": "ForceReleaseArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "init_graph_config",
+      "docs": [
+        "Task 1 — create the GraphConfig singleton (admin spine). Only",
+        "INTERIM_ROOT_AUTHORITY may create it; `init` so it exists exactly once."
+      ],
+      "discriminator": [
+        113,
+        201,
+        219,
+        155,
+        244,
+        86,
+        150,
+        155
+      ],
+      "accounts": [
+        {
+          "name": "graph_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Only the interim/admin root authority may create the singleton."
+          ],
+          "writable": true,
+          "signer": true,
+          "address": "X4o2kSLzqEQjnAzhq3L3BW92aawMV2n2F37EXd2GMpy"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "InitGraphConfigArgs"
             }
           }
         }
@@ -1459,6 +1927,11 @@
     },
     {
       "name": "open_standby",
+      "docs": [
+        "Task 5 — `open_standby` → GROW an edge: (re)set a child node's `RateCap`",
+        "under its parent. The parent's controller signs (GROW consent); the new",
+        "cap must fit under the parent's (JIT — no reservation total)."
+      ],
       "discriminator": [
         234,
         184,
@@ -1471,65 +1944,67 @@
       ],
       "accounts": [
         {
-          "name": "vault",
+          "name": "node",
           "docs": [
-            "The USER's vault — receives `standby_backer` / `standby_cap`. Mutated, no",
-            "signer required: the user's passkey signature embedded in the args",
-            "(verified via the SIMD-0075 precompile sibling) is what authorizes the",
-            "mutation."
+            "The CHILD node whose `RateCap` is being (re)set. Must already be parented",
+            "to `parent_node` (enforced in the handler via `node.parent`)."
           ],
           "writable": true
         },
         {
-          "name": "financier_swig",
+          "name": "parent_node",
           "docs": [
-            "`standby_backer`. Not deserialized — it is an identity, not an account we",
-            "read. The financier's authorization in v1 is represented by this account",
-            "+ their wallet-level co-signing of the transaction (see module docs)."
+            "The granting PARENT node. Read for its cap (the upper bound) and its",
+            "controller (the GROW signer)."
           ]
         },
         {
-          "name": "standby_backer",
+          "name": "parent_controller",
           "docs": [
-            "The financier's reserve ledger — must exist (set via set_standby_reserve)",
-            "and match financier_swig. Mutated (aggregate_promised updated)."
+            "The parent's controller — GROW consent. Address-constrained to",
+            "`parent_node.controller`, so an attacker cannot substitute an arbitrary",
+            "signer. Requiring it to SIGN binds this re-cap to the parent's authority."
           ],
-          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "The graph admin spine — read for the global pause flag. Re-grant is an",
+            "exposure-(re)setting verb → gated by the pause."
+          ]
+        },
+        {
+          "name": "event_authority",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  116,
-                  97,
-                  110,
-                  100,
-                  98,
-                  121,
-                  45,
-                  98,
-                  97,
-                  99,
-                  107,
+                  95,
+                  95,
                   101,
-                  114
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "financier_swig"
               }
             ]
           }
         },
         {
-          "name": "instructions_sysvar",
-          "docs": [
-            "instruction in the transaction MUST be a secp256r1_verify call carrying",
-            "the USER's passkey signature over the op-message."
-          ],
-          "address": "Sysvar1nstructions1111111111111111111111111"
+          "name": "program"
         }
       ],
       "args": [
@@ -2029,10 +2504,46 @@
         {
           "name": "vault",
           "docs": [
-            "The USER's vault — borrowed accumulator falls here, recovery deadline is",
-            "cleared here when borrowed reaches 0. Mutated."
+            "The USER's vault. Bound to the drawing node via `vault.node`; carries the",
+            "swig binding (`vault.swig_address`) above. Read-only — credit state now",
+            "lives on the PrincipalNode graph, not the Vault."
+          ]
+        },
+        {
+          "name": "drawing_node",
+          "docs": [
+            "The PrincipalNode whose `borrowed` is paid down. Must equal `vault.node`.",
+            "The leaf of the authenticated ancestor chain the repay decrements. Mutated."
           ],
           "writable": true
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "Graph admin spine — read for the runtime `max_depth_override` only. The",
+            "PAUSE flag does NOT gate repay (de-risking verbs stay live even paused)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "dexter_authority",
@@ -2048,6 +2559,38 @@
             "instruction is the swig::SignV2 that introspects this one."
           ],
           "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -2245,6 +2788,224 @@
       ]
     },
     {
+      "name": "seize_ancestor",
+      "docs": [
+        "Task 8 — RUNG 3 `seize_ancestor` → the LIABILITY CASCADE. After a partial",
+        "self-seize leaves a `shortfall` on the defaulted leaf, the financier",
+        "seizes an ANCESTOR's pre-authorized collateral (its own swig) to cover a",
+        "slice of that shortfall, decrementing `subtree_draw` up the authenticated",
+        "chain. Model A (full liability, no per-edge cap); the total is structurally",
+        "bounded by the root ceiling."
+      ],
+      "discriminator": [
+        84,
+        38,
+        138,
+        134,
+        2,
+        144,
+        8,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "ancestor_swig",
+          "docs": [
+            "Position 0 — the ANCESTOR's swig (required at this index by swig's",
+            "ProgramExec validator). The cascade money comes from HERE. Mirrors",
+            "draw_credit's `financier_swig`; the following SignV2 spends THIS swig's",
+            "wallet ATA → financier."
+          ]
+        },
+        {
+          "name": "ancestor_swig_wallet_address",
+          "docs": [
+            "Position 1 — the ancestor swig's swig_wallet_address PDA. The following",
+            "SignV2 spends THIS ATA's owner."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "ancestor_swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "ancestor_node",
+          "docs": [
+            "The ANCESTOR PrincipalNode whose pre-authorized collateral covers a slice",
+            "of the defaulter's shortfall. READ-ONLY (not `mut`): its `subtree_draw` is",
+            "decremented by the authenticated Decrement traverse below (it is one hop of",
+            "the chain in `remaining_accounts`), so making it a `mut` named account too",
+            "would clobber the traverse's write at instruction exit. Used here only to",
+            "(a) identify which ancestor pays and (b) prove genuine-ancestry — its key",
+            "MUST appear in the authenticated chain."
+          ]
+        },
+        {
+          "name": "defaulted_node",
+          "docs": [
+            "The DEFAULTED leaf carrying the uncovered `shortfall`. Mutated: `shortfall`",
+            "(and `borrowed` / `subtree_draw`) fall by `args.amount`; the deadline",
+            "clears when the shortfall reaches 0 (fully covered)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "Graph admin spine — read for the runtime `max_depth_override` only. The",
+            "PAUSE flag does NOT gate the cascade (a de-risking verb stays live even",
+            "paused; the Decrement traverse also passes through a frozen subtree)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "The orchestration authority driving the cascade. There is no Vault here to",
+            "bind it to (the defaulter is a PrincipalNode, not a Vault); the real",
+            "consent is the deadline + the ANCESTOR swig's cascade marker + the",
+            "authenticated ancestry. Signer-only (mirrors the financier in draw_credit,",
+            "which is likewise not passkey-verified in v1)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "docs": [
+            "instruction is the swig::SignV2 that spends the ancestor swig's ATA."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SeizeAncestorArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "seize_collateral",
       "discriminator": [
         40,
@@ -2346,10 +3107,57 @@
         {
           "name": "vault",
           "docs": [
-            "The USER's vault — `borrowed` is zeroed here and the recovery deadline is",
-            "cleared here. Mutated."
+            "The USER's vault. Bound to the drawing node via `vault.node`; carries the",
+            "swig binding (`vault.swig_address`) above. Read-only — credit state lives",
+            "on the PrincipalNode graph, not the Vault."
+          ]
+        },
+        {
+          "name": "drawing_node",
+          "docs": [
+            "The PrincipalNode being liquidated. Must equal `vault.node`. `borrowed`",
+            "becomes the uncovered `shortfall` here; `subtree_draw` falls by the seized",
+            "slice; the deadline clears iff fully self-covered. Mutated."
           ],
           "writable": true
+        },
+        {
+          "name": "collateral_ata",
+          "docs": [
+            "The drawing node's swig_wallet USDC ATA — read live so the partial seize",
+            "computes `seized_from_self = min(borrowed, available_collateral)` against",
+            "the REAL on-chain balance. The `owner` is cross-checked against the",
+            "canonical swig wallet PDA (lifted from register_session_key) so a caller",
+            "cannot smuggle a foreign funded ATA to over/under-state the partial."
+          ]
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "Graph admin spine — read for the runtime `max_depth_override` only. The",
+            "PAUSE flag does NOT gate seize (de-risking verbs stay live even paused)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "dexter_authority",
@@ -2366,6 +3174,38 @@
             "instruction is the swig::SignV2 that introspects this one."
           ],
           "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -2380,7 +3220,196 @@
       ]
     },
     {
+      "name": "set_freeze",
+      "docs": [
+        "Task 12 — `set_freeze`: set/clear a node's `frozen` flag. A proven STRICT",
+        "ancestor (the rooted root of the target's chain, established via the",
+        "read-only authenticated traverse over `remaining_accounts`) authorizes it;",
+        "a node may not freeze/unfreeze itself. Freeze halts exposure-increasing",
+        "verbs beneath the node; de-risking stays live through a frozen subtree."
+      ],
+      "discriminator": [
+        202,
+        80,
+        109,
+        208,
+        130,
+        144,
+        26,
+        233
+      ],
+      "accounts": [
+        {
+          "name": "target_node",
+          "docs": [
+            "The node whose `frozen` flag is being set. Mutated."
+          ],
+          "writable": true
+        },
+        {
+          "name": "ancestor_node",
+          "docs": [
+            "The proven STRICT ancestor authorizing the freeze — must be the rooted",
+            "ROOT of `target_node`'s chain (the handler requires the traverse's root ==",
+            "this account). Read-only; the traverse persists its (unchanged) state via",
+            "the matching `remaining_accounts` entry."
+          ]
+        },
+        {
+          "name": "ancestor_controller",
+          "docs": [
+            "The ancestor's controller — bound to `ancestor_node.controller` and",
+            "required to SIGN (freeze is an authority the ancestor's controller wields)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "The graph admin spine — read for the runtime `max_depth_override` (the",
+            "traverse's depth ceiling). Freeze is NOT pause-gated (an operator must be",
+            "able to freeze a subtree even on a paused graph)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SetFreezeArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_pause",
+      "docs": [
+        "Task 12 — `set_pause`: toggle the global `paused` flag (two-key",
+        "asymmetry). PAUSE accepts the hot pause_authority OR the cold admin;",
+        "UNPAUSE accepts the cold admin ONLY (`OnlyAdminMayUnpause`). Pause gates",
+        "only exposure-increasing verbs; de-risking stays live."
+      ],
+      "discriminator": [
+        63,
+        32,
+        154,
+        2,
+        56,
+        103,
+        79,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "graph_config",
+          "docs": [
+            "The graph admin spine — mutated (`paused` / `paused_at` / `pause_reason`)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "The caller. PAUSE accepts the hot pause_authority OR the cold admin;",
+            "UNPAUSE accepts the cold admin ONLY (enforced in the handler)."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SetPauseArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "set_standby_reserve",
+      "docs": [
+        "Task 5 — `set_standby_reserve` → SET-ROOT-CEILING: set a ROOT node's",
+        "`RateCap.ceiling` (the per-person aggregate cap). The root controller",
+        "signs; the new ceiling may not drop below `subtree_draw`."
+      ],
       "discriminator": [
         198,
         227,
@@ -2393,135 +3422,52 @@
       ],
       "accounts": [
         {
-          "name": "financier_swig",
+          "name": "node",
           "docs": [
-            "The FINANCIER's swig (identity + authority). It is the seed source for",
-            "standby_backer and for the swig_wallet PDA below."
-          ]
+            "The ROOT node whose aggregate ceiling is being set. Mutated:",
+            "`cap.ceiling`. Must be a root (`parent == None`), enforced in-handler."
+          ],
+          "writable": true
         },
         {
-          "name": "financier_swig_wallet_address",
+          "name": "controller",
           "docs": [
-            "The financier's swig_wallet PDA. A SIGNER: this instruction runs ONLY as",
-            "the inner CPI of the financier's swig SignV2, which signs with this PDA",
-            "(Swig invoke_signed). PDA-constrained so we KNOW the signer is the",
-            "financier's swig_wallet — that derivation + the signature together ARE the",
-            "financier's consent, bound to THIS exact call (mechanism B). No marker, no",
-            "sysvar adjacency."
+            "The node's controller — consent. Address-constrained to `node.controller`",
+            "and required to SIGN: only the root's controller may set its ceiling."
           ],
-          "signer": true,
+          "signer": true
+        },
+        {
+          "name": "event_authority",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  119,
-                  105,
-                  103,
-                  45,
-                  119,
-                  97,
-                  108,
-                  108,
+                  95,
+                  95,
                   101,
-                  116,
-                  45,
-                  97,
-                  100,
-                  100,
-                  114,
+                  118,
                   101,
-                  115,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "financier_swig"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                13,
-                12,
-                233,
-                66,
-                225,
-                231,
-                197,
-                6,
-                226,
-                24,
-                223,
-                13,
-                125,
-                241,
-                197,
-                47,
-                175,
-                220,
-                53,
-                41,
-                228,
-                141,
-                103,
-                77,
-                29,
-                178,
-                76,
-                117,
-                181,
-                76,
-                204,
-                190
-              ]
-            }
-          }
-        },
-        {
-          "name": "standby_backer",
-          "docs": [
-            "The financier's reserve ledger. Init on first call, mutated thereafter."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
                   110,
-                  100,
-                  98,
-                  121,
-                  45,
-                  98,
+                  116,
+                  95,
                   97,
-                  99,
-                  107,
-                  101,
-                  114
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "financier_swig"
               }
             ]
           }
         },
         {
-          "name": "fee_payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "name": "program"
         }
       ],
       "args": [
@@ -3119,6 +4065,19 @@
       ]
     },
     {
+      "name": "GraphConfig",
+      "discriminator": [
+        110,
+        207,
+        45,
+        223,
+        224,
+        81,
+        35,
+        66
+      ]
+    },
+    {
       "name": "LockedClaim",
       "discriminator": [
         146,
@@ -3132,6 +4091,19 @@
       ]
     },
     {
+      "name": "PrincipalNode",
+      "discriminator": [
+        241,
+        39,
+        115,
+        201,
+        73,
+        181,
+        48,
+        34
+      ]
+    },
+    {
       "name": "SessionAccount",
       "discriminator": [
         74,
@@ -3142,19 +4114,6 @@
         163,
         80,
         69
-      ]
-    },
-    {
-      "name": "StandbyBacker",
-      "discriminator": [
-        91,
-        209,
-        78,
-        1,
-        228,
-        57,
-        152,
-        232
       ]
     },
     {
@@ -3181,6 +4140,125 @@
         214,
         54,
         241
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "CapChanged",
+      "discriminator": [
+        59,
+        142,
+        65,
+        41,
+        18,
+        245,
+        114,
+        162
+      ]
+    },
+    {
+      "name": "CollateralSeized",
+      "discriminator": [
+        165,
+        149,
+        146,
+        90,
+        242,
+        23,
+        11,
+        168
+      ]
+    },
+    {
+      "name": "CreditDrawn",
+      "discriminator": [
+        186,
+        180,
+        69,
+        137,
+        39,
+        179,
+        141,
+        166
+      ]
+    },
+    {
+      "name": "CreditRepaid",
+      "discriminator": [
+        149,
+        202,
+        141,
+        22,
+        128,
+        189,
+        173,
+        27
+      ]
+    },
+    {
+      "name": "NodeAttached",
+      "discriminator": [
+        139,
+        143,
+        163,
+        72,
+        157,
+        121,
+        198,
+        244
+      ]
+    },
+    {
+      "name": "NodeDelegated",
+      "discriminator": [
+        13,
+        109,
+        20,
+        233,
+        87,
+        133,
+        219,
+        38
+      ]
+    },
+    {
+      "name": "NodeFrozen",
+      "discriminator": [
+        22,
+        9,
+        115,
+        18,
+        44,
+        2,
+        3,
+        45
+      ]
+    },
+    {
+      "name": "RootAttached",
+      "discriminator": [
+        14,
+        134,
+        89,
+        116,
+        2,
+        34,
+        105,
+        137
+      ]
+    },
+    {
+      "name": "SubtreeReleased",
+      "discriminator": [
+        84,
+        176,
+        111,
+        197,
+        243,
+        88,
+        36,
+        42
       ]
     }
   ],
@@ -3312,151 +4390,277 @@
     },
     {
       "code": 6025,
-      "name": "StandbyCapZero",
-      "msg": "Standby cap must be greater than zero."
-    },
-    {
-      "code": 6026,
-      "name": "CreditWouldExceedStandbyCap",
-      "msg": "Draw would exceed the financier's committed standby cap."
-    },
-    {
-      "code": 6027,
       "name": "WithdrawalWouldViolatePin",
       "msg": "Withdrawal would violate the credit pin (borrowed amount is reserved)."
     },
     {
-      "code": 6028,
+      "code": 6026,
       "name": "BorrowRecoveryTooEarly",
       "msg": "Borrow recovery deadline has not passed yet."
     },
     {
-      "code": 6029,
-      "name": "NoStandbyBacker",
-      "msg": "No standby backer is configured for this vault."
-    },
-    {
-      "code": 6030,
+      "code": 6027,
       "name": "NothingBorrowed",
       "msg": "Nothing is borrowed on this vault."
     },
     {
-      "code": 6031,
-      "name": "StandbyWouldExceedReserve",
-      "msg": "Promising this standby would exceed the financier's committed reserve."
-    },
-    {
-      "code": 6032,
-      "name": "ReserveBelowPromised",
-      "msg": "Cannot lower committed reserve below the amount already promised."
-    },
-    {
-      "code": 6033,
-      "name": "ResizeBelowBorrowed",
-      "msg": "Cannot set a standby cap below the amount already borrowed."
-    },
-    {
-      "code": 6034,
-      "name": "StandbyStillBorrowed",
-      "msg": "Cannot close a standby while a balance is still borrowed against it."
-    },
-    {
-      "code": 6035,
-      "name": "NoStandbyBackerLedger",
-      "msg": "Financier StandbyBacker reserve ledger is missing or does not match."
-    },
-    {
-      "code": 6036,
-      "name": "StandbyBackerMismatch",
-      "msg": "A different financier already backs this vault; close the existing standby first."
-    },
-    {
-      "code": 6037,
-      "name": "FinancierConsentMissing",
-      "msg": "financier consent missing: set_standby_reserve / close_standby (financier) must run as the inner CPI of the financier's swig SignV2 (swig_wallet must sign)"
-    },
-    {
-      "code": 6038,
+      "code": 6028,
       "name": "SessionAccountNotWritable",
       "msg": "an expired sibling session must be passed WRITABLE so the register-time sweep can clear it"
     },
     {
-      "code": 6039,
+      "code": 6029,
       "name": "SessionStillLive",
       "msg": "session is still live (version != 0); revoke_session_key it before close_session can reclaim its rent"
     },
     {
-      "code": 6040,
+      "code": 6030,
       "name": "NotALegacyVault",
       "msg": "account is not a recognized pre-version-byte legacy vault (expected exactly 151-byte V1 or 183-byte V1.5 with the Vault discriminator)"
     },
     {
-      "code": 6041,
+      "code": 6031,
       "name": "ClaimNotTerminal",
       "msg": "claim is still Pending (a live obligation); only Settled or Abandoned claims can be closed for rent reclaim"
     },
     {
-      "code": 6042,
+      "code": 6032,
       "name": "WorldIdVerificationFailed",
       "msg": "World ID v4 pi2 (OPRFNullifier) groth16 proof failed to verify against the production verifying key"
     },
     {
-      "code": 6043,
+      "code": 6033,
       "name": "WorldIdRootMismatch",
       "msg": "Proof merkle_root does not match the cached World ID root"
     },
     {
-      "code": 6044,
+      "code": 6034,
       "name": "WorldIdContextMismatch",
       "msg": "Proof rp_id/action does not match the Dexter context"
     },
     {
-      "code": 6045,
+      "code": 6035,
       "name": "WorldIdCredentialMismatch",
       "msg": "Proof credential/network signals (issuer_schema_id/cred_pk/depth/oprf_pk) do not match the pinned World ID values"
     },
     {
-      "code": 6046,
+      "code": 6036,
       "name": "NotInterimRootAuthority",
       "msg": "Caller is not the interim-root authority"
     },
     {
-      "code": 6047,
+      "code": 6037,
       "name": "VaultNotRootedToCredit",
       "msg": "Vault identity_claim is not derived from this CreditRoot's nullifier + agent_id"
     },
     {
-      "code": 6048,
+      "code": 6038,
       "name": "Sp1ProofTooShort",
       "msg": "SP1 proof bytes are too short to contain the 4-byte vk-hash prefix"
     },
     {
-      "code": 6049,
+      "code": 6039,
       "name": "Sp1VerifyFailed",
       "msg": "SP1-Helios Groth16 proof failed to verify against the pinned verifying key"
     },
     {
-      "code": 6050,
+      "code": 6040,
       "name": "Sp1PublicValuesMalformed",
       "msg": "SP1-Helios committed public values are malformed (ABI decode out of bounds)"
     },
     {
-      "code": 6051,
+      "code": 6041,
       "name": "WorldIdSlotNotFound",
       "msg": "No proven storage slot matched the pinned World ID registry address + latest-root slot key"
     },
     {
-      "code": 6052,
+      "code": 6042,
       "name": "BeaconHeadNotMonotonic",
       "msg": "New beacon head is older than the cached root's block_number (stale/replayed root)"
     },
     {
-      "code": 6053,
+      "code": 6043,
       "name": "BeaconHeadOverflow",
       "msg": "Proven beacon head (newHead) does not fit in a u64"
+    },
+    {
+      "code": 6044,
+      "name": "GraphPaused",
+      "msg": "The graph is paused; exposure-increasing verbs are disabled"
+    },
+    {
+      "code": 6045,
+      "name": "NotAdminAuthority",
+      "msg": "Caller is not the GraphConfig admin authority"
+    },
+    {
+      "code": 6046,
+      "name": "NotPauseAuthority",
+      "msg": "Caller is not the GraphConfig pause authority"
+    },
+    {
+      "code": 6047,
+      "name": "OnlyAdminMayUnpause",
+      "msg": "Only the admin authority may unpause"
+    },
+    {
+      "code": 6048,
+      "name": "DelegationDepthExceeded",
+      "msg": "Delegation depth would exceed the configured maximum"
+    },
+    {
+      "code": 6049,
+      "name": "UnauthenticatedAncestorChain",
+      "msg": "An ancestor in the chain is not authenticated"
+    },
+    {
+      "code": 6050,
+      "name": "AncestorChainNotRooted",
+      "msg": "The ancestor chain is not rooted"
+    },
+    {
+      "code": 6051,
+      "name": "DrawWouldExceedCeiling",
+      "msg": "Draw would exceed the node's ceiling"
+    },
+    {
+      "code": 6052,
+      "name": "DrawWouldExceedBucket",
+      "msg": "Draw would exceed the node's rate-limit bucket"
+    },
+    {
+      "code": 6053,
+      "name": "ChildCapExceedsParent",
+      "msg": "A child cap may not exceed its parent's cap"
+    },
+    {
+      "code": 6054,
+      "name": "NotNodeController",
+      "msg": "Caller is not the controller of this node"
+    },
+    {
+      "code": 6055,
+      "name": "ReleaseExceedsSubtreeDraw",
+      "msg": "Release would exceed the subtree's outstanding draw"
+    },
+    {
+      "code": 6056,
+      "name": "NodeFrozenErr",
+      "msg": "This node is frozen"
+    },
+    {
+      "code": 6057,
+      "name": "NodeHasOutstandingDraw",
+      "msg": "Node has outstanding draw and cannot perform this operation"
+    },
+    {
+      "code": 6058,
+      "name": "RootAttestationMissing",
+      "msg": "Root attestation is missing"
+    },
+    {
+      "code": 6059,
+      "name": "NodeAlreadyRooted",
+      "msg": "This node is already rooted"
+    },
+    {
+      "code": 6060,
+      "name": "ChildCountAtMax",
+      "msg": "This node already has the maximum number of children"
+    },
+    {
+      "code": 6061,
+      "name": "RateCapZero",
+      "msg": "Rate cap must be greater than zero"
+    },
+    {
+      "code": 6062,
+      "name": "WalletNodeMismatch",
+      "msg": "Wallet does not match the node"
+    },
+    {
+      "code": 6063,
+      "name": "DebtTransferMismatch",
+      "msg": "Debt-transfer amounts do not reconcile"
+    },
+    {
+      "code": 6064,
+      "name": "ShortfallAlreadyCovered",
+      "msg": "This shortfall has already been covered"
+    },
+    {
+      "code": 6065,
+      "name": "NotAnAncestorOfDefaulter",
+      "msg": "Caller is not an ancestor of the defaulting node"
+    },
+    {
+      "code": 6066,
+      "name": "NoUncoveredShortfall",
+      "msg": "There is no uncovered shortfall to cascade"
     }
   ],
   "types": [
+    {
+      "name": "AttachNodeArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "client_data_json",
+            "docs": [
+              "WebAuthn clientDataJSON; challenge must be sha256(op_message)."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "authenticator_data",
+            "docs": [
+              "WebAuthn authenticatorData (37+ bytes)."
+            ],
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AttachRootArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "nullifier",
+            "docs": [
+              "The human nullifier — the `CreditRoot` PDA seed component. The supplied",
+              "`credit_root` account is bound to `[CREDIT_ROOT_SEED, nullifier]`, so an",
+              "attacker cannot substitute an arbitrary account."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CapChanged",
+      "docs": [
+        "`open_standby` (grow), `close_standby` (cut-edge) and `set_standby_reserve`",
+        "(set-root-ceiling) — a node's `RateCap`/edge changed. Carries only the",
+        "affected node; consumers re-fetch the node for the new cap."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "node",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
     {
       "name": "CloseLockedClaimArgs",
       "type": {
@@ -3486,51 +4690,108 @@
       "name": "CloseStandbyArgs",
       "type": {
         "kind": "struct",
+        "fields": []
+      }
+    },
+    {
+      "name": "CollateralSeized",
+      "docs": [
+        "`seize_collateral` (self-seize) and `seize_ancestor` (the RUNG-3 cascade) —",
+        "`amount` of collateral was seized against `node`'s debt, rolling down the",
+        "authenticated chain to `root`."
+      ],
+      "type": {
+        "kind": "struct",
         "fields": [
           {
-            "name": "closer",
-            "docs": [
-              "Which party is consenting. Selects the consent leg in the handler."
-            ],
-            "type": {
-              "defined": {
-                "name": "Closer"
-              }
-            }
+            "name": "node",
+            "type": "pubkey"
           },
           {
-            "name": "client_data_json",
-            "docs": [
-              "USER leg only: WebAuthn clientDataJSON; challenge must be sha256(op_message).",
-              "Ignored for the financier leg."
-            ],
-            "type": "bytes"
+            "name": "root",
+            "type": "pubkey"
           },
           {
-            "name": "authenticator_data",
-            "docs": [
-              "USER leg only: WebAuthn authenticatorData (37+ bytes). Ignored for the",
-              "financier leg."
-            ],
-            "type": "bytes"
+            "name": "amount",
+            "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "Closer",
-      "docs": [
-        "Who is consenting to the close. The user leg proves a passkey signature; the",
-        "financier leg proves swig authority via the paired SignV2."
-      ],
+      "name": "CreateNodeArgs",
       "type": {
-        "kind": "enum",
-        "variants": [
+        "kind": "struct",
+        "fields": [
           {
-            "name": "User"
+            "name": "node_id",
+            "docs": [
+              "Stable identity + PDA seed component for the new node."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           },
           {
-            "name": "Financier"
+            "name": "cap",
+            "docs": [
+              "The new node's draw authority (velocity bucket + optional hard ceiling)."
+            ],
+            "type": {
+              "defined": {
+                "name": "RateCap"
+              }
+            }
+          },
+          {
+            "name": "parent",
+            "docs": [
+              "Some ⇒ this is a delegate; the parent's controller must sign and the",
+              "child cap must fit under the parent's. None ⇒ an anonymous root-less node."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreditDrawn",
+      "docs": [
+        "`draw_credit` — a leaf booked new debt and the authenticated chain rolled it",
+        "up to the ceiling-root. `depth` = ancestor hops above the leaf (0 ⇒ a depth-1",
+        "leaf-root drawing on itself)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "node",
+            "type": "pubkey"
+          },
+          {
+            "name": "root",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "new_borrowed",
+            "type": "u64"
+          },
+          {
+            "name": "new_subtree_draw",
+            "type": "u64"
+          },
+          {
+            "name": "depth",
+            "type": "u8"
           }
         ]
       }
@@ -3609,6 +4870,34 @@
       }
     },
     {
+      "name": "CreditRepaid",
+      "docs": [
+        "`repay_credit` — outstanding draw was paid down (leaf + every ancestor",
+        "decremented in lockstep). `new_borrowed` is the leaf's remaining debt."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "node",
+            "type": "pubkey"
+          },
+          {
+            "name": "root",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "new_borrowed",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "CreditRoot",
       "docs": [
         "One-human-one-root. PDA: seeds = [CREDIT_ROOT_SEED, nullifier]. `init`",
@@ -3670,18 +4959,42 @@
           {
             "name": "amount",
             "docs": [
-              "USDC drawn from the financier's vault to the seller. The following",
-              "SignV2 transfers exactly this amount."
+              "USDC drawn from the financier's swig to the seller. The following SignV2",
+              "must transfer EXACTLY this amount, or the draw is rejected."
             ],
             "type": "u64"
           },
           {
             "name": "recovery_window_seconds",
             "docs": [
-              "Seconds from now until the financier may `seize_collateral`. Used to set",
+              "Seconds from now until the financier may `seize_collateral`. Sets",
               "`borrow_recovery_at` on the FIRST draw only."
             ],
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EmancipateArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_nullifier",
+            "docs": [
+              "`Some(N)` ⇒ acquire the human `CreditRoot` at `[CREDIT_ROOT_SEED, N]` while",
+              "cutting the parent edge. `None` ⇒ cut the edge and keep any existing",
+              "attestation (the node may stand root-less or retain a prior root)."
+            ],
+            "type": {
+              "option": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
           }
         ]
       }
@@ -3863,6 +5176,105 @@
           {
             "name": "authenticator_data",
             "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GraphConfig",
+      "docs": [
+        "Admin spine for the recourse-rooted delegation graph. Singleton PDA:",
+        "seeds = [GRAPH_CONFIG_SEED]. `init` (NOT init_if_needed) → existence IS the",
+        "uniqueness guard; only INTERIM_ROOT_AUTHORITY may create it. Holds the",
+        "runtime tunables read by later tasks (pause flags, max-depth override)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version. First field per house style."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical bump for this singleton PDA."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "admin_authority",
+            "docs": [
+              "Cold key: may pause, unpause, and change tunables."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pause_authority",
+            "docs": [
+              "Hot key: may pause ONLY (never unpause, never tune)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "docs": [
+              "Global pause flag. Gates exposure-increasing verbs only (enforced later)."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "paused_at",
+            "docs": [
+              "Unix time of the last pause (0 if never paused)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pause_reason",
+            "docs": [
+              "Opaque reason code for the last pause."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "max_depth_override",
+            "docs": [
+              "Runtime max-depth override. 0 ⇒ use the MAX_DEPTH const."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitGraphConfigArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin_authority",
+            "docs": [
+              "Cold key recorded as `admin_authority` (pause + unpause + tunables)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pause_authority",
+            "docs": [
+              "Hot key recorded as `pause_authority` (pause ONLY)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "max_depth_override",
+            "docs": [
+              "Runtime max-depth override. 0 ⇒ use the MAX_DEPTH const."
+            ],
+            "type": "u8"
           }
         ]
       }
@@ -4196,6 +5608,91 @@
       }
     },
     {
+      "name": "NodeAttached",
+      "docs": [
+        "`attach_node` — the wallet↔node POSSESSION link (`Vault.node`) was set",
+        "(passkey-gated, link-once)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "node",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "NodeDelegated",
+      "docs": [
+        "`create_node` — a node was created. `parent == None` for a root-less node, or",
+        "`Some(parent)` for a delegate (GROW consent). The cap is the granted velocity",
+        "(`cap_rate` per `cap_period` secs) plus any aggregate `ceiling`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "parent",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "child",
+            "type": "pubkey"
+          },
+          {
+            "name": "cap_rate",
+            "type": "u64"
+          },
+          {
+            "name": "cap_period",
+            "type": "u32"
+          },
+          {
+            "name": "ceiling",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "controller",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "NodeFrozen",
+      "docs": [
+        "A node's `frozen` flag was toggled `by` an authority. (Struct defined per the",
+        "Task-11 spec; the freeze verb itself lands in a later task — no emitter yet.)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "node",
+            "type": "pubkey"
+          },
+          {
+            "name": "by",
+            "type": "pubkey"
+          },
+          {
+            "name": "frozen",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "OpenStandbyArgs",
       "type": {
         "kind": "struct",
@@ -4203,23 +5700,13 @@
           {
             "name": "cap",
             "docs": [
-              "The credit ceiling the financier commits. `borrowed <= cap` always."
+              "The new `RateCap` to set on the child. Must fit under the parent's cap."
             ],
-            "type": "u64"
-          },
-          {
-            "name": "client_data_json",
-            "docs": [
-              "WebAuthn clientDataJSON; challenge must be sha256(op_message)."
-            ],
-            "type": "bytes"
-          },
-          {
-            "name": "authenticator_data",
-            "docs": [
-              "WebAuthn authenticatorData (37+ bytes)."
-            ],
-            "type": "bytes"
+            "type": {
+              "defined": {
+                "name": "RateCap"
+              }
+            }
           }
         ]
       }
@@ -4266,6 +5753,158 @@
       }
     },
     {
+      "name": "PrincipalNode",
+      "docs": [
+        "One identity in the recourse-rooted delegation graph. Authority flows DOWN",
+        "(a controller grants children a `RateCap`); recourse flows UP (a defaulting",
+        "leaf's `shortfall` cascades to ancestors). PDA: seeds =",
+        "`[PRINCIPAL_NODE_SEED, node_id]` — the `node_id` is the stable identity, so a",
+        "node's address survives re-rooting (emancipation). `init` (NOT",
+        "init_if_needed): existence is the uniqueness guard per node_id."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version. First field per house style."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical bump for this PDA."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "node_id",
+            "docs": [
+              "Stable identity + PDA seed component. Survives re-rooting."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "controller",
+            "docs": [
+              "The key that grants downward (creates children, sets their caps) and may",
+              "freeze this subtree."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "parent",
+            "docs": [
+              "Parent node PDA. None ⇒ this is a root candidate (no upward recourse)."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "root_attestation",
+            "docs": [
+              "The attestation that roots this node (a `CreditRoot` PDA today; a future",
+              "attestation type later). None ⇒ not yet rooted."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "cap",
+            "docs": [
+              "This node's draw authority — velocity bucket + optional hard ceiling."
+            ],
+            "type": {
+              "defined": {
+                "name": "RateCap"
+              }
+            }
+          },
+          {
+            "name": "borrowed",
+            "docs": [
+              "This node's OWN outstanding draw (the leaf accumulator). Rises on draw,",
+              "falls on repay/seize."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "subtree_draw",
+            "docs": [
+              "Rolled-up subtree draw. Authoritative only at a ceiling-root; advisory",
+              "elsewhere. Maintained by the draw/repay traversal (Tasks 6/7)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "borrow_recovery_at",
+            "docs": [
+              "Seize deadline armed on first draw, cleared when `borrowed` returns to 0.",
+              "None ⇒ nothing borrowed / no deadline armed."
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "shortfall",
+            "docs": [
+              "RUNG-3: uncovered remainder after a partial self-seize, awaiting the",
+              "ancestor cascade. 0 when no default is in progress. Lives on the DEFAULTED",
+              "leaf node; the cascade (Task 8) reads + reduces it."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "frozen",
+            "docs": [
+              "Frozen subtree flag — set by the controller (or an ancestor) to halt",
+              "exposure-increasing verbs at/under this node."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "child_count",
+            "docs": [
+              "Number of child nodes whose `parent` points here."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "accrued_fee",
+            "docs": [
+              "Accrued fee accumulator. Accrual fields are present now; the accrual logic",
+              "lands later (rate_bps starts at 0 = no accrual)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "rate_bps",
+            "docs": [
+              "Fee rate in basis points. 0 ⇒ no accrual (the layout-task default)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "last_accrual",
+            "docs": [
+              "Unix time of the last fee accrual tick."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "ProvePasskeyArgs",
       "type": {
         "kind": "struct",
@@ -4294,6 +5933,67 @@
           {
             "name": "authenticator_data",
             "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RateCap",
+      "docs": [
+        "A token-bucket rate limiter PLUS an optional hard ceiling for a node's draw",
+        "authority. `bucket` refills `rate_amount` every `period_secs`, capped at",
+        "`rate_amount * burst_multiple`; `last_refill` anchors the refill clock.",
+        "`ceiling` (when Some) is the absolute outstanding-draw cap independent of the",
+        "velocity bucket. Logic lands in later tasks (Task 5 grow, Task 6 draw); this",
+        "task only fixes the layout."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rate_amount",
+            "docs": [
+              "Tokens (draw units) added to the bucket each `period_secs`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "period_secs",
+            "docs": [
+              "Refill period in seconds."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "bucket",
+            "docs": [
+              "Current bucket level (available draw velocity)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "last_refill",
+            "docs": [
+              "Unix time the bucket was last refilled."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "ceiling",
+            "docs": [
+              "Absolute outstanding-draw ceiling, independent of the velocity bucket.",
+              "None ⇒ velocity-only (no hard ceiling at this node)."
+            ],
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "burst_multiple",
+            "docs": [
+              "Burst cap: bucket may accumulate up to `rate_amount * burst_multiple`."
+            ],
+            "type": "u8"
           }
         ]
       }
@@ -4443,9 +6143,9 @@
           {
             "name": "amount",
             "docs": [
-              "USDC the caller intends to repay. Clamped to outstanding `borrowed` so an",
-              "over-repay never moves more than is owed. The following SignV2 transfers",
-              "exactly the CLAMPED value (`amount.min(vault.borrowed)`)."
+              "USDC the caller intends to repay. Clamped to the node's outstanding",
+              "`borrowed` so an over-repay never moves more than is owed. The following",
+              "SignV2 transfers exactly the CLAMPED value (`amount.min(borrowed)`)."
             ],
             "type": "u64"
           }
@@ -4488,23 +6188,6 @@
       }
     },
     {
-      "name": "ReserveKind",
-      "docs": [
-        "Whether `committed_reserve` is a declared number or a program-locked balance."
-      ],
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Declared"
-          },
-          {
-            "name": "Locked"
-          }
-        ]
-      }
-    },
-    {
       "name": "RevokeSessionKeyArgs",
       "type": {
         "kind": "struct",
@@ -4524,6 +6207,26 @@
           {
             "name": "authenticator_data",
             "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RootAttached",
+      "docs": [
+        "`attach_root` — an existing node was pointed UP at a human `credit_root`",
+        "(wallet-first acquire-a-root; one-human-one-root by aggregation)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "node",
+            "type": "pubkey"
+          },
+          {
+            "name": "credit_root",
+            "type": "pubkey"
           }
         ]
       }
@@ -4586,13 +6289,31 @@
       }
     },
     {
+      "name": "SeizeAncestorArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "docs": [
+              "The slice of the defaulter's shortfall this ancestor covers. The following",
+              "SignV2 must transfer EXACTLY this amount, or the cascade is rejected.",
+              "Bounded in-handler by `<= defaulted_node.shortfall` (Model A — the only",
+              "in-handler amount bound)."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "SeizeCollateralArgs",
       "docs": [
         "Empty by design. Unlike `recover_abandoned_lock` (which carries WebAuthn",
         "ceremony bytes because the BUYER must passkey-sign their own recovery),",
         "`seize_collateral` takes NO args: the financier is not passkey-verified in",
-        "v1, and the seized amount is the on-chain `vault.borrowed` snapshot — never a",
-        "caller-supplied value. The deadline + dexter_authority are the entire gate."
+        "v1, and the seized amount is computed on-chain (`min(borrowed, collateral)`)",
+        "— never a caller-supplied value. The deadline + dexter_authority are the gate."
       ],
       "type": {
         "kind": "struct",
@@ -4736,6 +6457,43 @@
       }
     },
     {
+      "name": "SetFreezeArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "frozen",
+            "docs": [
+              "Target state: `true` to freeze the subtree, `false` to thaw it."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SetPauseArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "paused",
+            "docs": [
+              "Target state: `true` to pause, `false` to unpause."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "reason",
+            "docs": [
+              "Opaque reason code recorded on a pause (ignored on unpause)."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "SetStandbyReserveArgs",
       "type": {
         "kind": "struct",
@@ -4743,7 +6501,8 @@
           {
             "name": "new_reserve",
             "docs": [
-              "The committed reserve ceiling to set. Must be >= current aggregate_promised."
+              "The new aggregate ceiling to set on the root's `RateCap`. Must be",
+              "`>= node.subtree_draw` (the lowering guard)."
             ],
             "type": "u64"
           }
@@ -4917,64 +6676,20 @@
       }
     },
     {
-      "name": "StandbyBacker",
+      "name": "SubtreeReleased",
       "docs": [
-        "Financier reserve ledger (aggregate-reserve primitive). One per financier",
-        "swig identity. The program reads THIS (allowed) but never the financier's",
-        "Vault (forbidden — the rehypothecation firewall). Enforces",
-        "`aggregate_promised <= committed_reserve` so a financier cannot promise more",
-        "standby capacity across vaults than they have committed."
+        "`emancipate` — `emancipated_node` cut its edge from `parent` and re-rooted."
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "version",
-            "docs": [
-              "Layout version. v1 is the first version (byte 0 for future branching)."
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          },
-          {
-            "name": "financier_swig",
-            "docs": [
-              "The financier swig identity this ledger belongs to. Equals the PDA seed."
-            ],
+            "name": "parent",
             "type": "pubkey"
           },
           {
-            "name": "committed_reserve",
-            "docs": [
-              "What the financier has committed as backable capacity. v1: a DECLARED",
-              "number (set via set_standby_reserve under the financier's swig authority).",
-              "The aggregate guard checks promises against this."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "aggregate_promised",
-            "docs": [
-              "Sum of `standby_cap` across all user vaults this financier currently backs.",
-              "Rises on open_standby (fresh/resize-up), falls on close_standby/resize-down.",
-              "Invariant: aggregate_promised <= committed_reserve always."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "reserve_kind",
-            "docs": [
-              "Declared vs Locked reserve. ALWAYS Declared in this version. Planting the",
-              "enum now means a future locked-reserve variant needs no account migration."
-            ],
-            "type": {
-              "defined": {
-                "name": "ReserveKind"
-              }
-            }
+            "name": "emancipated_node",
+            "type": "pubkey"
           }
         ]
       }
@@ -5105,42 +6820,16 @@
             "type": "u64"
           },
           {
-            "name": "borrowed",
+            "name": "node",
             "docs": [
-              "V5: amount an external financier has fronted that the buyer has NOT",
-              "repaid. The credit (\"buyer is negative\") accumulator. Rises at",
-              "`draw_credit`, falls at `repay_credit` / `seize_collateral`. MUST never",
-              "exceed `standby_cap`."
+              "The wallet↔node link. `Pubkey::default()` at init = UNLINKED (this vault",
+              "participates in no delegation graph yet). Set by `attach_node` (Task 10)",
+              "to the `PrincipalNode` PDA whose credit authority governs this wallet's",
+              "draws. The depth-N graph replaces the retired depth-1 credit fields",
+              "(`borrowed` / `standby_backer` / `standby_cap` / `borrow_recovery_at`):",
+              "all credit state now lives on the `PrincipalNode`, not the Vault."
             ],
-            "type": "u64"
-          },
-          {
-            "name": "standby_backer",
-            "docs": [
-              "V5: the financier's vault (swig_address) authorized to back this vault",
-              "past the user's own balance. `None` = no credit enabled. Set by",
-              "`open_standby`."
-            ],
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "standby_cap",
-            "docs": [
-              "V5: the ceiling the financier committed. `borrowed <= standby_cap` always."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "borrow_recovery_at",
-            "docs": [
-              "V5: deadline after which the financier may `seize_collateral`. Set on the",
-              "first draw, cleared when `borrowed` returns to 0. None = nothing borrowed."
-            ],
-            "type": {
-              "option": "i64"
-            }
+            "type": "pubkey"
           }
         ]
       }
