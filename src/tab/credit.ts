@@ -90,7 +90,12 @@ export async function drawCredit(p: DrawCreditParams): Promise<TransactionInstru
     vaultIx,
     transfers: [{ destinationAta: p.sellerAta, amount: p.amount }],
   });
-  return [vaultIx, ...signV2Ixs];
+  // CONTRACT: signV2Ixs INCLUDES vaultIx — @swig-wallet/kit's getSignInstructions
+  // returns its preInstructions AND the SignV2 in one ordered array (see
+  // assembleSignV2.ts). Re-adding vaultIx here would run draw_credit TWICE in one
+  // tx; the second reverts (same double-include class fixed for settleTab/
+  // instantPayout in 5d54497).
+  return [...signV2Ixs];
 }
 
 export interface RepayCreditParams {
@@ -128,7 +133,9 @@ export async function repayCredit(p: RepayCreditParams): Promise<TransactionInst
     vaultIx,
     transfers: [{ destinationAta: p.financierAta, amount: p.amount }],
   });
-  return [vaultIx, ...signV2Ixs];
+  // CONTRACT: signV2Ixs INCLUDES vaultIx (see drawCredit / assembleSignV2.ts).
+  // Re-adding vaultIx would run repay_credit TWICE and revert.
+  return [...signV2Ixs];
 }
 
 export interface SeizeCollateralParams {
@@ -168,7 +175,9 @@ export async function seizeCollateral(p: SeizeCollateralParams): Promise<Transac
     vaultIx,
     transfers: [{ destinationAta: p.financierAta, amount: p.seizeAmount }],
   });
-  return [vaultIx, ...signV2Ixs];
+  // CONTRACT: signV2Ixs INCLUDES vaultIx (see drawCredit / assembleSignV2.ts).
+  // Re-adding vaultIx would run seize_collateral TWICE and revert.
+  return [...signV2Ixs];
 }
 
 // ── set_standby_reserve (financier; mechanism B) ─────────────────────────────
@@ -432,7 +441,9 @@ export class GraphClient {
         vaultIx,
         transfers: [{ destinationAta: funding.financierAta, amount }],
       });
-      steps.push({ ancestorNode, amount, instructions: [vaultIx, ...signV2Ixs] });
+      // CONTRACT: signV2Ixs INCLUDES vaultIx (see drawCredit / assembleSignV2.ts).
+      // Re-adding vaultIx would run seize_ancestor TWICE and revert.
+      steps.push({ ancestorNode, amount, instructions: [...signV2Ixs] });
       remaining -= amount;
     }
 

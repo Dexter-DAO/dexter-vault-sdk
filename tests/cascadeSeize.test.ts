@@ -18,6 +18,7 @@ vi.mock('../src/reader/index.js', async (importOriginal) => {
 });
 
 import { GraphClient } from '../src/tab/credit.js';
+import { DISCRIMINATORS } from '../src/constants/index.js';
 import { readPrincipalNode, walkAncestors } from '../src/reader/index.js';
 
 const readPrincipalNodeMock = vi.mocked(readPrincipalNode);
@@ -32,8 +33,10 @@ const FEE_PAYER = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 const SWIG = new PublicKey('SysvarRent111111111111111111111111111111111');
 const ATA = new PublicKey('SysvarC1ock11111111111111111111111111111111');
 
-// Stub SignV2 so no precompile/network work runs; the leg still records amount.
-const stubAssemble = async () => [];
+// Kit-faithful stub: @swig-wallet/kit's getSignInstructions returns its
+// preInstructions (the vault ix) IN the ordered output, so the stub echoes
+// vaultIx. cascadeSeize must NOT re-prepend it (double-include reverts on-chain).
+const stubAssemble = async (a: any) => [a.vaultIx];
 
 function fundingOf(maxCover: bigint) {
   return { ancestorSwig: SWIG, financierAta: ATA, maxCover, assembleSignV2: stubAssemble };
@@ -69,6 +72,13 @@ describe('GraphClient.cascadeSeize allocation', () => {
     expect(steps.map((s) => s.amount)).toEqual([40n, 30n, 30n]);
     expect(steps.map((s) => s.ancestorNode)).toEqual([ANC1, ANC2, ANC3]);
     expect(remainingShortfall).toBe(0n);
+    // REGRESSION PIN: each leg carries seize_ancestor EXACTLY once (double-include reverts).
+    for (const s of steps) {
+      const n = s.instructions.filter(
+        (ix) => ix.data.length >= 8 && DISCRIMINATORS.seize_ancestor.every((b, i) => ix.data[i] === b),
+      ).length;
+      expect(n).toBe(1);
+    }
   });
 
   it('stops early once remaining hits 0 (does not resolve later ancestors)', async () => {

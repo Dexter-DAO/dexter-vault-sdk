@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { drawCredit, repayCredit, seizeCollateral } from '../src/tab/credit.js';
-import { PRINCIPAL_NODE_DISCRIMINATOR } from '../src/constants/index.js';
+import { PRINCIPAL_NODE_DISCRIMINATOR, DISCRIMINATORS } from '../src/constants/index.js';
 
 const VAULT = new PublicKey('SysvarC1ock11111111111111111111111111111111');
 const FIN_SWIG = new PublicKey('SysvarRent111111111111111111111111111111111');
@@ -13,8 +13,19 @@ const NODE = PublicKey.unique();
 const CTRL = PublicKey.unique();
 const ROOTATT = PublicKey.unique();
 
-const markerData = (b: number) => async (_a: any) =>
-  [new TransactionInstruction({ programId: FIN_SWIG, keys: [], data: Buffer.from([b]) })];
+// Kit-faithful fake: @swig-wallet/kit's getSignInstructions returns its
+// preInstructions IN the ordered output, so the fake echoes vaultIx FIRST.
+// Mis-modeling this (returning only the SignV2) is how the double-include bug
+// hid — drawCredit/repayCredit/seizeCollateral used to re-prepend vaultIx, so
+// the real kit ran the vault ix TWICE (caught for settleTab/instantPayout in
+// 5d54497; the credit verbs were the same class, fixed here).
+const markerData = (b: number) => async (a: any) =>
+  [a.vaultIx, new TransactionInstruction({ programId: FIN_SWIG, keys: [], data: Buffer.from([b]) })];
+
+/** Count ixs whose first 8 data bytes match `disc` (the vault verb must appear once). */
+function discCount(ixs: TransactionInstruction[], disc: number[]): number {
+  return ixs.filter((ix) => ix.data.length >= 8 && disc.every((bb, i) => ix.data[i] === bb)).length;
+}
 
 // Vault buffer (no withdrawal): outstanding @149, crystallized, settled, node @173.
 function vaultBuf(node: PublicKey): Buffer {
@@ -84,6 +95,8 @@ describe('credit verbs', () => {
     expect(ixs[0].keys[3].pubkey.equals(NODE)).toBe(true);
     expect(Array.from(ixs[ixs.length - 1].data)).toEqual([0xd]);
     expect(ixs.length).toBeGreaterThanOrEqual(2);  // [vaultIx, ...signV2]
+    // REGRESSION PIN: draw_credit must appear EXACTLY once (double-include reverts).
+    expect(discCount(ixs, DISCRIMINATORS.draw_credit)).toBe(1);
   });
 
   test('repayCredit composes repay_credit + SignV2 from the USER swig', async () => {
@@ -100,6 +113,8 @@ describe('credit verbs', () => {
     expect(ixs[0].keys[3].pubkey.equals(NODE)).toBe(true);
     expect(Array.from(ixs[ixs.length - 1].data)).toEqual([0xe]);
     expect(ixs.length).toBeGreaterThanOrEqual(2);  // [vaultIx, ...signV2]
+    // REGRESSION PIN: repay_credit must appear EXACTLY once (double-include reverts).
+    expect(discCount(ixs, DISCRIMINATORS.repay_credit)).toBe(1);
   });
 
   test('seizeCollateral composes seize_collateral + SignV2 from the USER swig', async () => {
@@ -116,5 +131,7 @@ describe('credit verbs', () => {
     expect(ixs[0].keys[3].pubkey.equals(NODE)).toBe(true);
     expect(Array.from(ixs[ixs.length - 1].data)).toEqual([0xf]);
     expect(ixs.length).toBeGreaterThanOrEqual(2);  // [vaultIx, ...signV2]
+    // REGRESSION PIN: seize_collateral must appear EXACTLY once (double-include reverts).
+    expect(discCount(ixs, DISCRIMINATORS.seize_collateral)).toBe(1);
   });
 });
