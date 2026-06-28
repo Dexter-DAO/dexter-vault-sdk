@@ -9,6 +9,7 @@ import { PRINCIPAL_NODE_DISCRIMINATOR } from '../constants/index.js';
 //   last_refill i64, ceiling Opt<u64>, burst_multiple u8} | borrowed u64
 //   | subtree_draw u64 | borrow_recovery_at Opt<i64> | shortfall u64 | frozen bool
 //   | child_count u32 | accrued_fee u64 | rate_bps u16 | last_accrual i64
+//   | financier pk
 function buildNodeBuffer(opts: {
   version?: number;
   bump?: number;
@@ -31,6 +32,7 @@ function buildNodeBuffer(opts: {
   accruedFee?: bigint;
   rateBps?: number;
   lastAccrual?: bigint;
+  financier?: PublicKey;
 }): Buffer {
   const u64 = (v: bigint) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(v); return b; };
   const i64 = (v: bigint) => { const b = Buffer.alloc(8); b.writeBigInt64LE(v); return b; };
@@ -64,6 +66,7 @@ function buildNodeBuffer(opts: {
     u64(opts.accruedFee ?? 0n),
     u16(opts.rateBps ?? 0),
     i64(opts.lastAccrual ?? 0n),
+    (opts.financier ?? PublicKey.default).toBuffer(),
   ];
   return Buffer.concat(parts);
 }
@@ -87,7 +90,7 @@ describe('decodePrincipalNode', () => {
       ceiling: 9_999n, burstMultiple: 3,
       borrowed: 250n, subtreeDraw: 800n, borrowRecoveryAt: 1_900_000_000n,
       shortfall: 0n, frozen: true, childCount: 2, accruedFee: 11n,
-      rateBps: 250, lastAccrual: 1_700_000_500n,
+      rateBps: 250, lastAccrual: 1_700_000_500n, financier: ROOTATT,
     });
     const n = decodePrincipalNode(buf);
     expect(n.version).toBe(1);
@@ -111,6 +114,7 @@ describe('decodePrincipalNode', () => {
     expect(n.accruedFee).toBe('11');
     expect(n.rateBps).toBe(250);
     expect(n.lastAccrual).toBe(1_700_000_500);
+    expect(n.financier).toBe(ROOTATT.toBase58());
   });
 
   it('round-trips a root node (parent None, root Some, ceiling None)', () => {

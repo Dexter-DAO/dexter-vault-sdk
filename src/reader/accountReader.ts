@@ -239,11 +239,12 @@ export function decodePrincipalNode(data: Buffer): PrincipalNodeState {
   const accruedFee = u64();
   const rateBps = u16();
   const lastAccrual = i64();
+  const financier = pk();
 
   return {
     version, bump, nodeId, controller, parent, rootAttestation, cap,
     borrowed, subtreeDraw, borrowRecoveryAt, shortfall, frozen,
-    childCount, accruedFee, rateBps, lastAccrual,
+    childCount, accruedFee, rateBps, lastAccrual, financier,
   };
 }
 

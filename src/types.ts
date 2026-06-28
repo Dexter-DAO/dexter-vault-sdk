@@ -71,6 +71,7 @@ export interface PrincipalNodeState {
   accruedFee: string;            // u64
   rateBps: number;               // u16
   lastAccrual: number;           // i64 unix seconds
+  financier: string;             // capital-source swig (made whole on repay/seize/cascade); inherited from parent
 }
 
 // ── LockedClaim (crystallized, buyer-irrevocable reservation tier) ────────

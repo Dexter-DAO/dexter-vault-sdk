@@ -295,6 +295,9 @@ export interface GraphCreateNodeParams {
   cap: RateCapInput;
   parentNode?: PublicKey;
   parentController?: PublicKey;
+  /** Capital source (swig) funding this node's draws; made whole on repay/seize/
+   *  cascade. Delegate ⇒ MUST equal parent.financier; root ⇒ sets the tree's. */
+  financier: PublicKey;
 }
 
 export interface GraphFreezeParams {

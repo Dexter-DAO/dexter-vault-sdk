@@ -151,6 +151,7 @@ describe('create_node builder ↔ IDL', () => {
       cap: CAP_WITH_CEILING,
       parentNode: C,
       parentController: D,
+      financier: E,
     });
     const accts = expectAccountFlags(ix, 'create_node');
     expect(ix.keys.length).toBe(accts.length); // 9 incl event pair
@@ -164,13 +165,14 @@ describe('create_node builder ↔ IDL', () => {
     expect(ix.keys[6].pubkey.equals(SystemProgram.programId)).toBe(true);
     expect(ix.keys[7].pubkey.equals(EVENT_AUTHORITY)).toBe(true);
     expect(ix.keys[8].pubkey.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);
-    // data: disc(8) || node_id(32) || RateCap(38, ceiling Some) || Option<pubkey> Some(33)
+    // data: disc(8) || node_id(32) || RateCap(38, ceiling Some) || Option<pubkey> Some(33) || financier(32)
     const data = ix.data as Buffer;
     expect(data.subarray(8, 40).equals(Buffer.from(NODE_ID))).toBe(true);
     const afterCap = expectRateCap(data, 40, CAP_WITH_CEILING);
     expect(data[afterCap], 'parent Option tag Some').toBe(1);
     expect(data.subarray(afterCap + 1, afterCap + 33).equals(C.toBuffer())).toBe(true);
-    expect(data.length).toBe(afterCap + 33);
+    expect(data.subarray(afterCap + 33, afterCap + 65).equals(E.toBuffer()), 'financier').toBe(true);
+    expect(data.length).toBe(afterCap + 65);
   });
 
   it('anonymous: parent slots are program-id sentinel (not writable/signer), Option<pubkey>=None', () => {
@@ -179,6 +181,7 @@ describe('create_node builder ↔ IDL', () => {
       controller: A,
       payer: B,
       cap: CAP_NO_CEILING,
+      financier: E,
     });
     // optional accounts present-as-sentinel: flags cleared vs the IDL delegate flags
     const accts = expectAccountFlags(ix, 'create_node', {
@@ -191,18 +194,19 @@ describe('create_node builder ↔ IDL', () => {
     const data = ix.data as Buffer;
     const afterCap = expectRateCap(data, 40, CAP_NO_CEILING);
     expect(data[afterCap], 'parent Option tag None').toBe(0);
-    expect(data.length).toBe(afterCap + 1);
+    expect(data.subarray(afterCap + 1, afterCap + 33).equals(E.toBuffer()), 'financier').toBe(true);
+    expect(data.length).toBe(afterCap + 33);
   });
 
   it('rejects a non-32-byte nodeId', () => {
     expect(() =>
-      buildCreateNodeInstruction({ nodeId: new Uint8Array(31), controller: A, payer: B, cap: CAP_NO_CEILING }),
+      buildCreateNodeInstruction({ nodeId: new Uint8Array(31), controller: A, payer: B, cap: CAP_NO_CEILING, financier: E }),
     ).toThrow();
   });
 
   it('rejects a delegate missing the parentController', () => {
     expect(() =>
-      buildCreateNodeInstruction({ nodeId: NODE_ID, controller: A, payer: B, cap: CAP_NO_CEILING, parentNode: C }),
+      buildCreateNodeInstruction({ nodeId: NODE_ID, controller: A, payer: B, cap: CAP_NO_CEILING, parentNode: C, financier: E }),
     ).toThrow();
   });
 });

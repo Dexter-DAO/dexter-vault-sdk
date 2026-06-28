@@ -4628,6 +4628,11 @@
       "code": 6068,
       "name": "CreditNodeRequired",
       "msg": "This vault is welded to a credit node; its PrincipalNode must be supplied"
+    },
+    {
+      "code": 6069,
+      "name": "FinancierMismatch",
+      "msg": "Financier does not match the node's recorded financier (single-tree invariant)"
     }
   ],
   "types": [
@@ -4786,6 +4791,17 @@
             "type": {
               "option": "pubkey"
             }
+          },
+          {
+            "name": "financier",
+            "docs": [
+              "The CAPITAL source (a swig) funding this node's draws + made whole on",
+              "repay/seize/cascade. ROOT-DETERMINED: for a DELEGATE it MUST equal the",
+              "parent's `financier` (a tree shares ONE financier); for a root-less /",
+              "operator / emancipated root it sets the tree's financier. (Vault-of-Record",
+              "= root yourself and set your own financier.)"
+            ],
+            "type": "pubkey"
           }
         ]
       }
@@ -5931,6 +5947,20 @@
               "Unix time of the last fee accrual tick."
             ],
             "type": "i64"
+          },
+          {
+            "name": "financier",
+            "docs": [
+              "The CAPITAL source (a swig) that funds this node's draws and is made whole",
+              "on repay/seize/cascade. ROOT-DETERMINED: inherited from `parent.financier`",
+              "at creation (a root-less / operator / emancipated root sets it explicitly),",
+              "so a whole tree shares ONE financier. `draw_credit` binds its",
+              "`financier_swig` to this; `repay`/`seize`/`seize_ancestor` bind their payout",
+              "DESTINATION to this financier's ATA — making \"financier-made-whole\" a",
+              "program invariant rather than operator trust. (Vault-of-Record = emancipate",
+              "to your own root and set your own financier; descendants inherit it.)"
+            ],
+            "type": "pubkey"
           }
         ]
       }

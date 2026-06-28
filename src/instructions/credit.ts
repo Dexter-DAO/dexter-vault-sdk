@@ -450,6 +450,11 @@ export interface CreateNodeParams {
   parentNode?: PublicKey;
   /** The parent node's controller (required + signing iff parentNode is set). */
   parentController?: PublicKey;
+  /** The CAPITAL source (a swig) funding this node's draws + made whole on
+   *  repay/seize/cascade. ROOT-DETERMINED: for a DELEGATE it MUST equal the
+   *  parent's `financier` (a tree shares ONE financier); for a root-less/
+   *  operator/emancipated root it sets the tree's financier. */
+  financier: PublicKey;
 }
 
 /**
@@ -462,7 +467,7 @@ export interface CreateNodeParams {
  *   [5] graph_config (readonly, PDA)
  *   [6] system_program
  *   [7] event_authority (readonly, PDA) [8] program
- * Data: disc || node_id[32] || RateCap || Option<pubkey>(parent).
+ * Data: disc || node_id[32] || RateCap || Option<pubkey>(parent) || pubkey(financier).
  */
 export function buildCreateNodeInstruction(p: CreateNodeParams): TransactionInstruction {
   if (p.nodeId.length !== 32) throw new Error('nodeId must be 32 bytes');
@@ -480,6 +485,7 @@ export function buildCreateNodeInstruction(p: CreateNodeParams): TransactionInst
     encodeBytes32(p.nodeId),
     encodeRateCap(p.cap),
     encodeOptionPubkey(p.parentNode ?? null),
+    p.financier.toBuffer(),
   ]);
   return new TransactionInstruction({
     programId: DEXTER_VAULT_PROGRAM_ID,
