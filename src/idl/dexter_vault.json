@@ -2966,11 +2966,10 @@
             "remain; this adds the trusted-orchestrator gate that draw_credit /",
             "seize_collateral get via `vault.dexter_authority`.",
             "",
-            "NOTE (deferred, system-wide): the inner SignV2 destination is still bound",
-            "only by amount, not address — \"financier-made-whole\" is enforced by the",
-            "trusted orchestrator, not on-chain, exactly as in draw_credit /",
-            "seize_collateral. Binding the destination to a recorded financier is the",
-            "financier-tier item tracked for draw+seize+cascade together, not here."
+            "The inner SignV2 destination is bound on-chain to the DEFAULTED node's",
+            "recorded financier ATA (on `graph_config.usdc_mint`) by",
+            "`require_financier_destination` in the handler below — \"financier-made-whole\"",
+            "is code here too, matching draw_credit's source bind and seize_collateral."
           ],
           "signer": true
         },
@@ -5293,6 +5292,18 @@
               "Runtime max-depth override. 0 ⇒ use the MAX_DEPTH const."
             ],
             "type": "u8"
+          },
+          {
+            "name": "usdc_mint",
+            "docs": [
+              "Canonical credit-settlement mint for this deployment (mainnet = USDC).",
+              "The recourse-out bind (`require_financier_destination`) derives the",
+              "financier's expected ATA from THIS mint, so seized/repaid funds can only",
+              "land in the financier's ATA on this asset. A deploy-time parameter set",
+              "ONCE at init — not a buried const — so the bind is provable on any cluster",
+              "and the credit asset is explicit. Mainnet pins it to USDC_MAINNET."
+            ],
+            "type": "pubkey"
           }
         ]
       }
@@ -5322,6 +5333,14 @@
               "Runtime max-depth override. 0 ⇒ use the MAX_DEPTH const."
             ],
             "type": "u8"
+          },
+          {
+            "name": "usdc_mint",
+            "docs": [
+              "Canonical credit-settlement mint (mainnet = USDC_MAINNET). Pins where the",
+              "recourse-out bind expects financier payouts to land. Set once here."
+            ],
+            "type": "pubkey"
           }
         ]
       }

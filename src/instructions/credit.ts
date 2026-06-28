@@ -414,12 +414,15 @@ export interface InitGraphConfigParams {
   adminAuthority: PublicKey;   // cold key recorded as admin_authority
   pauseAuthority: PublicKey;   // hot key recorded as pause_authority (pause ONLY)
   maxDepthOverride?: number;   // 0 ⇒ use the MAX_DEPTH const
+  usdcMint: PublicKey;         // canonical credit-settlement mint (mainnet = USDC).
+                               // The recourse-out bind derives financier ATAs from this.
 }
 
 /**
  * init_graph_config (admin one-time). Order:
  *   [0] graph_config (writable, PDA) [1] authority (signer, writable) [2] system_program
- * Data: disc || admin_authority(pk) || pause_authority(pk) || max_depth_override(u8).
+ * Data: disc || admin_authority(pk) || pause_authority(pk) || max_depth_override(u8)
+ *       || usdc_mint(pk).
  */
 export function buildInitGraphConfigInstruction(p: InitGraphConfigParams): TransactionInstruction {
   const [graphConfig] = deriveGraphConfigPda();
@@ -428,6 +431,7 @@ export function buildInitGraphConfigInstruction(p: InitGraphConfigParams): Trans
     p.adminAuthority.toBuffer(),
     p.pauseAuthority.toBuffer(),
     Buffer.from([(p.maxDepthOverride ?? 0) & 0xff]),
+    p.usdcMint.toBuffer(),
   ]);
   return new TransactionInstruction({
     programId: DEXTER_VAULT_PROGRAM_ID,

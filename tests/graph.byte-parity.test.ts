@@ -121,6 +121,7 @@ describe('init_graph_config builder ↔ IDL', () => {
       adminAuthority: B,
       pauseAuthority: C,
       maxDepthOverride: 5,
+      usdcMint: D,
     });
     expect(ix.programId.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);
     const accts = expectAccountFlags(ix, 'init_graph_config');
@@ -128,16 +129,17 @@ describe('init_graph_config builder ↔ IDL', () => {
     expect(ix.keys[0].pubkey.equals(GRAPH_CONFIG)).toBe(true);
     expect(ix.keys[1].pubkey.equals(A)).toBe(true);
     expect(ix.keys[2].pubkey.equals(SystemProgram.programId)).toBe(true);
-    // disc(8) || admin(32) || pause(32) || max_depth(u8) = 73
+    // disc(8) || admin(32) || pause(32) || max_depth(u8) || usdc_mint(32) = 105
     const data = ix.data as Buffer;
-    expect(data.length).toBe(73);
+    expect(data.length).toBe(105);
     expect(data.subarray(8, 40).equals(B.toBuffer())).toBe(true);
     expect(data.subarray(40, 72).equals(C.toBuffer())).toBe(true);
     expect(data[72]).toBe(5);
+    expect(data.subarray(73, 105).equals(D.toBuffer()), 'usdc_mint tail').toBe(true);
   });
 
   it('defaults max_depth_override to 0', () => {
-    const ix = buildInitGraphConfigInstruction({ authority: A, adminAuthority: B, pauseAuthority: C });
+    const ix = buildInitGraphConfigInstruction({ authority: A, adminAuthority: B, pauseAuthority: C, usdcMint: D });
     expect((ix.data as Buffer)[72]).toBe(0);
   });
 });
