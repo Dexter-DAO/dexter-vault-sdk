@@ -8,9 +8,9 @@ exports[`domain separators > OTS_SESSION_REGISTER_V1 1`] = `Uint8Array(32) "4f54
 
 exports[`domain separators > OTS_SESSION_REVOKE_V1 1`] = `Uint8Array(32) "4f54535f53455353494f4e5f5245564f4b455f56310000000000000000000000"`;
 
-exports[`instruction data layouts > finalize_withdrawal > finalize_withdrawal data 1`] = `Uint8Array(24) "b257ce44c9baa4e804000000010203040400000005060708"`;
+exports[`instruction data layouts > finalize_withdrawal (no node — non-credit vault, None sentinel at idx 4) > finalize_withdrawal data 1`] = `Uint8Array(24) "b257ce44c9baa4e804000000010203040400000005060708"`;
 
-exports[`instruction data layouts > finalize_withdrawal > finalize_withdrawal keys 1`] = `
+exports[`instruction data layouts > finalize_withdrawal (no node — non-credit vault, None sentinel at idx 4) > finalize_withdrawal keys 1`] = `
 [
   {
     "isSigner": false,
@@ -31,6 +31,11 @@ exports[`instruction data layouts > finalize_withdrawal > finalize_withdrawal ke
     "isSigner": false,
     "isWritable": false,
     "pubkey": "So11111111111111111111111111111111111111112",
+  },
+  {
+    "isSigner": false,
+    "isWritable": false,
+    "pubkey": "Hg3wRaydFtJhYrdvYrKECacpJYDsC9Px7yKmpncj2fhc",
   },
   {
     "isSigner": false,

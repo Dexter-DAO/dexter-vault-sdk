@@ -7,6 +7,10 @@ import {
   CREDIT_ROOT_DISCRIMINATOR_B58,
   CREDIT_EVENT_DISCRIMINATOR,
   CREDIT_EVENT_DISCRIMINATOR_B58,
+  PRINCIPAL_NODE_DISCRIMINATOR,
+  PRINCIPAL_NODE_DISCRIMINATOR_B58,
+  GRAPH_CONFIG_DISCRIMINATOR,
+  GRAPH_CONFIG_DISCRIMINATOR_B58,
 } from "../src/constants/index.js";
 
 function rootBuf(eventCount: bigint): Buffer {
@@ -45,5 +49,7 @@ describe("credit readers", () => {
   it("b58 discriminator constants match their bytes", () => {
     expect(CREDIT_ROOT_DISCRIMINATOR_B58).toBe(bs58.encode(Buffer.from(CREDIT_ROOT_DISCRIMINATOR)));
     expect(CREDIT_EVENT_DISCRIMINATOR_B58).toBe(bs58.encode(Buffer.from(CREDIT_EVENT_DISCRIMINATOR)));
+    expect(PRINCIPAL_NODE_DISCRIMINATOR_B58).toBe(bs58.encode(Buffer.from(PRINCIPAL_NODE_DISCRIMINATOR)));
+    expect(GRAPH_CONFIG_DISCRIMINATOR_B58).toBe(bs58.encode(Buffer.from(GRAPH_CONFIG_DISCRIMINATOR)));
   });
 });

@@ -2,41 +2,29 @@ import { describe, it, expect } from 'vitest';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { readVaultFull } from './accountReader.js';
 
-// Vault layout (no pending_withdrawal): identity_claim @ 84, dexter_authority @ 116,
-// live_session_count @ 148, outstanding_locked_amount @ 149, then the credit tail.
+// V6 graph Vault layout (no pending_withdrawal): identity_claim @ 84,
+// dexter_authority @ 116, live_session_count @ 148, then the fixed odometer tail:
+//   outstanding_locked u64 @149 | total_crystallized u64 | total_settled u64 | node pk
+// The V5 inline credit tail is gone — credit lives on the PrincipalNode graph now.
 function buildVaultBuffer(opts: {
   swig: PublicKey; auth: PublicKey;
   outstanding: bigint; crystallized: bigint; settled: bigint;
-  borrowed: bigint; standbyBacker: PublicKey | null; standbyCap: bigint;
-  borrowRecoveryAt: bigint | null;
+  node: PublicKey;
 }): Buffer {
-  const head = Buffer.alloc(149); // disc(8)..live_session_count(148) inclusive => first 149 bytes
+  const head = Buffer.alloc(149); // disc(8)..live_session_count(148) inclusive
   head.writeUInt8(6, 8);                      // version
   opts.swig.toBuffer().copy(head, 43);        // swig_address
   // pending_withdrawal tag @ 83 = 0 (absent) -> identity_claim @ 84, dexter_authority @ 116
   opts.auth.toBuffer().copy(head, 116);       // dexter_authority
   head.writeUInt8(0, 148);                    // live_session_count
-  const tailParts: Buffer[] = [];
   const u64 = (v: bigint) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(v); return b; };
-  const i64 = (v: bigint) => { const b = Buffer.alloc(8); b.writeBigInt64LE(v); return b; };
-  tailParts.push(u64(opts.outstanding));      // @149
-  tailParts.push(u64(opts.crystallized));
-  tailParts.push(u64(opts.settled));
-  tailParts.push(u64(opts.borrowed));
-  if (opts.standbyBacker) {
-    tailParts.push(Buffer.from([1]));
-    tailParts.push(opts.standbyBacker.toBuffer());
-  } else {
-    tailParts.push(Buffer.from([0]));
-  }
-  tailParts.push(u64(opts.standbyCap));
-  if (opts.borrowRecoveryAt !== null) {
-    tailParts.push(Buffer.from([1]));
-    tailParts.push(i64(opts.borrowRecoveryAt));
-  } else {
-    tailParts.push(Buffer.from([0]));
-  }
-  return Buffer.concat([head, ...tailParts]);
+  return Buffer.concat([
+    head,
+    u64(opts.outstanding),    // @149
+    u64(opts.crystallized),
+    u64(opts.settled),
+    opts.node.toBuffer(),     // node pubkey
+  ]);
 }
 
 function mockConn(buf: Buffer): Connection {
@@ -45,32 +33,43 @@ function mockConn(buf: Buffer): Connection {
 
 const SWIG = new PublicKey('11111111111111111111111111111112');
 const AUTH = new PublicKey('11111111111111111111111111111113');
-const BACKER = new PublicKey('11111111111111111111111111111114');
+const NODE = new PublicKey('11111111111111111111111111111114');
 const VAULT = new PublicKey('11111111111111111111111111111115');
 
-describe('readVaultFull credit tail', () => {
-  it('decodes borrowed/cap with standby_backer = Some and recovery armed', async () => {
+describe('readVaultFull V6 graph tail', () => {
+  it('decodes the odometers and the node anchor', async () => {
     const buf = buildVaultBuffer({
-      swig: SWIG, auth: AUTH, outstanding: 0n, crystallized: 0n, settled: 0n,
-      borrowed: 500_000n, standbyBacker: BACKER, standbyCap: 1_000_000n,
-      borrowRecoveryAt: 1_900_000_000n,
+      swig: SWIG, auth: AUTH, outstanding: 7n, crystallized: 0n, settled: 0n, node: NODE,
     });
     const v = await readVaultFull(mockConn(buf), VAULT);
-    expect(v.borrowed).toBe('500000');
-    expect(v.standbyBacker).toBe(BACKER.toBase58());
-    expect(v.standbyCap).toBe('1000000');
-    expect(v.borrowRecoveryAt).toBe(1_900_000_000);
+    expect(v.exists).toBe(true);
+    expect(v.version).toBe(6);
+    expect(v.swigAddress).toBe(SWIG.toBase58());
+    expect(v.dexterAuthority).toBe(AUTH.toBase58());
+    expect(v.outstandingLockedAmount).toBe('7');
+    expect(v.node).toBe(NODE.toBase58());
   });
 
-  it('decodes standby_backer = None with cap shifted by one byte', async () => {
+  it('returns node = null for a pre-graph vault too short to carry the field', async () => {
+    const short = buildVaultBuffer({
+      swig: SWIG, auth: AUTH, outstanding: 0n, crystallized: 0n, settled: 0n, node: NODE,
+    }).subarray(0, 160); // truncate before the node pubkey
+    const v = await readVaultFull(mockConn(short), VAULT);
+    expect(v.exists).toBe(true);
+    expect(v.node).toBeNull();
+  });
+
+  it('returns node = null for an UNWELDED V6 vault whose node field is the default/zero pubkey', async () => {
+    // V6 `node` is a FIXED Pubkey, not an Option. An unwelded vault stores
+    // PublicKey.default (all zeros) — NOT a real node. It MUST decode to null,
+    // else a credit gate (`if (vault.node)`) sees the truthy "111…111" string and
+    // treats a plain non-credit vault as credit-backed (the settle-500 bug).
     const buf = buildVaultBuffer({
-      swig: SWIG, auth: AUTH, outstanding: 0n, crystallized: 0n, settled: 0n,
-      borrowed: 0n, standbyBacker: null, standbyCap: 0n, borrowRecoveryAt: null,
+      swig: SWIG, auth: AUTH, outstanding: 5n, crystallized: 0n, settled: 0n,
+      node: PublicKey.default,
     });
     const v = await readVaultFull(mockConn(buf), VAULT);
-    expect(v.borrowed).toBe('0');
-    expect(v.standbyBacker).toBeNull();
-    expect(v.standbyCap).toBe('0');
-    expect(v.borrowRecoveryAt).toBeNull();
+    expect(v.exists).toBe(true);
+    expect(v.node).toBeNull();
   });
 });
