@@ -66,3 +66,24 @@ export function buildCloseStandbyMessage(vaultPda: PublicKey, financierSwig: Pub
   if (out.length !== 77) throw new Error(`close_standby message wrong length: ${out.length}`);
   return out;
 }
+
+/**
+ * Message format for the USER leg of `attach_node` — what the user's passkey
+ * signs to weld their vault to a PrincipalNode (the on-chain handler verifies it
+ * via the secp256r1 precompile sibling):
+ *
+ *   bytes("attach_node") (11) || vaultPda (32) || node (32) = 75 bytes
+ *
+ * MUST match build_attach_node_message in attach_node.rs byte-for-byte. This is
+ * the depth-N graph successor to open_standby for turning on a credit line: the
+ * client signs this; the facilitator assembles [secp256r1 precompile, attach_node].
+ */
+export function buildAttachNodeMessage(vaultPda: PublicKey, node: PublicKey): Uint8Array {
+  const prefix = Buffer.from('attach_node', 'utf8'); // 11 bytes
+  const out = new Uint8Array(prefix.length + 32 + 32);
+  out.set(prefix, 0);
+  out.set(vaultPda.toBytes(), prefix.length);
+  out.set(node.toBytes(), prefix.length + 32);
+  if (out.length !== 75) throw new Error(`attach_node message wrong length: ${out.length}`);
+  return out;
+}
