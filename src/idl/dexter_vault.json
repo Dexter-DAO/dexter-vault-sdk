@@ -237,6 +237,120 @@
       ]
     },
     {
+      "name": "close_node",
+      "docs": [
+        "Anti-griefing rent reclaim — close a TERMINAL `PrincipalNode` (nothing",
+        "owed, no children, no default) and return its rent, un-welding the vault",
+        "so the wallet can re-open (`attach_node` is link-once). Turns the per-open",
+        "node rent from a permanent burn into a refundable deposit, and reaps orphan",
+        "nodes. Controller-gated (rung-0: the Dexter session master)."
+      ],
+      "discriminator": [
+        19,
+        61,
+        232,
+        69,
+        247,
+        135,
+        255,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "node",
+          "docs": [
+            "The node being reclaimed. `close = rent_recipient` drains all lamports to",
+            "the recipient, reassigns to System, resizes to 0 — no revival (same",
+            "semantics `close_locked_claim` / `close_session` rely on). Gated by the",
+            "close-safe predicate + `controller` authority."
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "The welded vault — present ONLY when a vault points at this node. Validated",
+            "in the handler (Option-account self-constraints are evaluated there): when",
+            "present it MUST be welded to this node (`vault.node == node`) and carry the",
+            "signing authority as its `dexter_authority`; the handler then clears",
+            "`vault.node` so the wallet can re-open (attach_node is link-once). Absent ⇒",
+            "closing an orphan node (no vault points at it)."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "parent_node",
+          "docs": [
+            "The parent node — present ONLY for a delegate (`node.parent == Some`). Its",
+            "`child_count` is decremented (reverses `create_node`'s increment). Must be",
+            "the node named in `node.parent` (enforced in the handler)."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Signs the close. MUST be `node.controller` (and, when a vault is supplied,",
+            "`vault.dexter_authority`). For rung-0 both are the Dexter session master."
+          ],
+          "signer": true
+        },
+        {
+          "name": "rent_recipient",
+          "docs": [
+            "it (DeXterR2 for rung-0). Controller-gated, so only the trusted signer",
+            "(the credit authority) names it; an attacker is not the controller and",
+            "cannot call this at all."
+          ],
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "CloseNodeArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "close_session",
       "discriminator": [
         68,
@@ -4698,6 +4812,13 @@
     },
     {
       "name": "CloseLockedClaimArgs",
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    },
+    {
+      "name": "CloseNodeArgs",
       "type": {
         "kind": "struct",
         "fields": []

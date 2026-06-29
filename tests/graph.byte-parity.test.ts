@@ -21,6 +21,7 @@ import {
   buildSetPauseInstruction,
   buildSeizeAncestorInstruction,
   buildInitGraphConfigInstruction,
+  buildCloseNodeInstruction,
   type RateCapInput,
 } from '../src/instructions/credit.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
@@ -375,5 +376,48 @@ describe('seize_ancestor builder ↔ IDL', () => {
       amount: 1n,
     });
     expect(ix.keys.length).toBe(9);
+  });
+});
+
+describe('close_node builder ↔ IDL', () => {
+  it('with vault + parent: 7 accounts incl event pair, vault & parent_node writable, empty args', () => {
+    const ix = buildCloseNodeInstruction({
+      node: A,
+      vault: B,
+      parentNode: C,
+      authority: D,
+      rentRecipient: E,
+    });
+    expect(ix.programId.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);
+    const accts = expectAccountFlags(ix, 'close_node');
+    expect(ix.keys.length).toBe(accts.length); // 7 incl event pair
+    expect(ix.keys[0].pubkey.equals(A)).toBe(true); // node (w)
+    expect(ix.keys[1].pubkey.equals(B)).toBe(true); // vault (optional, present → w)
+    expect(ix.keys[2].pubkey.equals(C)).toBe(true); // parent_node (optional, present → w)
+    expect(ix.keys[3].pubkey.equals(D)).toBe(true); // authority (signer)
+    expect(ix.keys[4].pubkey.equals(E)).toBe(true); // rent_recipient (w)
+    expect(ix.keys[5].pubkey.equals(EVENT_AUTHORITY)).toBe(true);
+    expect(ix.keys[6].pubkey.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);
+    // data: discriminator only (CloseNodeArgs is empty)
+    const data = ix.data as Buffer;
+    expect(data.length).toBe(8);
+  });
+
+  it('orphan (no vault) + root-less (no parent): both optionals are program-id sentinels, flags cleared', () => {
+    const ix = buildCloseNodeInstruction({ node: A, authority: D, rentRecipient: E });
+    // optional accounts present-as-sentinel: writable flag cleared vs the IDL flags
+    const accts = expectAccountFlags(ix, 'close_node', {
+      1: { signer: false, writable: false },
+      2: { signer: false, writable: false },
+    });
+    expect(ix.keys.length).toBe(accts.length);
+    expect(ix.keys[0].pubkey.equals(A)).toBe(true); // node (w)
+    expect(ix.keys[1].pubkey.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true); // vault sentinel
+    expect(ix.keys[2].pubkey.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true); // parent_node sentinel
+    expect(ix.keys[3].pubkey.equals(D)).toBe(true); // authority (signer)
+    expect(ix.keys[4].pubkey.equals(E)).toBe(true); // rent_recipient (w)
+    expect(ix.keys[5].pubkey.equals(EVENT_AUTHORITY)).toBe(true);
+    expect(ix.keys[6].pubkey.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);
+    expect((ix.data as Buffer).length).toBe(8);
   });
 });

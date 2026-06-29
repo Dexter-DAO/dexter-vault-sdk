@@ -719,6 +719,59 @@ export function buildSeizeAncestorInstruction(p: SeizeAncestorParams): Transacti
   });
 }
 
+// ── close_node ───────────────────────────────────────────────────────────────
+
+export interface CloseNodeParams {
+  /** The TERMINAL PrincipalNode being reclaimed (writable). Rent is drained to
+   *  `rentRecipient`; gated by the close-safe predicate + `authority` == node.controller. */
+  node: PublicKey;
+  /** The welded vault — Some ONLY when a vault points at this node (vault.node == node);
+   *  the handler clears vault.node so the wallet can re-open (attach_node is link-once).
+   *  undefined/null ⇒ closing an orphan node (no vault points at it). */
+  vault?: PublicKey | null;
+  /** The parent node — Some ONLY for a delegate (node.parent == Some); its child_count
+   *  is decremented (reverses create_node's increment). undefined/null ⇒ a root-less /
+   *  root node with no parent edge. */
+  parentNode?: PublicKey | null;
+  /** Signs the close — MUST be node.controller (and, when a vault is supplied,
+   *  vault.dexter_authority). For rung-0 both are the Dexter session master. */
+  authority: PublicKey;
+  /** Receives the reclaimed node rent (writable). DeXterR2 for rung-0. */
+  rentRecipient: PublicKey;
+}
+
+/**
+ * close_node — anti-griefing rent reclaim for a TERMINAL node (nothing owed, no
+ * children, no default): returns its rent, un-welds the vault. Controller-gated
+ * (rung-0: the Dexter session master). Order (Anchor optional accounts →
+ * program-id sentinel when None, flags cleared):
+ *   [0] node            (writable)
+ *   [1] vault           (writable | program-id sentinel)        OPTIONAL
+ *   [2] parent_node     (writable | program-id sentinel)        OPTIONAL
+ *   [3] authority       (signer)
+ *   [4] rent_recipient  (writable)
+ *   [5] event_authority (readonly, PDA) [6] program
+ * Data: discriminator only (CloseNodeArgs is empty).
+ */
+export function buildCloseNodeInstruction(p: CloseNodeParams): TransactionInstruction {
+  const data = Buffer.from(DISCRIMINATORS.close_node);
+  // Anchor Option<Account> sentinel: pass the program id when the account is None.
+  const vaultKey = p.vault ?? DEXTER_VAULT_PROGRAM_ID;
+  const parentNodeKey = p.parentNode ?? DEXTER_VAULT_PROGRAM_ID;
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: p.node, isSigner: false, isWritable: true },
+      { pubkey: vaultKey, isSigner: false, isWritable: !!p.vault },
+      { pubkey: parentNodeKey, isSigner: false, isWritable: !!p.parentNode },
+      { pubkey: p.authority, isSigner: true, isWritable: false },
+      { pubkey: p.rentRecipient, isSigner: false, isWritable: true },
+      ...eventAccounts(),
+    ],
+    data,
+  });
+}
+
 // ── migrate_v4_to_v5 ───────────────────────────────────────────────────────
 
 export interface MigrateV4ToV5Params {
