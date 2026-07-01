@@ -163,6 +163,7 @@ export const DISCRIMINATORS = Object.freeze({
   close_locked_claim:      Uint8Array.from([231, 142, 174, 161, 156, 183, 26, 60]),
   establish_credit_root:   Uint8Array.from([182, 245, 97, 77, 108, 145, 37, 247]),
   establish_credit_root_trusted: Uint8Array.from([216, 195, 195, 65, 213, 117, 68, 238]),
+  upgrade_credit_root:     Uint8Array.from([49, 57, 1, 47, 103, 139, 200, 52]),
   record_credit_event:     Uint8Array.from([192, 207, 202, 39, 125, 52, 240, 255]),
   // Recourse graph (depth-N delegation) — sha256("global:<ix>")[..8].
   init_graph_config:       Uint8Array.from([113, 201, 219, 155, 244, 86, 150, 155]),

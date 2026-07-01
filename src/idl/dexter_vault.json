@@ -1134,14 +1134,7 @@
           "docs": [
             "The singleton World ID root cache — the SAME PDA `post_interim_root`",
             "writes. `init_if_needed` so the FIRST trustless write can create it if no",
-            "interim root was ever posted; subsequent writes mutate in place.",
-            "",
-            "`init_if_needed` re-init safety (mirrors set_standby_reserve /",
-            "post_interim_root): the PDA address is DETERMINISTIC (single fixed seed),",
-            "so an attacker cannot substitute a different account here, and the handler",
-            "writes every field unconditionally on each call — there is no partially",
-            "re-initialized state. The monotonic-head guard below is what prevents a",
-            "stale/replayed older root from overwriting a newer cached one."
+            "interim root was ever posted; subsequent writes mutate in place."
           ],
           "writable": true,
           "pda": {
@@ -1168,10 +1161,39 @@
           }
         },
         {
+          "name": "light_client",
+          "docs": [
+            "The SP1-Helios light-client continuity state. MUST already be seeded:",
+            "`bump = light_client.bump` fails closed (`AccountNotInitialized`) if it",
+            "isn't, so no trustless root can be established before a trusted checkpoint",
+            "is planted by `seed_light_client_state`. Mutated in place as the head and",
+            "sync committees advance."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  99,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "payer",
           "docs": [
-            "Pays rent on first creation. Anyone may pay; posting is permissionless —",
-            "the SP1 proof, not the signer identity, authorizes the write."
+            "Pays rent on first creation of the root cache. Anyone may pay; posting is",
+            "permissionless — the SP1 proof + continuity anchor, not the signer",
+            "identity, authorize the write."
           ],
           "writable": true,
           "signer": true
@@ -2913,6 +2935,68 @@
       ]
     },
     {
+      "name": "seed_light_client_state",
+      "docs": [
+        "Phase 2 — plant the trusted SP1-Helios light-client checkpoint (the",
+        "weak-subjectivity seed: head, header, current + next sync committee",
+        "hashes). Authority-gated (`INTERIM_ROOT_AUTHORITY`); after this, every",
+        "`establish_root` rides the beacon chain forward trustlessly."
+      ],
+      "discriminator": [
+        73,
+        51,
+        250,
+        243,
+        73,
+        251,
+        137,
+        236
+      ],
+      "accounts": [
+        {
+          "name": "light_client",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  99,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "address": "X4o2kSLzqEQjnAzhq3L3BW92aawMV2n2F37EXd2GMpy"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SeedLightClientStateArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "seize_ancestor",
       "docs": [
         "Task 8 — RUNG 3 `seize_ancestor` → the LIABILITY CASCADE. After a partial",
@@ -4169,6 +4253,84 @@
           }
         }
       ]
+    },
+    {
+      "name": "upgrade_credit_root",
+      "docs": [
+        "Convergence — upgrade an existing operator-attested (version=2) CreditRoot",
+        "to trustless (version=1) in place, by verifying a fresh World ID v4 π₂",
+        "proof for the SAME nullifier against the current SP1-Helios root.",
+        "Permissionless; monotonic (operator→trustless only); one-human-one-root",
+        "preserved (re-points the PDA, never mints a second)."
+      ],
+      "discriminator": [
+        49,
+        57,
+        1,
+        47,
+        103,
+        139,
+        200,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "root_cache",
+          "docs": [
+            "The singleton World ID root cache. Read-only here; its `root` is the value",
+            "the proof's merkle_root MUST match, and its `source` MUST be Sp1Helios."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  108,
+                  100,
+                  95,
+                  105,
+                  100,
+                  95,
+                  114,
+                  111,
+                  111,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "credit_root",
+          "docs": [
+            "The EXISTING one-human-one-root PDA (`mut`, NOT `init`). Seeded by the",
+            "proof's nullifier; the handler re-derives and cross-checks the stored",
+            "nullifier, so the account upgraded is provably the same human the proof",
+            "attests. A CreditRoot that does not exist fails account resolution."
+          ],
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Permissionless submitter — the proof is the authority, not this key."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "UpgradeCreditRootArgs"
+            }
+          }
+        }
+      ]
     }
   ],
   "accounts": [
@@ -4209,6 +4371,19 @@
         81,
         35,
         66
+      ]
+    },
+    {
+      "name": "LightClientState",
+      "discriminator": [
+        171,
+        193,
+        99,
+        248,
+        134,
+        25,
+        231,
+        142
       ]
     },
     {
@@ -4341,6 +4516,19 @@
         121,
         198,
         244
+      ]
+    },
+    {
+      "name": "NodeClosed",
+      "discriminator": [
+        191,
+        85,
+        142,
+        188,
+        15,
+        189,
+        76,
+        109
       ]
     },
     {
@@ -4579,173 +4767,213 @@
     },
     {
       "code": 6036,
+      "name": "WorldIdRootNotTrustless",
+      "msg": "Trustless credit-root establishment requires a math-verified SP1-Helios root (root_cache.source != Sp1Helios)"
+    },
+    {
+      "code": 6037,
+      "name": "CreditRootNotUpgradable",
+      "msg": "upgrade_credit_root requires an existing operator-attested (version=2) root; nothing to upgrade"
+    },
+    {
+      "code": 6038,
+      "name": "CreditRootNullifierMismatch",
+      "msg": "upgrade_credit_root proof nullifier does not match the existing CreditRoot's nullifier"
+    },
+    {
+      "code": 6039,
       "name": "NotInterimRootAuthority",
       "msg": "Caller is not the interim-root authority"
     },
     {
-      "code": 6037,
+      "code": 6040,
       "name": "VaultNotRootedToCredit",
       "msg": "Vault identity_claim is not derived from this CreditRoot's nullifier + agent_id"
     },
     {
-      "code": 6038,
+      "code": 6041,
       "name": "Sp1ProofTooShort",
       "msg": "SP1 proof bytes are too short to contain the 4-byte vk-hash prefix"
     },
     {
-      "code": 6039,
+      "code": 6042,
       "name": "Sp1VerifyFailed",
       "msg": "SP1-Helios Groth16 proof failed to verify against the pinned verifying key"
     },
     {
-      "code": 6040,
+      "code": 6043,
       "name": "Sp1PublicValuesMalformed",
       "msg": "SP1-Helios committed public values are malformed (ABI decode out of bounds)"
     },
     {
-      "code": 6041,
+      "code": 6044,
       "name": "WorldIdSlotNotFound",
       "msg": "No proven storage slot matched the pinned World ID registry address + latest-root slot key"
     },
     {
-      "code": 6042,
+      "code": 6045,
       "name": "BeaconHeadNotMonotonic",
       "msg": "New beacon head is older than the cached root's block_number (stale/replayed root)"
     },
     {
-      "code": 6043,
+      "code": 6046,
       "name": "BeaconHeadOverflow",
       "msg": "Proven beacon head (newHead) does not fit in a u64"
     },
     {
-      "code": 6044,
+      "code": 6047,
+      "name": "LightClientHeadMismatch",
+      "msg": "Proof prevHead does not equal the trusted light-client head (not proving forward from current state)"
+    },
+    {
+      "code": 6048,
+      "name": "LightClientHeaderMismatch",
+      "msg": "Proof prevHeader does not equal the trusted light-client header"
+    },
+    {
+      "code": 6049,
+      "name": "SyncCommitteeStartMismatch",
+      "msg": "Proof startSyncCommitteeHash does not equal the trusted sync committee (committee not anchored)"
+    },
+    {
+      "code": 6050,
+      "name": "WorldIdRootStale",
+      "msg": "Cached World ID root is older than ROOT_MAX_AGE_SECONDS (stale; a fresher root must be established first)"
+    },
+    {
+      "code": 6051,
       "name": "GraphPaused",
       "msg": "The graph is paused; exposure-increasing verbs are disabled"
     },
     {
-      "code": 6045,
+      "code": 6052,
       "name": "NotAdminAuthority",
       "msg": "Caller is not the GraphConfig admin authority"
     },
     {
-      "code": 6046,
+      "code": 6053,
       "name": "NotPauseAuthority",
       "msg": "Caller is not the GraphConfig pause authority"
     },
     {
-      "code": 6047,
+      "code": 6054,
       "name": "OnlyAdminMayUnpause",
       "msg": "Only the admin authority may unpause"
     },
     {
-      "code": 6048,
+      "code": 6055,
       "name": "DelegationDepthExceeded",
       "msg": "Delegation depth would exceed the configured maximum"
     },
     {
-      "code": 6049,
+      "code": 6056,
       "name": "UnauthenticatedAncestorChain",
       "msg": "An ancestor in the chain is not authenticated"
     },
     {
-      "code": 6050,
+      "code": 6057,
       "name": "AncestorChainNotRooted",
       "msg": "The ancestor chain is not rooted"
     },
     {
-      "code": 6051,
+      "code": 6058,
       "name": "DrawWouldExceedCeiling",
       "msg": "Draw would exceed the node's ceiling"
     },
     {
-      "code": 6052,
+      "code": 6059,
       "name": "DrawWouldExceedBucket",
       "msg": "Draw would exceed the node's rate-limit bucket"
     },
     {
-      "code": 6053,
+      "code": 6060,
       "name": "ChildCapExceedsParent",
       "msg": "A child cap may not exceed its parent's cap"
     },
     {
-      "code": 6054,
+      "code": 6061,
       "name": "NotNodeController",
       "msg": "Caller is not the controller of this node"
     },
     {
-      "code": 6055,
+      "code": 6062,
       "name": "ReleaseExceedsSubtreeDraw",
       "msg": "Release would exceed the subtree's outstanding draw"
     },
     {
-      "code": 6056,
+      "code": 6063,
       "name": "NodeFrozenErr",
       "msg": "This node is frozen"
     },
     {
-      "code": 6057,
+      "code": 6064,
       "name": "NodeHasOutstandingDraw",
       "msg": "Node has outstanding draw and cannot perform this operation"
     },
     {
-      "code": 6058,
+      "code": 6065,
       "name": "RootAttestationMissing",
       "msg": "Root attestation is missing"
     },
     {
-      "code": 6059,
+      "code": 6066,
       "name": "NodeAlreadyRooted",
       "msg": "This node is already rooted"
     },
     {
-      "code": 6060,
+      "code": 6067,
       "name": "ChildCountAtMax",
       "msg": "This node already has the maximum number of children"
     },
     {
-      "code": 6061,
+      "code": 6068,
       "name": "RateCapZero",
       "msg": "Rate cap must be greater than zero"
     },
     {
-      "code": 6062,
+      "code": 6069,
       "name": "WalletNodeMismatch",
       "msg": "Wallet does not match the node"
     },
     {
-      "code": 6063,
+      "code": 6070,
       "name": "DebtTransferMismatch",
       "msg": "Debt-transfer amounts do not reconcile"
     },
     {
-      "code": 6064,
+      "code": 6071,
       "name": "ShortfallAlreadyCovered",
       "msg": "This shortfall has already been covered"
     },
     {
-      "code": 6065,
+      "code": 6072,
       "name": "NotAnAncestorOfDefaulter",
       "msg": "Caller is not an ancestor of the defaulting node"
     },
     {
-      "code": 6066,
+      "code": 6073,
       "name": "NoUncoveredShortfall",
       "msg": "There is no uncovered shortfall to cascade"
     },
     {
-      "code": 6067,
+      "code": 6074,
       "name": "NodeStillParented",
       "msg": "Node still has a parent edge; re-root via emancipate, not attach_root"
     },
     {
-      "code": 6068,
+      "code": 6075,
       "name": "CreditNodeRequired",
       "msg": "This vault is welded to a credit node; its PrincipalNode must be supplied"
     },
     {
-      "code": 6069,
+      "code": 6076,
       "name": "FinancierMismatch",
       "msg": "Financier does not match the node's recorded financier (single-tree invariant)"
+    },
+    {
+      "code": 6077,
+      "name": "NodeNotClosable",
+      "msg": "Node is not closable: it still owes a draw, has children, or has a default in progress"
     }
   ],
   "types": [
@@ -5280,13 +5508,23 @@
       "name": "EstablishRootArgs",
       "docs": [
         "Phase 2 — the TRUSTLESS World ID root writer. An SP1-Helios Groth16 proof",
-        "attests an Ethereum light-client state transition; we verify it and read the",
-        "World ID registry's `_latestRoot` out of the proven storage slots, then cache",
-        "it as a `RootSource::Sp1Helios` root.",
+        "attests an Ethereum light-client state transition; we (1) verify it, (2)",
+        "enforce that it continues FORWARD from the trusted on-chain light-client head",
+        "using the trusted sync committee, (3) advance the light-client state, then (4)",
+        "read the World ID registry's `_latestRoot` out of the proven storage slots",
+        "and cache it as a `RootSource::Sp1Helios` root.",
         "",
-        "Trust-model difference vs `post_interim_root`: this instruction is",
-        "PERMISSIONLESS. There is no authority gate — anyone holding a valid",
-        "SP1-Helios proof may advance the cache. The proof IS the authorization."
+        "The continuity check (step 2) is what makes this trustless. The SP1 guest",
+        "verifies the finality update's BLS signatures against the sync committee",
+        "carried INSIDE its (host-supplied) light-client store — so without an anchor,",
+        "a prover could supply its OWN committee and sign a fake state root. We close",
+        "that by requiring `startSyncCommitteeHash`/`prevHead`/`prevHeader` to equal",
+        "the on-chain `LightClientState` (seeded once from a trusted checkpoint by",
+        "`seed_light_client_state`, then ridden forward by each accepted proof).",
+        "",
+        "PERMISSIONLESS: no authority gate — anyone holding a valid proof that",
+        "continues the chain may advance it. The proof + the continuity anchor ARE the",
+        "authorization."
       ],
       "type": {
         "kind": "struct",
@@ -5494,6 +5732,81 @@
               "Operator-defined opaque identity bytes. The protocol doesn't interpret",
               "these. Dexter writes a Supabase UUID into the first 16 bytes and zeros",
               "the rest; future operators may use whichever scheme they want."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LightClientState",
+      "docs": [
+        "SP1-Helios light-client continuity state (singleton, seed",
+        "`[LIGHT_CLIENT_STATE_SEED]`). Seeded ONCE from a trusted checkpoint by",
+        "`seed_light_client_state`; every `establish_root` proves FORWARD from it and",
+        "advances it. This is the on-chain half of the trustless World ID root: the",
+        "SP1 guest pins the genesis validators root (the BLS domain), and THIS account",
+        "pins the sync committee + head continuity — together they stop a prover from",
+        "supplying its own committee to sign a forged execution state root."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version. First field per house style."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical bump for this singleton PDA."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "head",
+            "docs": [
+              "Latest trusted finalized beacon slot."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "header",
+            "docs": [
+              "Beacon block header tree-hash root at `head`."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "sync_committee_hash",
+            "docs": [
+              "Sync committee hash for the period containing `head` — the committee the",
+              "NEXT proof's `startSyncCommitteeHash` must equal."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "next_sync_committee_hash",
+            "docs": [
+              "Sync committee hash for the following period (zero until a proof commits it)."
             ],
             "type": {
               "array": [
@@ -5809,6 +6122,33 @@
           },
           {
             "name": "node",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "NodeClosed",
+      "docs": [
+        "`close_node` — a terminal `PrincipalNode` was reclaimed (rent returned to",
+        "`rent_recipient`). `vault` is the un-welded wallet when one was linked, else",
+        "`None` (an orphan-node reap)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "node",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "rent_recipient",
             "type": "pubkey"
           }
         ]
@@ -6490,6 +6830,72 @@
       }
     },
     {
+      "name": "SeedLightClientStateArgs",
+      "docs": [
+        "Plant the trusted SP1-Helios light-client checkpoint — the weak-subjectivity",
+        "seed. Same role as the SP1Helios Solidity constructor: it fixes the head",
+        "slot, its beacon header root, and the sync committee hashes for the head's",
+        "period and the next. After this, every `establish_root` rides the beacon",
+        "chain forward trustlessly (the genesis validators root that fixes the BLS",
+        "domain is pinned IN THE SP1 GUEST; this seeds the committee + head it starts",
+        "from).",
+        "",
+        "AUTHORITY-gated (the program upgrade authority `INTERIM_ROOT_AUTHORITY`) and",
+        "`init_if_needed` so the admin can re-bootstrap from a fresh trusted checkpoint",
+        "if ever needed. Re-seeding is a trusted override (like",
+        "`establish_credit_root_trusted`): keep it until the trustless path has earned",
+        "retiring it."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "head",
+            "docs": [
+              "Trusted finalized beacon slot of the checkpoint."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "header",
+            "docs": [
+              "Beacon block header tree-hash root at `head`."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "sync_committee_hash",
+            "docs": [
+              "Sync committee hash for the period containing `head`."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "next_sync_committee_hash",
+            "docs": [
+              "Sync committee hash for the following period (zero if unknown)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "SeizeAncestorArgs",
       "type": {
         "kind": "struct",
@@ -6903,6 +7309,91 @@
           {
             "name": "new_holder",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpgradeCreditRootArgs",
+      "docs": [
+        "Convergence: upgrade an existing OPERATOR-attested (`version = 2`) CreditRoot",
+        "to TRUSTLESS (`version = 1`) IN PLACE, by verifying a fresh World ID v4 π₂",
+        "(OPRFNullifier) proof for the SAME human against the current math-verified",
+        "SP1-Helios root.",
+        "",
+        "This is how any operator-fast-path human — including the first mainnet root,",
+        "established trusted on 2026-06-23 (`establish_credit_root_trusted`) — becomes",
+        "math-backed WITHOUT minting a second root. One-human-one-root holds: the PDA",
+        "is re-pointed (a one-byte `version` flip), never re-created. `v1` and `v2`",
+        "CreditRoots are byte-identical in layout, so there is no realloc/migration and",
+        "`nullifier` / `established_at` / `event_count` are preserved untouched.",
+        "",
+        "Monotonic and permissionless:",
+        "* requires `credit_root.version == 2` → only ever upgrades operator→trustless,",
+        "never the reverse; idempotent-reject once already trustless.",
+        "* requires the proof's derived nullifier == the stored nullifier → the proof",
+        "must be for THIS human; no cross-human hijack, no second mint.",
+        "* requires `root_cache.source == Sp1Helios` (fresh) → the target of the",
+        "upgrade is a math-verified root, never an operator-posted Interim one.",
+        "* anyone may submit/pay — the proof is the authority, exactly like",
+        "`establish_root` / `establish_credit_root`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proof_a",
+            "docs": [
+              "G1, negated + big-endian (groth16-solana input convention)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "proof_b",
+            "docs": [
+              "G2, `x_c1 || x_c0 || y_c1 || y_c0`, each big-endian."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "proof_c",
+            "docs": [
+              "G1, big-endian, NOT negated."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "public_inputs",
+            "docs": [
+              "The 15 π₂ public inputs, each a 32-byte big-endian bn254 field element.",
+              "`public_inputs[0]` is the nullifier (the CreditRoot seed)."
+            ],
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                15
+              ]
+            }
           }
         ]
       }

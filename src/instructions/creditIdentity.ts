@@ -81,6 +81,45 @@ export function buildEstablishCreditRootTrustedInstruction(
   });
 }
 
+export interface UpgradeCreditRootParams {
+  proofA: Uint8Array; proofB: Uint8Array; proofC: Uint8Array; publicInputs: Uint8Array[]; payer: PublicKey;
+}
+
+/**
+ * Build `upgrade_credit_root` — convergence: flip an EXISTING operator-attested
+ * (`version = 2`) CreditRoot to trustless (`version = 1`) IN PLACE, by verifying a
+ * fresh World ID v4 π₂ proof for the SAME nullifier against the current
+ * SP1-Helios root. Same 15-input proof shape as the trustless establish; the
+ * on-chain handler requires `version == 2` (monotonic, no downgrade) and that the
+ * proof's nullifier equals the stored one (no cross-human hijack, no second mint).
+ * Permissionless — the proof is the authority.
+ *
+ * Accounts (match the on-chain `UpgradeCreditRoot` struct — NOTE only 3, NO
+ * system_program: the CreditRoot is mutated, not init'd):
+ *   [0] root_cache   (readonly)        — [world_id_root], must be source=Sp1Helios
+ *   [1] credit_root  (writable)        — PDA [credit_root, nullifier], mut (not init)
+ *   [2] payer        (signer)          — permissionless submitter
+ */
+export function buildUpgradeCreditRootInstruction(p: UpgradeCreditRootParams): TransactionInstruction {
+  if (p.publicInputs.length !== 15) throw new Error("publicInputs must be 15 × 32 bytes");
+  const nullifier = p.publicInputs[0]!;
+  const piBuf = Buffer.concat(p.publicInputs.map((x, i) => fixed(x, 32, `publicInputs[${i}]`)));
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.upgrade_credit_root),
+    fixed(p.proofA, 64, "proofA"), fixed(p.proofB, 128, "proofB"), fixed(p.proofC, 64, "proofC"), piBuf,
+  ]);
+  const [creditRoot] = deriveCreditRootPda(nullifier);
+  return new TransactionInstruction({
+    programId: DEXTER_VAULT_PROGRAM_ID,
+    keys: [
+      { pubkey: rootCachePda(DEXTER_VAULT_PROGRAM_ID), isSigner: false, isWritable: false },
+      { pubkey: creditRoot, isSigner: false, isWritable: true },
+      { pubkey: p.payer, isSigner: true, isWritable: true },
+    ],
+    data,
+  });
+}
+
 export interface RecordCreditEventParams {
   nullifier: Uint8Array; eventCount: bigint; vault: PublicKey; agentId: Uint8Array; kind: number; amount: bigint; payer: PublicKey;
 }
