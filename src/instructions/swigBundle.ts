@@ -1,16 +1,23 @@
 /**
- * Canonical 4-role Swig provisioning bundle.
+ * Canonical 7-authority Swig provisioning bundle.
  *
- * THE ONLY place in the codebase that knows about Swig roles 0/1/2/3. Every
- * enrollment path — dexter-api production, dexter-vault tests, future
- * consumers — calls this. The drift bug that ate 4 hours on 2026-06-02 is
- * structurally impossible because the role list lives in exactly one file.
+ * THE ONLY place in the codebase that knows about Swig roles. Every enrollment
+ * path — dexter-api production, dexter-vault tests, future consumers — calls
+ * this. The drift bug that ate 4 hours on 2026-06-02 is structurally impossible
+ * because the role list lives in exactly one file. This bundle mints the SAME
+ * authority SET as the program's set_swig_atomic (2026-07-01 reconciliation) so a
+ * vault's capabilities never depend on which builder created it. Sign-time
+ * resolves ProgramExec roles BY MARKER, so index order across the two paths is
+ * immaterial — only the SET must match.
  *
- * Role assignment (locked):
+ * Role assignment (roles 0-4 locked; 5/6 appended 2026-07-01):
  *   role 0 — Ed25519(fee-payer), manageAuthority only (bootstrap; can't spend)
  *   role 1 — ProgramExec(vault, marker=finalize_withdrawal), all (withdraw path)
  *   role 2 — Ed25519Session(master, TTL'd + token-limited), all (streaming spend)
  *   role 3 — ProgramExec(vault, marker=settle_tab_voucher), all (Tab settle path)
+ *   role 4 — ProgramExec(vault, marker=settle_locked_voucher), all (lock settle)
+ *   role 5 — ProgramExec(vault, marker=repay_credit), all (recourse repay leg)
+ *   role 6 — ProgramExec(vault, marker=seize_collateral), all (recourse seize leg)
  *
  * The HMAC key the Swig-id derivation needs is a CALLER-PROVIDED 32-byte
  * seed. Production passes its session-master secret; tests pass a stable
@@ -56,10 +63,21 @@ export const SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB = new Uint8Array([
 export const SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED = new Uint8Array(
   DISCRIMINATORS.settle_locked_voucher,
 );
+// Recourse money-leg markers (added 2026-07-01, reconciling this client bundle
+// with the program's set_swig_atomic so both mint the same canonical role set).
+// MUST match set_swig_atomic.rs SWIG_MARKER_REPAY_CREDIT / SWIG_MARKER_SEIZE_COLLATERAL.
+export const SWIG_PROGRAM_EXEC_PREFIX_REPAY = new Uint8Array(
+  DISCRIMINATORS.repay_credit,
+);
+export const SWIG_PROGRAM_EXEC_PREFIX_SEIZE = new Uint8Array(
+  DISCRIMINATORS.seize_collateral,
+);
 export const SWIG_PROGRAM_EXEC_MARKERS: readonly Uint8Array[] = [
   SWIG_PROGRAM_EXEC_PREFIX,
   SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB,
   SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED,
+  SWIG_PROGRAM_EXEC_PREFIX_REPAY,
+  SWIG_PROGRAM_EXEC_PREFIX_SEIZE,
 ];
 
 /**
@@ -137,6 +155,18 @@ export async function buildSwigCreationBundle(
   );
   const vaultSettleLockedActions = Actions.set().all().get();
 
+  const vaultRepayAuthorityInfo = createProgramExecAuthorityInfo(
+    vaultProgramIdBytes,
+    SWIG_PROGRAM_EXEC_PREFIX_REPAY,
+  );
+  const vaultRepayActions = Actions.set().all().get();
+
+  const vaultSeizeAuthorityInfo = createProgramExecAuthorityInfo(
+    vaultProgramIdBytes,
+    SWIG_PROGRAM_EXEC_PREFIX_SEIZE,
+  );
+  const vaultSeizeActions = Actions.set().all().get();
+
   const sessionAuthorityInfo = createEd25519SessionAuthorityInfo(
     dexterPubkeyBytes,
     sessionTtlSeconds,
@@ -157,7 +187,9 @@ export async function buildSwigCreationBundle(
     .addAuthority(vaultAuthorityInfo, vaultActions)
     .addAuthority(sessionAuthorityInfo, sessionActions)
     .addAuthority(vaultTabSettleAuthorityInfo, vaultTabSettleActions)
-    .addAuthority(vaultSettleLockedAuthorityInfo, vaultSettleLockedActions);
+    .addAuthority(vaultSettleLockedAuthorityInfo, vaultSettleLockedActions)
+    .addAuthority(vaultRepayAuthorityInfo, vaultRepayActions)
+    .addAuthority(vaultSeizeAuthorityInfo, vaultSeizeActions);
 
   const contexts = await builder.getInstructionContexts();
   const instructions = contexts.flatMap((ctx) => getInstructionsFromContext(ctx));
