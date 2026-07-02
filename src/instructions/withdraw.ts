@@ -20,6 +20,7 @@ import {
   SWIG_PROGRAM_ID,
   DISCRIMINATORS,
 } from '../constants/index.js';
+import { deriveGraphConfigPda } from '../credit/derive.js';
 
 /** Borsh `Vec<u8>` = u32-LE length prefix + bytes. */
 function encodeBytesVec(buf: Uint8Array): Buffer {
@@ -117,7 +118,9 @@ export interface FinalizeWithdrawalParams {
  *   [2] vault               — the vault PDA being mutated
  *   [3] vault_usdc_ata      — swig wallet's USDC ATA, read for the reservation gate (read-only)
  *   [4] node                — OPTIONAL: the welded PrincipalNode (credit-liability pin); program-id = None
- *   [5] instructions_sysvar — for the secp256r1 precompile sibling lookup
+ *   [5] graph_config        — GraphConfig singleton PDA; the canonical usdc_mint source that the
+ *                             reservation self-check AND the following money leg are pinned to
+ *   [6] instructions_sysvar — for the secp256r1 precompile sibling lookup
  */
 export function buildFinalizeWithdrawalInstruction(
   p: FinalizeWithdrawalParams,
@@ -138,6 +141,9 @@ export function buildFinalizeWithdrawalInstruction(
       { pubkey: p.vaultUsdcAta, isSigner: false, isWritable: false },
       // Anchor optional account: the program id itself signals None (unwelded vault).
       { pubkey: p.node ?? DEXTER_VAULT_PROGRAM_ID, isSigner: false, isWritable: false },
+      // graph_config — the canonical usdc_mint source (added 2026-07-02 with the money-leg bind).
+      // MUST be present or the program deserializes the sysvar as GraphConfig and reverts (3007).
+      { pubkey: deriveGraphConfigPda()[0], isSigner: false, isWritable: false },
       { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isSigner: false, isWritable: false },
     ],
     data,

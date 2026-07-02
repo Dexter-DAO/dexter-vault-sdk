@@ -405,10 +405,11 @@ describe('instruction data layouts', () => {
     expect(ix.data.length).toBe(8 + 32 + 8 + 4 + 32);
     expect(Buffer.from(ix.data.subarray(52, 84))).toEqual(KNOWN_COUNTERPARTY.toBuffer());
     expect(new Uint8Array(ix.data)).toMatchSnapshot('settle_tab_voucher data');
-    // V6: session PDA inserted at index 3 (writable) — 6 accounts total.
+    // V6: session PDA at index 3 (writable); graph_config appended at index 6
+    // (money-leg mint pin, 2026-07-02) — 7 accounts total.
     const { deriveSessionPda } = await import('../src/session/index.js');
     const [expectedSessionPda] = deriveSessionPda(KNOWN_VAULT_PDA, KNOWN_COUNTERPARTY);
-    expect(ix.keys).toHaveLength(6);
+    expect(ix.keys).toHaveLength(7);
     expect(ix.keys[3]).toEqual({ pubkey: expectedSessionPda, isSigner: false, isWritable: true });
     expect(ix.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable }))).toMatchSnapshot('settle_tab_voucher keys');
   });
@@ -445,8 +446,8 @@ describe('instruction data layouts', () => {
     });
     expect(new Uint8Array(ix.data)).toMatchSnapshot('finalize_withdrawal data');
     const finalizeKeys = ix.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable }));
-    // 6-account layout: swig, swig_wallet_address, vault, vault_usdc_ata(3), node(4 OPTIONAL), instructions_sysvar(5)
-    expect(finalizeKeys).toHaveLength(6);
+    // 7-account layout: swig, swig_wallet_address, vault, vault_usdc_ata(3), node(4 OPTIONAL), graph_config(5), instructions_sysvar(6)
+    expect(finalizeKeys).toHaveLength(7);
     expect(finalizeKeys[3]).toEqual({ pubkey: KNOWN_VAULT_USDC_ATA.toBase58(), isSigner: false, isWritable: false });
     // node omitted → Anchor None sentinel is the program id itself
     expect(finalizeKeys[4].pubkey).toEqual(ix.programId.toBase58());
@@ -463,7 +464,7 @@ describe('instruction data layouts', () => {
       authenticatorData: KNOWN_AUTH_DATA,
     });
     const keys = ix.keys.map(k => k.pubkey.toBase58());
-    expect(keys).toHaveLength(6);
+    expect(keys).toHaveLength(7);
     expect(keys[4]).toEqual(KNOWN_DESTINATION.toBase58());
   });
 

@@ -32,6 +32,7 @@ import {
 import { DEXTER_VAULT_PROGRAM_ID, DISCRIMINATORS } from '../constants/index.js';
 import { deriveSessionPda } from '../session/index.js';
 import { deriveSwigWalletAddress } from './withdraw.js';
+import { deriveGraphConfigPda } from '../credit/derive.js';
 
 function encodeFixedBytes(buf: Uint8Array, len: number): Buffer {
   if (buf.length !== len) {
@@ -87,6 +88,8 @@ export function buildSettleTabVoucherInstruction(p: SettleTabVoucherParams): Tra
       { pubkey: sessionPda, isSigner: false, isWritable: true },
       { pubkey: p.dexterAuthority, isSigner: true, isWritable: false },
       { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isSigner: false, isWritable: false },
+      // graph_config — canonical usdc_mint source for the money-leg bind (2026-07-02).
+      { pubkey: deriveGraphConfigPda()[0], isSigner: false, isWritable: false },
     ],
     data,
   });

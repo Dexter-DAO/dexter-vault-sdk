@@ -29,6 +29,7 @@ import {
   SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED,
   SWIG_PROGRAM_EXEC_PREFIX_REPAY,
   SWIG_PROGRAM_EXEC_PREFIX_SEIZE,
+  SWIG_PROGRAM_EXEC_PREFIX_SEIZE_ANCESTOR,
   SWIG_PROGRAM_EXEC_MARKERS,
 } from '../src/instructions/index.js';
 
@@ -136,15 +137,17 @@ describe('buildSwigCreationBundle structural lock', () => {
     );
   });
 
-  test('SWIG_PROGRAM_EXEC_MARKERS exports all five markers in declared order', () => {
-    // 5 ProgramExec markers (the session/fee-payer roles are not ProgramExec).
-    // Order 2026-07-01: finalize, settle_tab, settle_locked, repay, seize.
-    expect(SWIG_PROGRAM_EXEC_MARKERS.length).toBe(5);
+  test('SWIG_PROGRAM_EXEC_MARKERS exports all six markers in declared order', () => {
+    // 6 ProgramExec markers (the session/fee-payer roles are not ProgramExec).
+    // Order: finalize, settle_tab, settle_locked, repay, seize, seize_ancestor
+    // (seize_ancestor appended 2026-07-02 → canonical 8-authority set).
+    expect(SWIG_PROGRAM_EXEC_MARKERS.length).toBe(6);
     expect(SWIG_PROGRAM_EXEC_MARKERS[0]).toBe(SWIG_PROGRAM_EXEC_PREFIX);
     expect(SWIG_PROGRAM_EXEC_MARKERS[1]).toBe(SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB);
     expect(SWIG_PROGRAM_EXEC_MARKERS[2]).toBe(SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED);
     expect(SWIG_PROGRAM_EXEC_MARKERS[3]).toBe(SWIG_PROGRAM_EXEC_PREFIX_REPAY);
     expect(SWIG_PROGRAM_EXEC_MARKERS[4]).toBe(SWIG_PROGRAM_EXEC_PREFIX_SEIZE);
+    expect(SWIG_PROGRAM_EXEC_MARKERS[5]).toBe(SWIG_PROGRAM_EXEC_PREFIX_SEIZE_ANCESTOR);
   });
 
   test('expectedSwigAddressFor matches the bundle output', async () => {

@@ -14,6 +14,7 @@ import {
 } from '../constants/index.js';
 import { deriveSessionPda } from '../session/index.js';
 import { deriveSwigWalletAddress } from './withdraw.js';
+import { deriveGraphConfigPda } from '../credit/derive.js';
 
 // ── local encoding helper (per-file convention, matches setSwig.ts) ──
 function encodeBytesVec(buf: Uint8Array): Buffer {
@@ -108,6 +109,10 @@ export function buildSettleLockedVoucherInstruction(
       { pubkey: p.vaultPda, isSigner: false, isWritable: true },
       { pubkey: p.holder, isSigner: true, isWritable: false },
       { pubkey: p.dexterAuthority, isSigner: true, isWritable: true },
+      // instructions_sysvar [6] + graph_config [7] — added 2026-07-02 with the
+      // money-leg bind (settle_locked now decodes + binds the following transfer).
+      { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+      { pubkey: deriveGraphConfigPda()[0], isSigner: false, isWritable: false },
     ],
     data,
   });

@@ -1,5 +1,5 @@
 /**
- * Canonical 7-authority Swig provisioning bundle.
+ * Canonical 8-authority Swig provisioning bundle.
  *
  * THE ONLY place in the codebase that knows about Swig roles. Every enrollment
  * path — dexter-api production, dexter-vault tests, future consumers — calls
@@ -10,7 +10,9 @@
  * resolves ProgramExec roles BY MARKER, so index order across the two paths is
  * immaterial — only the SET must match.
  *
- * Role assignment (roles 0-4 locked; 5/6 appended 2026-07-01):
+ * Role assignment (roles 0-4 locked; 5/6 appended 2026-07-01; 7 appended 2026-07-02).
+ * NOTE: index order here differs from the program's set_swig_atomic — that's FINE.
+ * Sign-time resolves BY MARKER, so only the SET of markers must match, not the order.
  *   role 0 — Ed25519(fee-payer), manageAuthority only (bootstrap; can't spend)
  *   role 1 — ProgramExec(vault, marker=finalize_withdrawal), all (withdraw path)
  *   role 2 — Ed25519Session(master, TTL'd + token-limited), all (streaming spend)
@@ -18,6 +20,7 @@
  *   role 4 — ProgramExec(vault, marker=settle_locked_voucher), all (lock settle)
  *   role 5 — ProgramExec(vault, marker=repay_credit), all (recourse repay leg)
  *   role 6 — ProgramExec(vault, marker=seize_collateral), all (recourse seize leg)
+ *   role 7 — ProgramExec(vault, marker=seize_ancestor), all (RUNG-3 cascade leg)
  *
  * The HMAC key the Swig-id derivation needs is a CALLER-PROVIDED 32-byte
  * seed. Production passes its session-master secret; tests pass a stable
@@ -72,12 +75,18 @@ export const SWIG_PROGRAM_EXEC_PREFIX_REPAY = new Uint8Array(
 export const SWIG_PROGRAM_EXEC_PREFIX_SEIZE = new Uint8Array(
   DISCRIMINATORS.seize_collateral,
 );
+// RUNG-3 cascade money-leg marker (added 2026-07-02, → canonical 8-authority set).
+// MUST match set_swig_atomic.rs SWIG_MARKER_SEIZE_ANCESTOR.
+export const SWIG_PROGRAM_EXEC_PREFIX_SEIZE_ANCESTOR = new Uint8Array(
+  DISCRIMINATORS.seize_ancestor,
+);
 export const SWIG_PROGRAM_EXEC_MARKERS: readonly Uint8Array[] = [
   SWIG_PROGRAM_EXEC_PREFIX,
   SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB,
   SWIG_PROGRAM_EXEC_PREFIX_SETTLE_LOCKED,
   SWIG_PROGRAM_EXEC_PREFIX_REPAY,
   SWIG_PROGRAM_EXEC_PREFIX_SEIZE,
+  SWIG_PROGRAM_EXEC_PREFIX_SEIZE_ANCESTOR,
 ];
 
 /**
@@ -167,6 +176,12 @@ export async function buildSwigCreationBundle(
   );
   const vaultSeizeActions = Actions.set().all().get();
 
+  const vaultSeizeAncestorAuthorityInfo = createProgramExecAuthorityInfo(
+    vaultProgramIdBytes,
+    SWIG_PROGRAM_EXEC_PREFIX_SEIZE_ANCESTOR,
+  );
+  const vaultSeizeAncestorActions = Actions.set().all().get();
+
   const sessionAuthorityInfo = createEd25519SessionAuthorityInfo(
     dexterPubkeyBytes,
     sessionTtlSeconds,
@@ -189,7 +204,8 @@ export async function buildSwigCreationBundle(
     .addAuthority(vaultTabSettleAuthorityInfo, vaultTabSettleActions)
     .addAuthority(vaultSettleLockedAuthorityInfo, vaultSettleLockedActions)
     .addAuthority(vaultRepayAuthorityInfo, vaultRepayActions)
-    .addAuthority(vaultSeizeAuthorityInfo, vaultSeizeActions);
+    .addAuthority(vaultSeizeAuthorityInfo, vaultSeizeActions)
+    .addAuthority(vaultSeizeAncestorAuthorityInfo, vaultSeizeAncestorActions);
 
   const contexts = await builder.getInstructionContexts();
   const instructions = contexts.flatMap((ctx) => getInstructionsFromContext(ctx));

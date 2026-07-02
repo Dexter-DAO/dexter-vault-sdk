@@ -16,7 +16,7 @@ describe('buildInstantPayoutInstructions', () => {
     let sawPreInstruction = false;
     const stubAssembleSignV2 = async (args: any) => {
       for (const t of args.transfers) recorded.push({ to: t.destinationAta.toBase58(), amount: t.amount });
-      sawPreInstruction = !!args.settleIx && args.settleIx.keys.length === 6;
+      sawPreInstruction = !!args.settleIx && args.settleIx.keys.length === 8;
       // Kit-faithful: the real getSignInstructions returns preInstructions in its
       // output, so the fake echoes settleIx first (the double-include regression).
       return [args.settleIx, { programId: SWIG, keys: [], data: Buffer.alloc(0) }] as any;
@@ -31,7 +31,7 @@ describe('buildInstantPayoutInstructions', () => {
     });
 
     expect(ixs.length).toBe(2);
-    expect(ixs[0].keys.length).toBe(6);
+    expect(ixs[0].keys.length).toBe(8);
     expect(sawPreInstruction).toBe(true);
     expect(recorded).toContainEqual({ to: SELLER_ATA.toBase58(), amount: 62_370_000n });
     expect(recorded).toContainEqual({ to: FINANCIER_ATA.toBase58(), amount: 630_000n });

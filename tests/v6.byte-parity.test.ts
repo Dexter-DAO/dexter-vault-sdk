@@ -19,6 +19,7 @@ import {
 import { buildLockVoucherInstruction, deriveLockedClaimPda } from '../src/instructions/lockedClaim.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
 import { deriveSessionPda, buildSiblingAccountMetas } from '../src/session/index.js';
+import { deriveGraphConfigPda } from '../src/credit/derive.js';
 
 const idl = JSON.parse(
   readFileSync(new URL('../src/idl/dexter_vault.json', import.meta.url), 'utf8'),
@@ -273,8 +274,9 @@ describe('buildSettleTabVoucherInstruction (V6)', () => {
     cumulativeAmount: 99_000n,
     sequenceNumber: 5,
   });
-  test('accounts: 6 keys with session PDA inserted at index 3 (writable)', () => {
+  test('accounts: 7 keys — session PDA at index 3 (writable), graph_config appended at index 6', () => {
     const [sessionPda] = deriveSessionPda(vaultPda, counterparty);
+    const [graphConfig] = deriveGraphConfigPda();
     expect(ix.keys).toEqual([
       { pubkey: swigAddress, isSigner: false, isWritable: false },
       { pubkey: deriveSwigWalletAddress(swigAddress), isSigner: false, isWritable: false },
@@ -282,6 +284,7 @@ describe('buildSettleTabVoucherInstruction (V6)', () => {
       { pubkey: sessionPda, isSigner: false, isWritable: true },
       { pubkey: dexterAuthority, isSigner: true, isWritable: false },
       { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
+      { pubkey: graphConfig, isSigner: false, isWritable: false },
     ]);
   });
   test('args: channel(32) + cumulative(u64) + sequence(u32) + counterparty(32) LAST', () => {

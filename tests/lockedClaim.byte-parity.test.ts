@@ -7,6 +7,7 @@ import { buildCloseLockedClaimInstruction } from '../src/instructions/lockedClai
 import { buildLockVoucherInstruction, deriveLockedClaimPda } from '../src/instructions/lockedClaim.js';
 import { deriveSwigWalletAddress } from '../src/instructions/withdraw.js';
 import { deriveSessionPda } from '../src/session/index.js';
+import { deriveGraphConfigPda } from '../src/credit/derive.js';
 import { DEXTER_VAULT_PROGRAM_ID, DISCRIMINATORS, INSTRUCTIONS_SYSVAR_ID } from '../src/constants/index.js';
 
 const CLAIM = new PublicKey('11111111111111111111111111111111');
@@ -47,7 +48,7 @@ describe('settleLockedVoucher', () => {
       holder: HOLDER,
       dexterAuthority: NEW_HOLDER,
     });
-    expect(ix.keys.length).toBe(6);
+    expect(ix.keys.length).toBe(8);
     expect(ix.keys[0].pubkey.equals(SWIG)).toBe(true);
     expect(ix.keys[0].isWritable).toBe(false);
     expect(ix.keys[1].pubkey.equals(deriveSwigWalletAddress(SWIG))).toBe(true);
@@ -62,6 +63,9 @@ describe('settleLockedVoucher', () => {
     expect(ix.keys[5].isSigner).toBe(true);
     // dexter_authority is writable on-chain (close = dexter_authority reclaims claim rent)
     expect(ix.keys[5].isWritable).toBe(true);
+    // instructions_sysvar [6] + graph_config [7] — added 2026-07-02 with the money-leg bind
+    expect(ix.keys[6].pubkey.equals(INSTRUCTIONS_SYSVAR_ID)).toBe(true);
+    expect(ix.keys[7].pubkey.equals(deriveGraphConfigPda()[0])).toBe(true);
     expect(ix.data.length).toBe(8); // discriminator only
     expect(Buffer.from(ix.data)).toEqual(Buffer.from(DISCRIMINATORS.settle_locked_voucher));
   });
