@@ -39,12 +39,19 @@ const KNOWN_FEE_PAYER       = 'Sysvar1nstructions1111111111111111111111111';
 const KNOWN_DEXTER_MASTER   = 'Ed25519SigVerify111111111111111111111111111';
 const KNOWN_IDENTITY_SEED   = new Uint8Array(16).fill(0x42);
 const KNOWN_HMAC_KEY        = new Uint8Array(32).fill(0x9F);
+// Fail-closed spend policy: both values are REQUIRED (no SDK default), so
+// every structural test passes them explicitly.
+const KNOWN_SPEND_POLICY    = {
+  sessionTtlSeconds: 2_592_000n,   // 30 days
+  spendLimitAtomic: 20_000_000n,   // $20 (6dp USDC)
+};
 
 describe('buildSwigCreationBundle structural lock', () => {
   test('bundle produces ≥5 instructions (CreateV1 + role 1 + role 2 + role 3 + role 4)', async () => {
     const bundle = await buildSwigCreationBundle({
       feePayer: KNOWN_FEE_PAYER,
       dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      ...KNOWN_SPEND_POLICY,
       identitySeed: KNOWN_IDENTITY_SEED,
       hmacKey: KNOWN_HMAC_KEY,
     });
@@ -55,6 +62,7 @@ describe('buildSwigCreationBundle structural lock', () => {
     const bundle = await buildSwigCreationBundle({
       feePayer: KNOWN_FEE_PAYER,
       dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      ...KNOWN_SPEND_POLICY,
       identitySeed: KNOWN_IDENTITY_SEED,
       hmacKey: KNOWN_HMAC_KEY,
     });
@@ -68,12 +76,14 @@ describe('buildSwigCreationBundle structural lock', () => {
     const a = await buildSwigCreationBundle({
       feePayer: KNOWN_FEE_PAYER,
       dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      ...KNOWN_SPEND_POLICY,
       identitySeed: KNOWN_IDENTITY_SEED,
       hmacKey: KNOWN_HMAC_KEY,
     });
     const b = await buildSwigCreationBundle({
       feePayer: KNOWN_FEE_PAYER,
       dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      ...KNOWN_SPEND_POLICY,
       identitySeed: KNOWN_IDENTITY_SEED,
       hmacKey: KNOWN_HMAC_KEY,
     });
@@ -85,12 +95,14 @@ describe('buildSwigCreationBundle structural lock', () => {
     const a = await buildSwigCreationBundle({
       feePayer: KNOWN_FEE_PAYER,
       dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      ...KNOWN_SPEND_POLICY,
       identitySeed: KNOWN_IDENTITY_SEED,
       hmacKey: KNOWN_HMAC_KEY,
     });
     const b = await buildSwigCreationBundle({
       feePayer: KNOWN_FEE_PAYER,
       dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      ...KNOWN_SPEND_POLICY,
       identitySeed: new Uint8Array(16).fill(0x43),
       hmacKey: KNOWN_HMAC_KEY,
     });
@@ -101,12 +113,14 @@ describe('buildSwigCreationBundle structural lock', () => {
     const a = await buildSwigCreationBundle({
       feePayer: KNOWN_FEE_PAYER,
       dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      ...KNOWN_SPEND_POLICY,
       identitySeed: KNOWN_IDENTITY_SEED,
       hmacKey: KNOWN_HMAC_KEY,
     });
     const b = await buildSwigCreationBundle({
       feePayer: KNOWN_FEE_PAYER,
       dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      ...KNOWN_SPEND_POLICY,
       identitySeed: KNOWN_IDENTITY_SEED,
       hmacKey: new Uint8Array(32).fill(0xAB),
     });
@@ -154,6 +168,7 @@ describe('buildSwigCreationBundle structural lock', () => {
     const bundle = await buildSwigCreationBundle({
       feePayer: KNOWN_FEE_PAYER,
       dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      ...KNOWN_SPEND_POLICY,
       identitySeed: KNOWN_IDENTITY_SEED,
       hmacKey: KNOWN_HMAC_KEY,
     });
@@ -165,8 +180,43 @@ describe('buildSwigCreationBundle structural lock', () => {
     await expect(buildSwigCreationBundle({
       feePayer: KNOWN_FEE_PAYER,
       dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      ...KNOWN_SPEND_POLICY,
       identitySeed: KNOWN_IDENTITY_SEED,
       hmacKey: new Uint8Array(16),     // wrong: need 32
     })).rejects.toThrow();
+  });
+
+  // ── Fail-closed spend policy: omitted/zero NEVER falls back to a default ──
+
+  test('rejects zero spendLimitAtomic (no default, ever)', async () => {
+    await expect(buildSwigCreationBundle({
+      feePayer: KNOWN_FEE_PAYER,
+      dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      identitySeed: KNOWN_IDENTITY_SEED,
+      hmacKey: KNOWN_HMAC_KEY,
+      sessionTtlSeconds: KNOWN_SPEND_POLICY.sessionTtlSeconds,
+      spendLimitAtomic: 0n,
+    })).rejects.toThrow(/spendLimitAtomic is required/);
+  });
+
+  test('rejects omitted spendLimitAtomic (no default, ever)', async () => {
+    await expect(buildSwigCreationBundle({
+      feePayer: KNOWN_FEE_PAYER,
+      dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      identitySeed: KNOWN_IDENTITY_SEED,
+      hmacKey: KNOWN_HMAC_KEY,
+      sessionTtlSeconds: KNOWN_SPEND_POLICY.sessionTtlSeconds,
+    } as any)).rejects.toThrow(/spendLimitAtomic is required/);
+  });
+
+  test('rejects zero sessionTtlSeconds (no default, ever)', async () => {
+    await expect(buildSwigCreationBundle({
+      feePayer: KNOWN_FEE_PAYER,
+      dexterMasterPubkey: KNOWN_DEXTER_MASTER,
+      identitySeed: KNOWN_IDENTITY_SEED,
+      hmacKey: KNOWN_HMAC_KEY,
+      sessionTtlSeconds: 0n,
+      spendLimitAtomic: KNOWN_SPEND_POLICY.spendLimitAtomic,
+    })).rejects.toThrow(/sessionTtlSeconds is required/);
   });
 });

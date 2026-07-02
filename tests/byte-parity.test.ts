@@ -520,11 +520,19 @@ describe('instruction data layouts', () => {
       swigWalletAddressBump: 0xFD,
       clientDataJSON,
       authenticatorData,
+      spendLimitAtomic: 20_000_000n,   // $20 — user-authored, REQUIRED
+      sessionTtlSeconds: 2_592_000n,   // 30 days — REQUIRED
     });
 
     // Lock the wire format.
     expect(ix.programId.toBase58()).toBe('Hg3wRaydFtJhYrdvYrKECacpJYDsC9Px7yKmpncj2fhc');
     expect(Buffer.from(ix.data).toString('hex')).toMatchSnapshot('set_swig_atomic-data');
+
+    // Fail-closed tail: spend_limit_atomic(8 LE) || session_ttl_seconds(8 LE) || spend_mode(1).
+    const tail = Buffer.from(ix.data.subarray(ix.data.length - 17));
+    expect(tail.readBigUInt64LE(0)).toBe(20_000_000n);
+    expect(tail.readBigUInt64LE(8)).toBe(2_592_000n);
+    expect(tail[16]).toBe(0); // spend_mode RESERVED — always 0 in this version
     expect(ix.keys.map((k) => ({
       pubkey: k.pubkey.toBase58(),
       isSigner: k.isSigner,
@@ -589,6 +597,8 @@ describe('instruction data layouts', () => {
       hmacKey,
       clientDataJSON,
       authenticatorData,
+      spendLimitAtomic: 20_000_000n,
+      sessionTtlSeconds: 2_592_000n,
     });
 
     // Reproduce the derivation the wrapper does, then call the low-level builder
@@ -618,6 +628,8 @@ describe('instruction data layouts', () => {
       swigWalletAddressBump,
       clientDataJSON,
       authenticatorData,
+      spendLimitAtomic: 20_000_000n,
+      sessionTtlSeconds: 2_592_000n,
     });
 
     expect(Buffer.from(hi.data)).toEqual(Buffer.from(lo.data));

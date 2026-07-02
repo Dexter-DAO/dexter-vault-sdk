@@ -15,6 +15,9 @@
  *   || dexter_master_pubkey (32)
  *   || client_data_json_len (4 LE) || client_data_json (variable)
  *   || authenticator_data_len (4 LE) || authenticator_data (variable)
+ *   || spend_limit_atomic (8 LE)   — REQUIRED > 0, user-authored allowance
+ *   || session_ttl_seconds (8 LE)  — REQUIRED > 0
+ *   || spend_mode (1)              — RESERVED, always 0 in this version
  *
  * Discriminator (locked by Anchor's sha256("global:set_swig_atomic")[0..8]):
  *   77 6f f7 d7 be 03 aa 17
@@ -55,7 +58,18 @@ export interface BuildSetSwigAtomicParams {
   /** WebAuthn ceremony output. */
   clientDataJSON: Uint8Array;
   authenticatorData: Uint8Array;
+  /**
+   * Role-2 allowance in atomic USDC (6dp). REQUIRED, > 0 — user-authored at
+   * the birth ceremony. The on-chain handler rejects zero (SpendLimitRequired)
+   * and there is no default anywhere in the stack.
+   */
+  spendLimitAtomic: bigint;
+  /** Role-2 session TTL in seconds. REQUIRED, > 0 (SessionTtlRequired on-chain). */
+  sessionTtlSeconds: bigint;
 }
+
+/** RESERVED wire byte — plain drain-only TokenLimit. Not caller-settable. */
+const SPEND_MODE_PLAIN: number = 0;
 
 export function buildSetSwigAtomicInstruction(
   params: BuildSetSwigAtomicParams,
@@ -65,6 +79,16 @@ export function buildSetSwigAtomicInstruction(
   }
   if (params.authenticatorData.length < 37) {
     throw new Error(`authenticatorData must be at least 37 bytes`);
+  }
+  if (typeof params.spendLimitAtomic !== 'bigint' || params.spendLimitAtomic <= 0n) {
+    throw new Error(
+      'spendLimitAtomic is required and must be > 0 — the allowance is user-authored; there is no default',
+    );
+  }
+  if (typeof params.sessionTtlSeconds !== 'bigint' || params.sessionTtlSeconds <= 0n) {
+    throw new Error(
+      'sessionTtlSeconds is required and must be > 0 — there is no default',
+    );
   }
 
   const cdj = params.clientDataJSON;
@@ -77,7 +101,10 @@ export function buildSetSwigAtomicInstruction(
     1 + // swig_wallet_address_bump
     32 + // dexter_master_pubkey
     4 + cdj.length + // client_data_json (len-prefixed)
-    4 + ad.length;   // authenticator_data (len-prefixed)
+    4 + ad.length +  // authenticator_data (len-prefixed)
+    8 + // spend_limit_atomic
+    8 + // session_ttl_seconds
+    1;  // spend_mode (reserved)
 
   const data = new Uint8Array(dataLen);
   const view = new DataView(data.buffer);
@@ -91,6 +118,9 @@ export function buildSetSwigAtomicInstruction(
   data.set(cdj, off); off += cdj.length;
   view.setUint32(off, ad.length, true); off += 4;
   data.set(ad, off); off += ad.length;
+  view.setBigUint64(off, params.spendLimitAtomic, true); off += 8;
+  view.setBigUint64(off, params.sessionTtlSeconds, true); off += 8;
+  data[off++] = SPEND_MODE_PLAIN;
 
   if (off !== dataLen) throw new Error(`internal: byte offset mismatch (${off} vs ${dataLen})`);
 
@@ -131,6 +161,10 @@ export interface BuildSetSwigAtomicFromIdentityParams {
   /** WebAuthn ceremony outputs. */
   clientDataJSON: Uint8Array;
   authenticatorData: Uint8Array;
+  /** Role-2 allowance in atomic USDC (6dp). REQUIRED, > 0 — user-authored. */
+  spendLimitAtomic: bigint;
+  /** Role-2 session TTL in seconds. REQUIRED, > 0. */
+  sessionTtlSeconds: bigint;
 }
 
 /**
@@ -178,5 +212,7 @@ export function buildSetSwigAtomicFromIdentity(
     swigWalletAddressBump,
     clientDataJSON: params.clientDataJSON,
     authenticatorData: params.authenticatorData,
+    spendLimitAtomic: params.spendLimitAtomic,
+    sessionTtlSeconds: params.sessionTtlSeconds,
   });
 }

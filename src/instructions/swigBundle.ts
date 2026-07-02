@@ -54,8 +54,6 @@ import { PublicKey } from '@solana/web3.js';
 import { DEXTER_VAULT_PROGRAM_ID, USDC_MAINNET, DISCRIMINATORS } from '../constants/index.js';
 
 const SWIG_ID_DOMAIN = 'dexter-swig-id:v1:';
-const DEFAULT_SESSION_TTL_SECONDS = BigInt(30 * 24 * 60 * 60);
-const DEFAULT_SPEND_LIMIT_ATOMIC = BigInt(1_000_000_000);
 
 export const SWIG_PROGRAM_EXEC_PREFIX = new Uint8Array([
   178, 87, 206, 68, 201, 186, 164, 232,
@@ -113,8 +111,13 @@ export interface BuildSwigCreationBundleParams {
   identitySeed: Uint8Array;
   /** 32-byte HMAC key for Swig-id derivation. Caller-provided (no env access). */
   hmacKey: Uint8Array;
-  sessionTtlSeconds?: bigint;
-  spendLimitAtomic?: bigint;
+  /** Role-2 session TTL in seconds. REQUIRED, > 0 — there is no default. */
+  sessionTtlSeconds: bigint;
+  /**
+   * Role-2 allowance in atomic USDC (6dp). REQUIRED, > 0 — the user authors
+   * this number at the birth ceremony; the SDK never supplies one.
+   */
+  spendLimitAtomic: bigint;
 }
 
 export interface SwigCreationBundleOutput {
@@ -131,9 +134,23 @@ export async function buildSwigCreationBundle(
     dexterMasterPubkey,
     identitySeed,
     hmacKey,
-    sessionTtlSeconds = DEFAULT_SESSION_TTL_SECONDS,
-    spendLimitAtomic = DEFAULT_SPEND_LIMIT_ATOMIC,
+    sessionTtlSeconds,
+    spendLimitAtomic,
   } = params;
+
+  // Fail-closed spend policy: no fallback, ever. Omitted/zero rejects here,
+  // mirroring the on-chain set_swig_atomic handler (SpendLimitRequired /
+  // SessionTtlRequired).
+  if (typeof spendLimitAtomic !== 'bigint' || spendLimitAtomic <= 0n) {
+    throw new Error(
+      'spendLimitAtomic is required and must be > 0 — the allowance is user-authored; there is no default',
+    );
+  }
+  if (typeof sessionTtlSeconds !== 'bigint' || sessionTtlSeconds <= 0n) {
+    throw new Error(
+      'sessionTtlSeconds is required and must be > 0 — there is no default',
+    );
+  }
 
   const swigId = deriveSwigId(identitySeed, hmacKey);
   const swigPda = await findSwigPda(swigId);
