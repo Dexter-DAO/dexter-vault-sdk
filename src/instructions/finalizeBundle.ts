@@ -11,10 +11,15 @@
  * wrapped in ONE Swig::SignV2, both amounts and destinations byte-reconciled,
  * fee read from GraphConfig (never a local constant).
  *
- * ORDER CONTRACT (on-chain enforced): the SignV2 must be the instruction
- * IMMEDIATELY after finalize_withdrawal (the program parses current_index+1),
- * so the optional destination-ATA create rides BEFORE the vault ix, never
- * between it and the SignV2.
+ * ORDER CONTRACT (on-chain enforced, both adjacencies):
+ *   [ComputeBudget?, ...preInstructions, secp256r1 precompile, finalize, SignV2]
+ * — the passkey verifier requires the precompile at current_index − 1 of the
+ * finalize ix, and the money-leg decoder requires the SignV2 at
+ * current_index + 1. So the optional destination-ATA create (preInstructions)
+ * rides BEFORE the precompile, and NOTHING sits between precompile → finalize
+ * → SignV2. The caller supplies the precompile (it owns the WebAuthn
+ * signature) and composes:
+ *   [computeBudgetIx, ...bundle.preInstructions, precompileIx, ...bundle.instructions]
  */
 
 import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
@@ -47,8 +52,11 @@ export interface FinalizeWithdrawBundleParams {
 }
 
 export interface FinalizeWithdrawBundle {
-  /** Fully ordered: [createDestAta?], finalize_withdrawal, SignV2. Prepend
-   *  ComputeBudget + the secp256r1 precompile instruction and send. */
+  /** Setup that must run BEFORE the secp256r1 precompile (today: the optional
+   *  destination-ATA create). Empty when no setup is needed. */
+  preInstructions: TransactionInstruction[];
+  /** The adjacency-locked pair: [finalize_withdrawal, SignV2]. The caller's
+   *  precompile instruction must sit IMMEDIATELY before these. */
   instructions: TransactionInstruction[];
   grossAtomic: bigint;
   feeAtomic: bigint;
@@ -117,7 +125,7 @@ export async function buildFinalizeWithdrawBundle(
 
   const destInfo = await p.connection.getAccountInfo(destAta);
   const destinationAtaCreated = destInfo === null;
-  const pre: TransactionInstruction[] = destinationAtaCreated
+  const preInstructions: TransactionInstruction[] = destinationAtaCreated
     ? [
         createAssociatedTokenAccountInstruction(
           p.feePayer,
@@ -129,7 +137,8 @@ export async function buildFinalizeWithdrawBundle(
     : [];
 
   return {
-    instructions: [...pre, ...tail],
+    preInstructions,
+    instructions: tail,
     grossAtomic: gross,
     feeAtomic: fee,
     userReceivesAtomic: net,
