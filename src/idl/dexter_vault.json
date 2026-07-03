@@ -184,6 +184,259 @@
       ]
     },
     {
+      "name": "attest_liquidation",
+      "docs": [
+        "Leveraged-carry — liquidation bracket half 1 (BUILD-SPEC §2.2). Reads the",
+        "base holding + oracle PRE-swap, proves the position underwater, and",
+        "snapshots the seizable ceiling onto LeveredPosition. No money moves."
+      ],
+      "discriminator": [
+        47,
+        219,
+        12,
+        120,
+        1,
+        105,
+        101,
+        177
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "The USER's vault. Carries the swig binding + node binding.",
+            "Boxed: try_accounts stack frame headroom (SBF 4096-byte limit)."
+          ]
+        },
+        {
+          "name": "drawing_node",
+          "docs": [
+            "The node being liquidated. Read-only here — attest only justifies; the",
+            "settle half mutates credit state. `borrowed` (+ accrued_fee) is the debt."
+          ]
+        },
+        {
+          "name": "levered_position",
+          "docs": [
+            "The position. `pending_liq_value` / `pending_liq_at` are written here."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  101,
+                  100,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint",
+          "docs": [
+            "The base asset. Provides `.decimals` for valuation (§8.5, read live) and",
+            "binds the AssetConfig seed + LeveredPosition.base_mint."
+          ]
+        },
+        {
+          "name": "asset_config",
+          "docs": [
+            "The approved-asset row — oracle gate params + liq threshold. Bound to",
+            "base_mint by the full seeds constraint."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "swig",
+          "docs": [
+            "Position 0 for deriving the swig wallet PDA (the base ATA owner check)."
+          ]
+        },
+        {
+          "name": "swig_wallet_address",
+          "docs": [
+            "The swig wallet PDA — the base ATA must be owned by this."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "base_ata",
+          "docs": [
+            "The position's base holding, read LIVE. Owner cross-checked against the",
+            "canonical swig wallet PDA (same guard as seize_collateral's collateral_ata)",
+            "so a caller cannot smuggle a foreign ATA to mis-state the position value."
+          ]
+        },
+        {
+          "name": "primary_price",
+          "docs": [
+            "Pyth price update for the primary (valuation) feed, pinned to",
+            "`asset_config.primary_feed_id`."
+          ]
+        },
+        {
+          "name": "market_price",
+          "docs": [
+            "Pyth price update for the market reference feed (RR mode). Anchor's",
+            "Option makes it omittable in market mode."
+          ],
+          "optional": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "Orchestration authority (same gate as the credit instructions)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "close_locked_claim",
       "discriminator": [
         231,
@@ -861,6 +1114,299 @@
       ]
     },
     {
+      "name": "draw_leverage",
+      "docs": [
+        "Leveraged-carry — open a levered position (BUILD-SPEC §1.4). `draw_credit`",
+        "fork: destination = the user's own swig, no time deadline (price-triggered",
+        "liquidation instead), borrow-spike breaker, opens the LeveredPosition PDA."
+      ],
+      "discriminator": [
+        80,
+        125,
+        46,
+        48,
+        220,
+        134,
+        248,
+        96
+      ],
+      "accounts": [
+        {
+          "name": "financier_swig",
+          "docs": [
+            "Position 0 — the FINANCIER's swig (required at this index by swig's",
+            "ProgramExec validator). The leverage USDC comes from here."
+          ]
+        },
+        {
+          "name": "financier_swig_wallet_address",
+          "docs": [
+            "Position 1 — the financier's swig_wallet_address PDA. The following SignV2",
+            "spends THIS ATA's owner."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "financier_swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "The USER's vault. Bound to the drawing node via `vault.node`.",
+            "Boxed: try_accounts stack frame headroom (SBF 4096-byte limit)."
+          ]
+        },
+        {
+          "name": "drawing_node",
+          "docs": [
+            "The PrincipalNode whose cap authorizes (and whose `borrowed` accumulates)",
+            "this leverage draw. Must equal `vault.node`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "asset_config",
+          "docs": [
+            "The approved-asset row for the base asset this position will hold. Bound",
+            "to `base_mint` by the full seeds constraint — a config for mint A must",
+            "never gate a position in mint B."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint",
+          "docs": [
+            "The base asset. Binds the AssetConfig seed and the LeveredPosition row."
+          ]
+        },
+        {
+          "name": "levered_position",
+          "docs": [
+            "The position identity, opened here. `init` (NOT init_if_needed): one",
+            "levered position per vault — a second open on a live position rejects."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  101,
+                  100,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "Graph admin spine — read for the global pause gate."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "borrower_destination",
+          "docs": [
+            "The booked destination ATA = the USER's OWN swig USDC ATA. The following",
+            "SignV2 TransferChecked's destination MUST equal this key, else",
+            "`DebtTransferMismatch`. Bound by key only; never read."
+          ]
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "The orchestration authority driving the draw AND attesting the market",
+            "borrow rate (v1 keeper model — the attestor is the signer; a dedicated",
+            "keeper key is a later hardening). `mut` — it pays rent for the",
+            "LeveredPosition init."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "instructions_sysvar",
+          "docs": [
+            "instruction is the swig::SignV2 this handler introspects for the money leg."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "DrawLeverageArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "emancipate",
       "docs": [
         "Task 9 — `emancipate`: a node cuts its parent edge and re-roots itself.",
@@ -1352,6 +1898,36 @@
           "optional": true
         },
         {
+          "name": "graph_config",
+          "docs": [
+            "Graph admin spine. Read for the canonical settlement mint",
+            "(`usdc_mint`) that BOTH the reservation self-check and the following",
+            "money leg are pinned to — a plain non-credit vault still supplies it",
+            "(it's a single global PDA), so the withdrawal mint can never be forged."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "instructions_sysvar",
           "address": "Sysvar1nstructions1111111111111111111111111"
         }
@@ -1398,6 +1974,141 @@
           "type": {
             "defined": {
               "name": "ForceReleaseArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "init_asset_config",
+      "docs": [
+        "Leveraged-carry Phase 0 — list a base asset on the approved-asset",
+        "allowlist (creates the keyed `AssetConfig` PDA). Graph-admin-gated;",
+        "parameters are validated fail-closed and mode-aware (an RR row must",
+        "ship its full divergence/growth-cap gate stack)."
+      ],
+      "discriminator": [
+        241,
+        233,
+        59,
+        183,
+        211,
+        248,
+        59,
+        149
+      ],
+      "accounts": [
+        {
+          "name": "asset_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint",
+          "docs": [
+            "The asset being listed. Typed as a Mint (token or token-2022) so a",
+            "non-mint account can never occupy the PDA seed."
+          ]
+        },
+        {
+          "name": "graph_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin_authority",
+          "docs": [
+            "Only the graph admin may list assets."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "AssetConfigParams"
             }
           }
         }
@@ -1703,6 +2414,77 @@
           "type": {
             "defined": {
               "name": "LockVoucherArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "migrate_graph_config_v2",
+      "docs": [
+        "GraphConfig V1 → V2 realloc migration: installs the on-chain withdrawal",
+        "fee + treasury (task #186). Cold-admin-gated; run IMMEDIATELY after the",
+        "program upgrade — graph_config readers are down until it lands."
+      ],
+      "discriminator": [
+        108,
+        31,
+        103,
+        93,
+        16,
+        217,
+        41,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "graph_config",
+          "docs": [
+            "verified in the handler. AccountInfo on purpose — see the module doc."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Must equal the admin_authority recorded in the V1 bytes; pays the",
+            "realloc rent delta."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "MigrateGraphConfigV2Args"
             }
           }
         }
@@ -2071,6 +2853,38 @@
           }
         }
       ]
+    },
+    {
+      "name": "migrate_v6_to_v7",
+      "discriminator": [
+        50,
+        185,
+        208,
+        4,
+        220,
+        239,
+        94,
+        68
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "Safe to auto-deserialize as the current Vault: the handler's length",
+            "check rejects any account whose bytes are not exactly the current",
+            "layout BEFORE any decoded field is trusted."
+          ],
+          "writable": true
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "Authority gate — must equal the vault's recorded dexter_authority."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
     },
     {
       "name": "open_standby",
@@ -3817,6 +4631,337 @@
       ]
     },
     {
+      "name": "set_withdrawal_fee",
+      "docs": [
+        "Cold-admin tunable for the withdrawal fee leg (amount + treasury),",
+        "capped on-chain by WITHDRAWAL_FEE_CAP."
+      ],
+      "discriminator": [
+        202,
+        235,
+        196,
+        76,
+        230,
+        68,
+        57,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "graph_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SetWithdrawalFeeArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "settle_liquidation",
+      "docs": [
+        "Leveraged-carry — liquidation bracket half 2 (BUILD-SPEC §2.2). Runs after",
+        "the unwind swap: seizes min(debt, USDC proceeds) to the pinned financier,",
+        "books the closure (seize_collateral core), and clears the attestation."
+      ],
+      "discriminator": [
+        50,
+        172,
+        228,
+        25,
+        186,
+        38,
+        162,
+        119
+      ],
+      "accounts": [
+        {
+          "name": "swig",
+          "docs": [
+            "Position 0 — the USER's swig (address = vault.swig_address), required at",
+            "this index by swig's ProgramExec validator. The following SignV2 spends",
+            "the user's swig_wallet USDC ATA to pay the financier."
+          ]
+        },
+        {
+          "name": "swig_wallet_address",
+          "docs": [
+            "Position 1 — the user's swig_wallet PDA."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "The USER's vault. Read-only — credit state lives on the node.",
+            "Boxed: try_accounts stack frame headroom (SBF 4096-byte limit)."
+          ]
+        },
+        {
+          "name": "drawing_node",
+          "docs": [
+            "The node being liquidated. Must equal `vault.node`. `borrowed` becomes the",
+            "uncovered shortfall; `subtree_draw` falls by the seized slice. Mutated."
+          ],
+          "writable": true
+        },
+        {
+          "name": "levered_position",
+          "docs": [
+            "The position. Carries the pending attestation this settle consumes.",
+            "Mutated: the snapshot is cleared after settlement."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  101,
+                  100,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "asset_config",
+          "docs": [
+            "The asset row for this position's base mint — read ONLY for its staleness",
+            "knob (`max_age_secs`), so the attestation-freshness bound reuses the same",
+            "per-asset policy the oracle gate uses (no separate invented constant).",
+            "Bound to the position's own base_mint by the full seeds constraint."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "levered_position.base_mint",
+                "account": "LeveredPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proceeds_ata",
+          "docs": [
+            "The user swig's USDC proceeds ATA — read LIVE so `seized = min(debt,",
+            "proceeds)` is against the REAL post-swap balance. Owner cross-checked",
+            "against the canonical swig wallet PDA (same guard as seize_collateral)."
+          ]
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "Graph admin spine — read for `max_depth_override` only. PAUSE does NOT gate",
+            "liquidation (a de-risking verb stays live even paused, like seize)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "dexter_authority",
+          "docs": [
+            "Orchestration authority (same gate as seize_collateral)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "docs": [
+            "instruction is the swig::SignV2 this handler introspects for the money leg."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "settle_locked_voucher",
       "discriminator": [
         44,
@@ -3942,6 +5087,42 @@
           ],
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "docs": [
+            "SignV2 is the money leg this handler now introspects and binds."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "Graph admin spine — read for the canonical settlement mint the money",
+            "leg is pinned to. A single global PDA; supplied so the payout mint",
+            "can't be forged."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -4123,6 +5304,35 @@
         {
           "name": "instructions_sysvar",
           "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "Graph admin spine — read for the canonical settlement mint (`usdc_mint`)",
+            "the following money leg is pinned to. A single global PDA, supplied on",
+            "every settle, so the payout mint can't be forged."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -4255,6 +5465,133 @@
       ]
     },
     {
+      "name": "update_asset_config",
+      "docs": [
+        "Leveraged-carry Phase 0 — retune an existing listing (full-replace",
+        "through the same validator as init; enable/disable lives here too).",
+        "Graph-admin-gated."
+      ],
+      "discriminator": [
+        104,
+        102,
+        158,
+        165,
+        28,
+        229,
+        131,
+        81
+      ],
+      "accounts": [
+        {
+          "name": "asset_config",
+          "docs": [
+            "Bound to its mint by the full seeds constraint — a config for mint A",
+            "can never be updated while claiming to be mint B's row."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_config.base_mint",
+                "account": "AssetConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "graph_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin_authority",
+          "docs": [
+            "Only the graph admin may retune listings."
+          ],
+          "signer": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "AssetConfigParams"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "upgrade_credit_root",
       "docs": [
         "Convergence — upgrade an existing operator-attested (version=2) CreditRoot",
@@ -4335,6 +5672,19 @@
   ],
   "accounts": [
     {
+      "name": "AssetConfig",
+      "discriminator": [
+        57,
+        112,
+        247,
+        166,
+        247,
+        64,
+        140,
+        23
+      ]
+    },
+    {
       "name": "CreditEvent",
       "discriminator": [
         199,
@@ -4374,6 +5724,19 @@
       ]
     },
     {
+      "name": "LeveredPosition",
+      "discriminator": [
+        97,
+        190,
+        154,
+        102,
+        66,
+        25,
+        254,
+        241
+      ]
+    },
+    {
       "name": "LightClientState",
       "discriminator": [
         171,
@@ -4397,6 +5760,19 @@
         82,
         6,
         245
+      ]
+    },
+    {
+      "name": "PriceUpdateV2",
+      "discriminator": [
+        34,
+        241,
+        35,
+        99,
+        157,
+        126,
+        244,
+        205
       ]
     },
     {
@@ -4453,6 +5829,32 @@
     }
   ],
   "events": [
+    {
+      "name": "AssetConfigInitialized",
+      "discriminator": [
+        155,
+        228,
+        155,
+        62,
+        174,
+        164,
+        61,
+        147
+      ]
+    },
+    {
+      "name": "AssetConfigUpdated",
+      "discriminator": [
+        12,
+        97,
+        64,
+        94,
+        123,
+        177,
+        111,
+        10
+      ]
+    },
     {
       "name": "CapChanged",
       "discriminator": [
@@ -4555,6 +5957,32 @@
         2,
         3,
         45
+      ]
+    },
+    {
+      "name": "PositionAttested",
+      "discriminator": [
+        224,
+        19,
+        150,
+        98,
+        197,
+        71,
+        144,
+        51
+      ]
+    },
+    {
+      "name": "PositionLiquidated",
+      "discriminator": [
+        40,
+        107,
+        90,
+        214,
+        96,
+        30,
+        61,
+        128
       ]
     },
     {
@@ -4974,9 +6402,533 @@
       "code": 6077,
       "name": "NodeNotClosable",
       "msg": "Node is not closable: it still owes a draw, has children, or has a default in progress"
+    },
+    {
+      "code": 6078,
+      "name": "OracleFeedMismatch",
+      "msg": "Oracle account does not carry the pinned feed id"
+    },
+    {
+      "code": 6079,
+      "name": "OracleUnverified",
+      "msg": "Price update lacks full wormhole verification"
+    },
+    {
+      "code": 6080,
+      "name": "OraclePriceStale",
+      "msg": "Oracle price is older than the configured staleness bound"
+    },
+    {
+      "code": 6081,
+      "name": "OracleNonPositivePrice",
+      "msg": "Oracle price is zero or negative"
+    },
+    {
+      "code": 6082,
+      "name": "OracleConfidenceTooWide",
+      "msg": "Oracle confidence interval exceeds the configured band"
+    },
+    {
+      "code": 6083,
+      "name": "OracleDivergenceExceeded",
+      "msg": "Valuation feed diverges from the market reference beyond the configured band"
+    },
+    {
+      "code": 6084,
+      "name": "OracleGrowthCapExceeded",
+      "msg": "Redemption-rate growth exceeds the configured yearly cap"
+    },
+    {
+      "code": 6085,
+      "name": "OracleSnapshotInvalid",
+      "msg": "Redemption-rate snapshot is invalid (future-dated, non-positive, or exponent mismatch)"
+    },
+    {
+      "code": 6086,
+      "name": "OracleMarketRefMissing",
+      "msg": "Redemption-rate valuation requires a market reference price"
+    },
+    {
+      "code": 6087,
+      "name": "OracleRrSnapshotMissing",
+      "msg": "Redemption-rate valuation requires a growth-cap snapshot"
+    },
+    {
+      "code": 6088,
+      "name": "OracleInvalidValuationMode",
+      "msg": "Unknown valuation mode"
+    },
+    {
+      "code": 6089,
+      "name": "CarryMathOverflow",
+      "msg": "Carry-gate arithmetic overflow"
+    },
+    {
+      "code": 6090,
+      "name": "LeverageBelowOne",
+      "msg": "Leverage must be at least 1x (10000 bps)"
+    },
+    {
+      "code": 6091,
+      "name": "InvalidAssetConfig",
+      "msg": "Asset config parameters are out of bounds or inconsistent for the valuation mode"
+    },
+    {
+      "code": 6092,
+      "name": "AssetConfigDisabled",
+      "msg": "This asset's listing is disabled for new leverage"
+    },
+    {
+      "code": 6093,
+      "name": "LeverageExceedsAssetMax",
+      "msg": "Requested leverage exceeds this asset's configured maximum"
+    },
+    {
+      "code": 6094,
+      "name": "BorrowRateSpike",
+      "msg": "Attested market borrow rate exceeds the asset's borrow-spike ceiling"
+    },
+    {
+      "code": 6095,
+      "name": "BorrowAttestationStale",
+      "msg": "Borrow-rate attestation is stale or future-dated"
+    },
+    {
+      "code": 6096,
+      "name": "PositionStillSolvent",
+      "msg": "Position is still solvent at the liquidation threshold — cannot attest liquidation"
+    },
+    {
+      "code": 6097,
+      "name": "NoPendingLiquidation",
+      "msg": "No pending liquidation attestation (never attested, or already settled)"
+    },
+    {
+      "code": 6098,
+      "name": "LiquidationAttestationStale",
+      "msg": "Liquidation attestation is stale — re-attest before settling"
+    },
+    {
+      "code": 6099,
+      "name": "SpendLimitRequired",
+      "msg": "spend_limit_atomic must be user-authored and greater than zero (no program default)"
+    },
+    {
+      "code": 6100,
+      "name": "SessionTtlRequired",
+      "msg": "session_ttl_seconds must be greater than zero (no program default)"
+    },
+    {
+      "code": 6101,
+      "name": "UnsupportedSpendMode",
+      "msg": "spend_mode is reserved; only 0 (plain drain-only TokenLimit) is valid in this version"
+    },
+    {
+      "code": 6102,
+      "name": "FeeExceedsCap",
+      "msg": "Withdrawal fee exceeds the on-chain WITHDRAWAL_FEE_CAP"
+    },
+    {
+      "code": 6103,
+      "name": "WithdrawalBelowFee",
+      "msg": "Pending withdrawal amount does not exceed the withdrawal fee"
+    },
+    {
+      "code": 6104,
+      "name": "InvalidFeeTreasury",
+      "msg": "fee_treasury must be a real wallet (non-default pubkey)"
     }
   ],
   "types": [
+    {
+      "name": "AssetConfig",
+      "docs": [
+        "Per-asset row of the leveraged-carry engine's approved-base-asset allowlist",
+        "(Phase 0 of BUILD-SPEC-leveraged-carry-engine-2026-07-02). Keyed PDA:",
+        "seeds = [ASSET_CONFIG_SEED, base_mint]. `init` (NOT init_if_needed) →",
+        "existence per mint IS the uniqueness guard. Created and tuned by",
+        "`GraphConfig.admin_authority` (listings and risk params are runtime admin",
+        "ops, unlike the init-time-only GraphConfig tunables — Aave's CAPO incident",
+        "is the argument for tunable-without-redeploy).",
+        "",
+        "Every future reader MUST bind the row to the mint actually being valued",
+        "with the full seeds constraint `[ASSET_CONFIG_SEED, base_mint]` — a config",
+        "for mint A must never gate a position in mint B (the singleton shortcut",
+        "used for GraphConfig is NOT safe here)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version. First field per house style."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical bump for this PDA."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "base_mint",
+            "docs": [
+              "The base asset this row approves for levered positions."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "enabled",
+            "docs": [
+              "Listing kill switch. Disabled rows must refuse NEW leverage but still",
+              "serve valuation for closes/liquidations of existing positions."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "valuation_mode",
+            "docs": [
+              "VALUATION_MODE_MARKET (0) or VALUATION_MODE_REDEMPTION_RATE (1) — see",
+              "verify/oracle.rs for what each mode gates."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "primary_feed_id",
+            "docs": [
+              "Pinned Pyth feed id of the valuation feed (market price in mode 0, the",
+              "redemption rate in mode 1)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "market_feed_id",
+            "docs": [
+              "Pinned Pyth feed id of the live market reference (mode 1 only; zeroed",
+              "in mode 0). The divergence breaker runs RR against this."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "max_age_secs",
+            "docs": [
+              "Staleness bound (secs) applied to every feed read for this asset. For",
+              "tokenized equities this doubles as the market-hours breaker — do not",
+              "widen it to \"fix\" weekend staleness."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "max_conf_bps",
+            "docs": [
+              "Confidence band, bps of price. Bites on market feeds; structurally a",
+              "no-op on RR feeds (conf ≈ 0) — see verify/oracle.rs module doc."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_divergence_bps",
+            "docs": [
+              "RR↔market divergence band, bps (mode 1; Kamino Scope runs 30–100)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_growth_bps_per_year",
+            "docs": [
+              "CAPO-style upside growth cap, bps per 365d year (mode 1)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "rr_snapshot_price",
+            "docs": [
+              "Growth-cap anchor: last admin-attested redemption rate (mode 1)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "rr_snapshot_expo",
+            "docs": [
+              "Exponent of the snapshot (must match the live feed's exponent)."
+            ],
+            "type": "i32"
+          },
+          {
+            "name": "rr_snapshot_at",
+            "docs": [
+              "Unix time the snapshot was taken."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "max_leverage_bps",
+            "docs": [
+              "Leverage ceiling for the dial, bps (50_000 = 5x). u32: 10x T-bill-class",
+              "caps exceed u16."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "liq_threshold_bps",
+            "docs": [
+              "Liquidation threshold, bps of LTV. Position at exactly this threshold",
+              "is still solvent (verify/solvency.rs boundary semantic)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "max_borrow_rate_bps",
+            "docs": [
+              "Borrow-spike gate: refuse NEW leverage when the position's borrow rate",
+              "exceeds this. The firewall does not cover the borrow-rate regime."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "min_net_carry_bps",
+            "docs": [
+              "Carry floor: refuse NEW leverage when net_carry_bps(Y, B, L) at the",
+              "requested dial falls below this."
+            ],
+            "type": "i16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AssetConfigInitialized",
+      "docs": [
+        "`init_asset_config` — a base asset was listed for the leveraged-carry",
+        "engine (Phase 0 allowlist row created by the graph admin). Carries the",
+        "security-critical fields (feed ids, gate bands) so an off-chain monitor can",
+        "detect a feed-id swap or a gate-loosening retune from the event stream",
+        "alone — the leverage/liq summary is not enough to spot a repointed feed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "valuation_mode",
+            "type": "u8"
+          },
+          {
+            "name": "primary_feed_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "market_feed_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "max_age_secs",
+            "type": "u32"
+          },
+          {
+            "name": "max_conf_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_divergence_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_growth_bps_per_year",
+            "type": "u32"
+          },
+          {
+            "name": "max_leverage_bps",
+            "type": "u32"
+          },
+          {
+            "name": "liq_threshold_bps",
+            "type": "u16"
+          },
+          {
+            "name": "enabled",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AssetConfigParams",
+      "docs": [
+        "The full parameter set of a listing. Shared verbatim by",
+        "`update_asset_config` (full-replace semantics: an update supplies every",
+        "field, so a row is always internally consistent — no partial-patch drift)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "enabled",
+            "type": "bool"
+          },
+          {
+            "name": "valuation_mode",
+            "type": "u8"
+          },
+          {
+            "name": "primary_feed_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "market_feed_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "max_age_secs",
+            "type": "u32"
+          },
+          {
+            "name": "max_conf_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_divergence_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_growth_bps_per_year",
+            "type": "u32"
+          },
+          {
+            "name": "rr_snapshot_price",
+            "type": "i64"
+          },
+          {
+            "name": "rr_snapshot_expo",
+            "type": "i32"
+          },
+          {
+            "name": "rr_snapshot_at",
+            "type": "i64"
+          },
+          {
+            "name": "max_leverage_bps",
+            "type": "u32"
+          },
+          {
+            "name": "liq_threshold_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_borrow_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "min_net_carry_bps",
+            "type": "i16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AssetConfigUpdated",
+      "docs": [
+        "`update_asset_config` — an existing listing's risk parameters were retuned",
+        "(or the listing was enabled/disabled) by the graph admin. Full-replace, so",
+        "this emits the same security-critical fields as the init event: a monitor",
+        "diffs consecutive events to catch a primary_feed_id swap or a widened band."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "valuation_mode",
+            "type": "u8"
+          },
+          {
+            "name": "primary_feed_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "market_feed_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "max_age_secs",
+            "type": "u32"
+          },
+          {
+            "name": "max_conf_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_divergence_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_growth_bps_per_year",
+            "type": "u32"
+          },
+          {
+            "name": "max_leverage_bps",
+            "type": "u32"
+          },
+          {
+            "name": "liq_threshold_bps",
+            "type": "u16"
+          },
+          {
+            "name": "enabled",
+            "type": "bool"
+          }
+        ]
+      }
+    },
     {
       "name": "AttachNodeArgs",
       "type": {
@@ -5371,6 +7323,47 @@
       }
     },
     {
+      "name": "DrawLeverageArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "docs": [
+              "USDC drawn from the financier's swig to the user's own swig. The following",
+              "SignV2 must transfer EXACTLY this amount (= D = (L−1)·E, computed",
+              "off-chain), or the draw is rejected."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "leverage_bps",
+            "docs": [
+              "Intended leverage, bps (50_000 = 5x). Recorded on `LeveredPosition`;",
+              "bounded here by `AssetConfig.max_leverage_bps`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "attested_market_borrow_bps",
+            "docs": [
+              "Keeper-attested live MARKET borrow rate, bps. The breaker refuses the",
+              "draw when this exceeds `AssetConfig.max_borrow_rate_bps`."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "attested_at",
+            "docs": [
+              "Unix time the borrow-rate attestation was taken. Bounded by the asset's",
+              "own oracle staleness knob (`AssetConfig.max_age_secs`); never future-dated."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "EmancipateArgs",
       "type": {
         "kind": "struct",
@@ -5663,6 +7656,37 @@
               "and the credit asset is explicit. Mainnet pins it to USDC_MAINNET."
             ],
             "type": "pubkey"
+          },
+          {
+            "name": "withdrawal_fee_atomic",
+            "docs": [
+              "Flat withdrawal fee in atomic units of `usdc_mint`, enforced on-chain by",
+              "finalize_withdrawal's two-leg money bind (leg 2 must move EXACTLY this).",
+              "Bounded by WITHDRAWAL_FEE_CAP so a compromised cold key cannot turn the",
+              "fee knob into a skim. V2 field (migrate_graph_config_v2)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee_treasury",
+            "docs": [
+              "Wallet that receives the fee leg. finalize_withdrawal derives this",
+              "wallet's canonical `usdc_mint` ATA and pins leg 2's destination to it.",
+              "V2 field."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved for future tunables — the V1→V2 realloc taught us to leave room."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
           }
         ]
       }
@@ -5698,6 +7722,21 @@
             "docs": [
               "Canonical credit-settlement mint (mainnet = USDC_MAINNET). Pins where the",
               "recourse-out bind expects financier payouts to land. Set once here."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "withdrawal_fee_atomic",
+            "docs": [
+              "Flat withdrawal fee (atomic units of `usdc_mint`). Bounded by",
+              "WITHDRAWAL_FEE_CAP; enforced by finalize_withdrawal's fee leg."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee_treasury",
+            "docs": [
+              "Fee-leg recipient wallet (leg 2 of finalize_withdrawal pins to its ATA)."
             ],
             "type": "pubkey"
           }
@@ -5739,6 +7778,93 @@
                 32
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LeveredPosition",
+      "docs": [
+        "One levered-carry position, 1:1 with its vault/node. Lean by design: every",
+        "risk parameter (oracle, valuation mode, liq threshold, leverage ceiling)",
+        "lives on `AssetConfig[base_mint]`, so this row carries only what is unique to",
+        "the POSITION — which asset, the intended leverage at open, and when. The",
+        "enforced money mechanics stay on `PrincipalNode` (`borrowed`, `cap.ceiling`,",
+        "`financier`); this account is the position's identity + base-asset binding.",
+        "PDA: `[LEVERED_POSITION_SEED, vault]` — existence per vault IS the",
+        "one-position-per-vault uniqueness guard (plain `init`, never init_if_needed)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version. First field per house style."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical bump for this PDA."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "The vault/node this position is 1:1 with (the isolation unit)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "base_mint",
+            "docs": [
+              "The base asset held in the user's swig. Binds this position to exactly",
+              "one `AssetConfig[base_mint]` row for valuation + liquidation."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "leverage_bps",
+            "docs": [
+              "Intended leverage at open, bps (50_000 = 5x). Recorded here; bounded at",
+              "open by `AssetConfig.max_leverage_bps`. The ENFORCED cap on drawn USDC is",
+              "`PrincipalNode.cap.ceiling` — binding the drawn amount to live",
+              "equity×leverage is a slice-2 hardening (needs a live equity read)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "opened_at",
+            "docs": [
+              "Unix time the position was opened."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pending_liq_value",
+            "docs": [
+              "Liquidation bracket (BUILD-SPEC §2.2, attest→settle). `attest_liquidation`",
+              "snapshots the oracle-priced position value here AFTER proving the position",
+              "underwater but BEFORE the unwind swap sells the base (the only moment the",
+              "base is readable). `settle_liquidation` — running after the swap, when the",
+              "base is gone — consumes it: a fresh, non-zero snapshot is the proof the",
+              "seizure was justified at a validated price. Zero = no pending attestation.",
+              "This is the user's protection: the seizable ceiling is locked in at a",
+              "conservative price before any swap can distort it."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "pending_liq_at",
+            "docs": [
+              "Unix time the pending snapshot was taken. `settle_liquidation` requires it",
+              "fresh (bounded by the asset's own oracle staleness knob) so an attestation",
+              "from a transient depeg cannot be replayed against a recovered price."
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -6056,6 +8182,22 @@
       }
     },
     {
+      "name": "MigrateGraphConfigV2Args",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "withdrawal_fee_atomic",
+            "type": "u64"
+          },
+          {
+            "name": "fee_treasury",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
       "name": "MigrateLegacyToV6Args",
       "type": {
         "kind": "struct",
@@ -6259,6 +8401,74 @@
       }
     },
     {
+      "name": "PositionAttested",
+      "docs": [
+        "Emitted by `attest_liquidation` — the pre-swap, oracle-priced justification",
+        "that a levered position is underwater. The snapshot locked onto",
+        "LeveredPosition is the seizable ceiling `settle_liquidation` later consumes."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "position_value",
+            "docs": [
+              "Oracle-priced value of the base holding, USDC base units (conservative",
+              "lower feed per §8.1)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "debt",
+            "docs": [
+              "Debt at attest time (node.borrowed + accrued_fee)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "ltv_bps",
+            "docs": [
+              "LTV in bps at the attested price (reporting only; the gate is is_solvent)."
+            ],
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionLiquidated",
+      "docs": [
+        "Emitted by `settle_liquidation` — the post-swap money settlement. `seized` is",
+        "what the financier recovered from the USDC proceeds; `shortfall` is any",
+        "uncovered remainder left outstanding on the node."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "node",
+            "type": "pubkey"
+          },
+          {
+            "name": "root",
+            "type": "pubkey"
+          },
+          {
+            "name": "seized",
+            "type": "u64"
+          },
+          {
+            "name": "shortfall",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "PostInterimRootArgs",
       "type": {
         "kind": "struct",
@@ -6274,6 +8484,114 @@
           },
           {
             "name": "block_number",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PriceFeedMessage",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "feed_id",
+            "docs": [
+              "`FeedId` but avoid the type alias because of compatibility issues with Anchor's `idl-build` feature."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "price",
+            "type": "i64"
+          },
+          {
+            "name": "conf",
+            "type": "u64"
+          },
+          {
+            "name": "exponent",
+            "type": "i32"
+          },
+          {
+            "name": "publish_time",
+            "docs": [
+              "The timestamp of this price update in seconds"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "prev_publish_time",
+            "docs": [
+              "The timestamp of the previous price update. This field is intended to allow users to",
+              "identify the single unique price update for any moment in time:",
+              "for any time t, the unique update is the one such that prev_publish_time < t <= publish_time.",
+              "",
+              "Note that there may not be such an update while we are migrating to the new message-sending logic,",
+              "as some price updates on pythnet may not be sent to other chains (because the message-sending",
+              "logic may not have triggered). We can solve this problem by making the message-sending mandatory",
+              "(which we can do once publishers have migrated over).",
+              "",
+              "Additionally, this field may be equal to publish_time if the message is sent on a slot where",
+              "where the aggregation was unsuccesful. This problem will go away once all publishers have",
+              "migrated over to a recent version of pyth-agent."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "ema_price",
+            "type": "i64"
+          },
+          {
+            "name": "ema_conf",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PriceUpdateV2",
+      "docs": [
+        "A price update account. This account is used by the Pyth Receiver program to store a verified price update from a Pyth price feed.",
+        "It contains:",
+        "- `write_authority`: The write authority for this account. This authority can close this account to reclaim rent or update the account to contain a different price update.",
+        "- `verification_level`: The [`VerificationLevel`] of this price update. This represents how many Wormhole guardian signatures have been verified for this price update.",
+        "- `price_message`: The actual price update.",
+        "- `posted_slot`: The slot at which this price update was posted."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "write_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "verification_level",
+            "type": {
+              "defined": {
+                "name": "VerificationLevel"
+              }
+            }
+          },
+          {
+            "name": "price_message",
+            "type": {
+              "defined": {
+                "name": "PriceFeedMessage"
+              }
+            }
+          },
+          {
+            "name": "posted_slot",
             "type": "u64"
           }
         ]
@@ -7194,6 +9512,48 @@
               "WebAuthn authenticatorData (37+ bytes)."
             ],
             "type": "bytes"
+          },
+          {
+            "name": "spend_limit_atomic",
+            "docs": [
+              "Role-2 allowance in atomic USDC (6dp). User-authored at the birth",
+              "ceremony. Zero REJECTS — there is no program default. Appended after",
+              "the vecs so pre-upgrade clients (which omit it) fail borsh",
+              "deserialization instead of silently minting a defaulted limit."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "session_ttl_seconds",
+            "docs": [
+              "Role-2 session TTL in seconds. Zero REJECTS — no program default."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "spend_mode",
+            "docs": [
+              "RESERVED period/mode discriminant so a future unattended-periodic",
+              "mode never forces an args migration. Only 0 (plain drain-only",
+              "TokenLimit) is valid in this program version."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SetWithdrawalFeeArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "withdrawal_fee_atomic",
+            "type": "u64"
+          },
+          {
+            "name": "fee_treasury",
+            "type": "pubkey"
           }
         ]
       }
@@ -7522,6 +9882,39 @@
               "all credit state now lives on the `PrincipalNode`, not the Vault."
             ],
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VerificationLevel",
+      "docs": [
+        "Pyth price updates are bridged to all blockchains via Wormhole.",
+        "Using the price updates on another chain requires verifying the signatures of the Wormhole guardians.",
+        "The usual process is to check the signatures for two thirds of the total number of guardians, but this can be cumbersome on Solana because of the transaction size limits,",
+        "so we also allow for partial verification.",
+        "",
+        "This enum represents how much a price update has been verified:",
+        "- If `Full`, we have verified the signatures for two thirds of the current guardians.",
+        "- If `Partial`, only `num_signatures` guardian signatures have been checked.",
+        "",
+        "# Warning",
+        "Using partially verified price updates is dangerous, as it lowers the threshold of guardians that need to collude to produce a malicious price update."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Partial",
+            "fields": [
+              {
+                "name": "num_signatures",
+                "type": "u8"
+              }
+            ]
+          },
+          {
+            "name": "Full"
           }
         ]
       }

@@ -6,6 +6,7 @@ export * from './revokeSession.js';
 export * from './settleVoucher.js';
 export * from './settleTabVoucher.js';
 export * from './withdraw.js';
+export * from './finalizeBundle.js';
 export * from './rotate.js';
 export * from './provePasskey.js';
 export * from './swigBundle.js';
