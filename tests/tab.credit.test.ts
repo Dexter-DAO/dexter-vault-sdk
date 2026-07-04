@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { drawCredit, repayCredit, seizeCollateral } from '../src/tab/credit.js';
 import { PRINCIPAL_NODE_DISCRIMINATOR, DISCRIMINATORS } from '../src/constants/index.js';
+import { deriveGraphConfigPda } from '../src/credit/derive.js';
 
 const VAULT = new PublicKey('SysvarC1ock11111111111111111111111111111111');
 const FIN_SWIG = new PublicKey('SysvarRent111111111111111111111111111111111');
@@ -53,28 +54,45 @@ function rootNodeBuf(): Buffer {
     Buffer.from([0]),            // parent = None
     Buffer.concat([Buffer.from([1]), ROOTATT.toBuffer()]), // root_attestation = Some
     u64(0n), u32(60), u64(0n), i64(0n), Buffer.from([0]), Buffer.from([0]), // cap (ceiling None)
-    u64(0n),                     // borrowed
-    u64(0n),                     // subtree_draw
+    u64(5_000_000n),             // borrowed (a live draw so clamps don't zero)
+    u64(5_000_000n),             // subtree_draw
     Buffer.from([0]),            // borrow_recovery_at None
     u64(0n),                     // shortfall
     Buffer.from([0]),            // frozen
     u32(0),                      // child_count
     u64(0n),                     // accrued_fee
-    u16(0),                      // rate_bps
+    u16(0),                      // rate_bps (0 ⇒ zero interest; math parity lives in accrual.test.ts)
     i64(0n),                     // last_accrual
+    CTRL.toBuffer(),             // financier (any pubkey)
   ]);
+}
+
+// GraphConfig V2 buffer (221 bytes): version 2, take_bps 0 ⇒ single-leg settlements.
+function graphConfigBuf(): Buffer {
+  const b = Buffer.alloc(221);
+  b.writeUInt8(2, 8);              // version = V2
+  DEST.toBuffer().copy(b, 85);     // usdc_mint (any)
+  CTRL.toBuffer().copy(b, 125);    // fee_treasury (any)
+  b.writeUInt16LE(0, 157);         // interest_take_bps = 0
+  return b;
 }
 
 function mockConn(): Connection {
   const byKey = new Map<string, Buffer>([
     [VAULT.toBase58(), vaultBuf(NODE)],
     [NODE.toBase58(), rootNodeBuf()],
+    [deriveGraphConfigPda()[0].toBase58(), graphConfigBuf()],
   ]);
   return {
     getAccountInfo: async (pk: PublicKey) => {
       const data = byKey.get(pk.toBase58());
       return data ? { data } : null;
     },
+    // spread engine: the wrappers source accrual_ts from the CHAIN clock and
+    // (seize) the LIVE collateral balance.
+    getSlot: async () => 1,
+    getBlockTime: async () => 1_751_600_000,
+    getTokenAccountBalance: async () => ({ value: { amount: '2000000' } }),
   } as unknown as Connection;
 }
 
@@ -122,12 +140,12 @@ describe('credit verbs', () => {
     let sawTransfers: any[] | undefined;
     const ixs = await seizeCollateral({
       connection: mockConn(), userVaultPda: VAULT, userSwig: USER_SWIG, collateralAta: COLLATERAL,
-      dexterAuthority: AUTH, financierAta: DEST, feePayer: DEST, seizeAmount: 2_000_000n,
+      dexterAuthority: AUTH, financierAta: DEST, feePayer: DEST,
       assembleSignV2: async (a: any) => { sawSwig = a.swigAddress; sawTransfers = a.transfers; return markerData(0xf)(a); },
     });
     expect(sawSwig!.equals(USER_SWIG)).toBe(true);  // seize funds from USER
     expect(sawTransfers![0].destinationAta.equals(DEST)).toBe(true);  // → financier ATA
-    expect(sawTransfers![0].amount).toBe(2_000_000n);  // the seizeAmount
+    expect(sawTransfers![0].amount).toBe(2_000_000n);  // min(borrowed, live collateral) — quoted, not caller-supplied
     expect(ixs[0].keys[3].pubkey.equals(NODE)).toBe(true);
     expect(Array.from(ixs[ixs.length - 1].data)).toEqual([0xf]);
     expect(ixs.length).toBeGreaterThanOrEqual(2);  // [vaultIx, ...signV2]

@@ -168,6 +168,8 @@ export const DISCRIMINATORS = Object.freeze({
   // Recourse graph (depth-N delegation) — sha256("global:<ix>")[..8].
   init_graph_config:       Uint8Array.from([113, 201, 219, 155, 244, 86, 150, 155]),
   create_node:             Uint8Array.from([20, 183, 134, 233, 51, 51, 115, 83]),
+  set_node_rate:           Uint8Array.from([157, 158, 26, 71, 75, 150, 16, 95]),
+  set_interest_take:       Uint8Array.from([113, 89, 38, 72, 185, 114, 12, 113]),
   attach_node:             Uint8Array.from([222, 53, 143, 98, 138, 62, 148, 196]),
   attach_root:             Uint8Array.from([195, 137, 100, 253, 213, 219, 89, 228]),
   emancipate:              Uint8Array.from([137, 136, 7, 92, 28, 52, 63, 6]),

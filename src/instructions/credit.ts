@@ -36,6 +36,12 @@ function encodeU64(value: bigint): Buffer {
   return out;
 }
 
+function encodeU16(value: number): Buffer {
+  const b = Buffer.alloc(2);
+  b.writeUInt16LE(value, 0);
+  return b;
+}
+
 function encodeI64(value: bigint): Buffer {
   const out = Buffer.alloc(8);
   out.writeBigInt64LE(value, 0);
@@ -312,6 +318,12 @@ export interface RepayCreditParams {
   drawingNode: PublicKey;
   dexterAuthority: PublicKey;
   amount: bigint;
+  /** Spread engine (D6): the unix second the caller computed interest against
+   *  when building the money legs. Bounded on-chain (node.last_accrual <= ts
+   *  <= now, staleness <= 300s); the handler accrues to EXACTLY this second so
+   *  the client-built legs match to the atomic unit. Use the CHAIN clock, not
+   *  Date.now(). See credit/accrual.ts quoteRepay(). */
+  accrualTs: bigint;
   /** The drawing leaf's authenticated ancestor chain (child→parent, EXCLUDING the
    *  leaf) — the Decrement traverse lowers each ancestor's subtree_draw. */
   chain?: PublicKey[];
@@ -329,12 +341,13 @@ export interface RepayCreditParams {
  *   [7] event_authority     (readonly, PDA)
  *   [8] program             (readonly)
  *   [9..] ancestor chain    (writable, child→parent, excl. leaf)
- * Data: disc || amount(u64).
+ * Data: disc || amount(u64) || accrual_ts(i64).
  */
 export function buildRepayCreditInstruction(p: RepayCreditParams): TransactionInstruction {
   const data = Buffer.concat([
     Buffer.from(DISCRIMINATORS.repay_credit),
     encodeU64(p.amount),
+    encodeI64(p.accrualTs),
   ]);
   const swigWalletAddress = deriveSwigWalletAddress(p.swigAddress);
   const [graphConfig] = deriveGraphConfigPda();
@@ -365,6 +378,8 @@ export interface SeizeCollateralParams {
   /** The user swig's collateral ATA (owner == swig_wallet_address). */
   collateralAta: PublicKey;
   dexterAuthority: PublicKey;
+  /** Spread engine (D6): see RepayCreditParams.accrualTs. */
+  accrualTs: bigint;
   /** The leaf's authenticated ancestor chain (child→parent, EXCLUDING the leaf). */
   chain?: PublicKey[];
 }
@@ -382,10 +397,13 @@ export interface SeizeCollateralParams {
  *   [8] event_authority     (readonly, PDA)
  *   [9] program             (readonly)
  *   [10..] ancestor chain   (writable, child→parent, excl. leaf)
- * Data: discriminator only (SeizeCollateralArgs is empty).
+ * Data: disc || accrual_ts(i64).
  */
 export function buildSeizeCollateralInstruction(p: SeizeCollateralParams): TransactionInstruction {
-  const data = Buffer.from(DISCRIMINATORS.seize_collateral);
+  const data = Buffer.concat([
+    Buffer.from(DISCRIMINATORS.seize_collateral),
+    encodeI64(p.accrualTs),
+  ]);
   const swigWalletAddress = deriveSwigWalletAddress(p.swigAddress);
   const [graphConfig] = deriveGraphConfigPda();
   return new TransactionInstruction({
@@ -459,6 +477,10 @@ export interface CreateNodeParams {
    *  parent's `financier` (a tree shares ONE financier); for a root-less/
    *  operator/emancipated root it sets the tree's financier. */
   financier: PublicKey;
+  /** Spread engine: the APR (bps, 365d year) this node's draws accrue at,
+   *  priced at birth. <= RATE_BPS_CAP (10_000). Default 0 = free credit until
+   *  set_node_rate (or a carry open's keeper stamp) prices the line. */
+  rateBps?: number;
 }
 
 /**
@@ -471,7 +493,7 @@ export interface CreateNodeParams {
  *   [5] graph_config (readonly, PDA)
  *   [6] system_program
  *   [7] event_authority (readonly, PDA) [8] program
- * Data: disc || node_id[32] || RateCap || Option<pubkey>(parent) || pubkey(financier).
+ * Data: disc || node_id[32] || RateCap || Option<pubkey>(parent) || pubkey(financier) || rate_bps(u16).
  */
 export function buildCreateNodeInstruction(p: CreateNodeParams): TransactionInstruction {
   if (p.nodeId.length !== 32) throw new Error('nodeId must be 32 bytes');
@@ -490,6 +512,7 @@ export function buildCreateNodeInstruction(p: CreateNodeParams): TransactionInst
     encodeRateCap(p.cap),
     encodeOptionPubkey(p.parentNode ?? null),
     p.financier.toBuffer(),
+    encodeU16(p.rateBps ?? 0),
   ]);
   return new TransactionInstruction({
     programId: DEXTER_VAULT_PROGRAM_ID,

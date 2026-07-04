@@ -4369,6 +4369,176 @@
       ]
     },
     {
+      "name": "set_interest_take",
+      "docs": [
+        "Spread engine — `set_interest_take`: the protocol's share of collected",
+        "interest (cold admin, INTEREST_TAKE_CAP_BPS-bounded — never more than",
+        "half; the rest is bound to the financier's ATA on-chain)."
+      ],
+      "discriminator": [
+        113,
+        89,
+        38,
+        72,
+        185,
+        114,
+        12,
+        113
+      ],
+      "accounts": [
+        {
+          "name": "graph_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SetInterestTakeArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_node_rate",
+      "docs": [
+        "Spread engine — `set_node_rate`: reprice a node's line (controller-signed,",
+        "RATE_BPS_CAP-bounded). Settles interest at the OLD rate first, so",
+        "repricing never retroactively recharges old debt (design D7). The carry",
+        "keeper's retune verb for live positions."
+      ],
+      "discriminator": [
+        157,
+        158,
+        26,
+        71,
+        75,
+        150,
+        16,
+        95
+      ],
+      "accounts": [
+        {
+          "name": "node",
+          "docs": [
+            "The node being repriced. Mutated: `rate_bps` (+ the settled",
+            "`accrued_fee` / `last_accrual`)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "controller",
+          "docs": [
+            "The node's controller — consent. Only the node's controller may price",
+            "its line (mirror of set_standby_reserve's gate)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SetNodeRateArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "set_pause",
       "docs": [
         "Task 12 — `set_pause`: toggle the global `paused` flag (two-key",
@@ -4959,7 +5129,16 @@
           "name": "program"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SettleLiquidationArgs"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "settle_locked_voucher",
@@ -5908,6 +6087,19 @@
       ]
     },
     {
+      "name": "InterestTakeSet",
+      "discriminator": [
+        93,
+        242,
+        237,
+        148,
+        192,
+        81,
+        4,
+        215
+      ]
+    },
+    {
       "name": "NodeAttached",
       "discriminator": [
         139,
@@ -5957,6 +6149,19 @@
         2,
         3,
         45
+      ]
+    },
+    {
+      "name": "NodeRateSet",
+      "discriminator": [
+        59,
+        242,
+        115,
+        98,
+        80,
+        201,
+        238,
+        48
       ]
     },
     {
@@ -6537,6 +6742,31 @@
       "code": 6104,
       "name": "InvalidFeeTreasury",
       "msg": "fee_treasury must be a real wallet (non-default pubkey)"
+    },
+    {
+      "code": 6105,
+      "name": "AccrualTsInvalid",
+      "msg": "accrual_ts is before the node's accrual clock or in the future"
+    },
+    {
+      "code": 6106,
+      "name": "AccrualTsStale",
+      "msg": "accrual_ts is staler than ACCRUAL_TS_MAX_STALENESS_SECS — rebuild against a fresh clock"
+    },
+    {
+      "code": 6107,
+      "name": "RateExceedsCap",
+      "msg": "rate_bps exceeds the on-chain RATE_BPS_CAP"
+    },
+    {
+      "code": 6108,
+      "name": "InterestTakeExceedsCap",
+      "msg": "interest_take_bps exceeds the on-chain INTEREST_TAKE_CAP_BPS"
+    },
+    {
+      "code": 6109,
+      "name": "NodeNotClean",
+      "msg": "draw_leverage requires a clean node (no outstanding borrowed or accrued_fee) — a position always opens at its own rate"
     }
   ],
   "types": [
@@ -7050,6 +7280,20 @@
           {
             "name": "amount",
             "type": "u64"
+          },
+          {
+            "name": "interest_seized",
+            "docs": [
+              "Spread engine (self-seize only; zero on cascade hops): interest",
+              "collected from the collateral after principal, and the uncollected",
+              "remainder written off at seizure (the earnings claim crystallizes —",
+              "the cascade covers principal only)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "interest_written_off",
+            "type": "u64"
           }
         ]
       }
@@ -7102,6 +7346,16 @@
               "= root yourself and set your own financier.)"
             ],
             "type": "pubkey"
+          },
+          {
+            "name": "rate_bps",
+            "docs": [
+              "Spread engine: the APR (bps, 365d year) this node's draws accrue at,",
+              "priced at birth by the creating controller (+ the parent's GROW",
+              "signature for a delegate). <= RATE_BPS_CAP. 0 = free credit until",
+              "`set_node_rate` (or a carry open's keeper stamp) prices the line."
+            ],
+            "type": "u16"
           }
         ]
       }
@@ -7139,6 +7393,26 @@
           {
             "name": "depth",
             "type": "u8"
+          },
+          {
+            "name": "accrued_delta",
+            "docs": [
+              "Spread engine: interest banked by this touch's settle (pre-draw balance",
+              "× rate × elapsed) plus the running total — the ledger's accrual feed."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "new_accrued_fee",
+            "type": "u64"
+          },
+          {
+            "name": "rate_bps",
+            "docs": [
+              "The rate the NEW balance accrues at (draw_leverage stamps the keeper-",
+              "attested borrow rate here; draw_credit reports the standing rate)."
+            ],
+            "type": "u16"
           }
         ]
       }
@@ -7239,6 +7513,27 @@
           },
           {
             "name": "new_borrowed",
+            "type": "u64"
+          },
+          {
+            "name": "principal_paid",
+            "docs": [
+              "Spread engine: how the payment split. `amount` = principal_paid +",
+              "interest_paid; of the interest, `treasury_cut` went to the protocol",
+              "treasury leg and the rest to the financier leg."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "interest_paid",
+            "type": "u64"
+          },
+          {
+            "name": "treasury_cut",
+            "type": "u64"
+          },
+          {
+            "name": "new_accrued_fee",
             "type": "u64"
           }
         ]
@@ -7677,14 +7972,29 @@
             "type": "pubkey"
           },
           {
+            "name": "interest_take_bps",
+            "docs": [
+              "Spread engine (2026-07-04): the protocol's share of COLLECTED interest,",
+              "in bps, routed to `fee_treasury`'s ATA as a second settlement leg by",
+              "repay/seize/settle_liquidation; the remainder is bound to the financier's",
+              "ATA. Capped by INTEREST_TAKE_CAP_BPS (never more than half). Carved from",
+              "the head of the V2 `reserved` tail — live accounts read their zeroed",
+              "bytes as 0 (= all interest to the financier), so NO migration and NO",
+              "version bump: this is exactly the byte-compatible reinterpretation the",
+              "reserved tail exists for. Tuned by `set_interest_take` (cold admin)."
+            ],
+            "type": "u16"
+          },
+          {
             "name": "reserved",
             "docs": [
-              "Reserved for future tunables — the V1→V2 realloc taught us to leave room."
+              "Reserved for future tunables — the V1→V2 realloc taught us to leave room.",
+              "(64 at the V2 realloc; interest_take_bps carved 2 bytes off the head.)"
             ],
             "type": {
               "array": [
                 "u8",
-                64
+                62
               ]
             }
           }
@@ -7778,6 +8088,26 @@
                 32
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "InterestTakeSet",
+      "docs": [
+        "Spread engine — `set_interest_take` retuned the protocol's share of",
+        "collected interest (cold admin, capped by INTEREST_TAKE_CAP_BPS)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_take_bps",
+            "type": "u16"
+          },
+          {
+            "name": "new_take_bps",
+            "type": "u16"
           }
         ]
       }
@@ -8362,6 +8692,35 @@
       }
     },
     {
+      "name": "NodeRateSet",
+      "docs": [
+        "Spread engine — `set_node_rate` repriced a node's line. `accrued_settled`",
+        "is the interest banked at the OLD rate before the switch (design D7:",
+        "repricing never retroactively recharges old debt)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "node",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "new_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "accrued_settled",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "OpenStandbyArgs",
       "type": {
         "kind": "struct",
@@ -8463,6 +8822,18 @@
           },
           {
             "name": "shortfall",
+            "type": "u64"
+          },
+          {
+            "name": "interest_seized",
+            "docs": [
+              "Spread engine: interest collected from the proceeds after principal,",
+              "and the uncollected remainder written off at settlement."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "interest_written_off",
             "type": "u64"
           }
         ]
@@ -9002,11 +9373,23 @@
           {
             "name": "amount",
             "docs": [
-              "USDC the caller intends to repay. Clamped to the node's outstanding",
-              "`borrowed` so an over-repay never moves more than is owed. The following",
-              "SignV2 transfers exactly the CLAMPED value (`amount.min(borrowed)`)."
+              "USDC the caller intends to repay. Clamped to the node's TOTAL owed",
+              "(borrowed principal + accrued interest) so an over-repay never moves",
+              "more than is owed. The following SignV2 transfers exactly the clamped",
+              "value, split across the financier/treasury legs."
             ],
             "type": "u64"
+          },
+          {
+            "name": "accrual_ts",
+            "docs": [
+              "Spread engine (design D6): the timestamp the client computed interest",
+              "against when it built the money legs. Bounded on-chain",
+              "(last_accrual <= ts <= now, staleness <= ACCRUAL_TS_MAX_STALENESS_SECS);",
+              "the handler accrues to EXACTLY this second so booked interest ==",
+              "client-built legs, to the atomic unit."
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -9234,15 +9617,26 @@
     {
       "name": "SeizeCollateralArgs",
       "docs": [
-        "Empty by design. Unlike `recover_abandoned_lock` (which carries WebAuthn",
+        "Near-empty by design. Unlike `recover_abandoned_lock` (which carries WebAuthn",
         "ceremony bytes because the BUYER must passkey-sign their own recovery),",
-        "`seize_collateral` takes NO args: the financier is not passkey-verified in",
-        "v1, and the seized amount is computed on-chain (`min(borrowed, collateral)`)",
-        "— never a caller-supplied value. The deadline + dexter_authority are the gate."
+        "`seize_collateral` carries NO amount: the financier is not passkey-verified in",
+        "v1, and the seized amount is computed on-chain (`min(owed, collateral)`)",
+        "— never a caller-supplied value. The deadline + dexter_authority are the gate.",
+        "The one arg is the spread engine's accrual timestamp (a bounded CLOCK, not an",
+        "amount — design D6): the keeper computed the interest legs against it, and the",
+        "handler accrues to exactly that second so both sides agree to the atomic unit."
       ],
       "type": {
         "kind": "struct",
-        "fields": []
+        "fields": [
+          {
+            "name": "accrual_ts",
+            "docs": [
+              "See RepayCreditArgs::accrual_ts."
+            ],
+            "type": "i64"
+          }
+        ]
       }
     },
     {
@@ -9392,6 +9786,37 @@
               "Target state: `true` to freeze the subtree, `false` to thaw it."
             ],
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SetInterestTakeArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_take_bps",
+            "docs": [
+              "The protocol's share of collected interest, bps. Must be",
+              "<= INTEREST_TAKE_CAP_BPS."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SetNodeRateArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_rate_bps",
+            "docs": [
+              "The new APR in basis points (365d year). Must be <= RATE_BPS_CAP."
+            ],
+            "type": "u16"
           }
         ]
       }
@@ -9554,6 +9979,23 @@
           {
             "name": "fee_treasury",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettleLiquidationArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "accrual_ts",
+            "docs": [
+              "Spread engine (design D6): see RepayCreditArgs::accrual_ts. The",
+              "attest→swap→settle bracket sits in ONE atomic tx, so a just-built",
+              "timestamp is trivially fresh."
+            ],
+            "type": "i64"
           }
         ]
       }

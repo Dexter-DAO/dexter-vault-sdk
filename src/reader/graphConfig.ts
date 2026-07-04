@@ -9,7 +9,8 @@
  *   version@8, bump@9, admin_authority@10..42, pause_authority@42..74,
  *   paused@74, paused_at@75..83, pause_reason@83, max_depth_override@84,
  *   usdc_mint@85..117, withdrawal_fee_atomic@117..125, fee_treasury@125..157,
- *   reserved@157..221.
+ *   interest_take_bps@157..159 (spread engine, carved from the reserved tail),
+ *   reserved@159..221.
  * Mirrors programs/dexter-vault/src/instructions/migrate_graph_config_v2.rs,
  * whose layout-pin unit test ties 221 to `8 + GraphConfig::INIT_SPACE`.
  */
@@ -27,6 +28,10 @@ export interface GraphConfigOnchain {
   withdrawalFeeAtomic: bigint;
   /** Wallet whose usdcMint ATA receives the fee leg. */
   feeTreasury: PublicKey;
+  /** Spread engine: the protocol's share of COLLECTED interest, bps (capped
+   *  on-chain at 5_000). Settlement builders MUST price the treasury leg from
+   *  here — the program binds leg amounts against THESE bytes. */
+  interestTakeBps: number;
 }
 
 const GRAPH_CONFIG_V2_LEN = 221;
@@ -45,6 +50,7 @@ export function parseGraphConfigData(data: Buffer): GraphConfigOnchain {
     usdcMint: new PublicKey(data.subarray(85, 117)),
     withdrawalFeeAtomic: data.readBigUInt64LE(117),
     feeTreasury: new PublicKey(data.subarray(125, 157)),
+    interestTakeBps: data.readUInt16LE(157),
   };
 }
 

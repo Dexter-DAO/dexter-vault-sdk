@@ -123,13 +123,14 @@ describe('drawCredit (depth-N graph)', () => {
 });
 
 describe('repayCredit (depth-N graph)', () => {
-  it('emits 9 fixed accounts + appended chain with a single u64 amount arg', () => {
+  it('emits 9 fixed accounts + appended chain with u64 amount + i64 accrual_ts (spread engine)', () => {
     const ix = buildRepayCreditInstruction({
       swigAddress: RENT,
       vaultPda: CLOCK,
       drawingNode: DRAWING_NODE,
       dexterAuthority: WSOL,
       amount: 1_000_000n,
+      accrualTs: 1_751_600_000n,
       chain: [ANC1],
     });
     expect(ix.keys.length).toBe(10); // 9 fixed + 1 chain
@@ -147,20 +148,23 @@ describe('repayCredit (depth-N graph)', () => {
     expect(ix.keys[8].pubkey.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);       // program
     expect(ix.keys[9].pubkey.equals(ANC1)).toBe(true);                         // chain
     expect(ix.keys[9].isWritable).toBe(true);
-    expect(ix.data.length).toBe(16);
+    // data: disc(8) + amount u64(8) + accrual_ts i64(8) = 24
+    expect(ix.data.length).toBe(24);
     expect(Buffer.from(ix.data.subarray(0, 8))).toEqual(Buffer.from(DISCRIMINATORS.repay_credit));
     expect(ix.data.readBigUInt64LE(8)).toBe(1_000_000n);
+    expect(ix.data.readBigInt64LE(16)).toBe(1_751_600_000n);
   });
 });
 
 describe('seizeCollateral (depth-N graph)', () => {
-  it('emits 10 fixed accounts + appended chain, empty args (discriminator only)', () => {
+  it('emits 10 fixed accounts + appended chain with i64 accrual_ts (spread engine)', () => {
     const ix = buildSeizeCollateralInstruction({
       swigAddress: RENT,
       vaultPda: CLOCK,
       drawingNode: DRAWING_NODE,
       collateralAta: COLLATERAL,
       dexterAuthority: WSOL,
+      accrualTs: 1_751_600_000n,
       chain: [ANC1, ANC2],
     });
     expect(ix.keys.length).toBe(12); // 10 fixed + 2 chain
@@ -179,8 +183,10 @@ describe('seizeCollateral (depth-N graph)', () => {
     expect(ix.keys[9].pubkey.equals(DEXTER_VAULT_PROGRAM_ID)).toBe(true);       // program
     expect(ix.keys[10].pubkey.equals(ANC1)).toBe(true);
     expect(ix.keys[11].pubkey.equals(ANC2)).toBe(true);
-    expect(ix.data.length).toBe(8);
-    expect(Buffer.from(ix.data)).toEqual(Buffer.from(DISCRIMINATORS.seize_collateral));
+    // data: disc(8) + accrual_ts i64(8) = 16
+    expect(ix.data.length).toBe(16);
+    expect(Buffer.from(ix.data.subarray(0, 8))).toEqual(Buffer.from(DISCRIMINATORS.seize_collateral));
+    expect(ix.data.readBigInt64LE(8)).toBe(1_751_600_000n);
   });
 });
 

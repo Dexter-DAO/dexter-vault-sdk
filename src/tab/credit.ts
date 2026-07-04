@@ -27,6 +27,9 @@ import {
 } from '../instructions/index.js';
 import { buildSecp256r1VerifyInstruction } from '../precompile/index.js';
 import { readVaultFull, walkAncestors, readPrincipalNode } from '../reader/index.js';
+import { readGraphConfigOnchain } from '../reader/graphConfig.js';
+import { quoteRepay, quoteSeize, type AccruingNode } from '../credit/accrual.js';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { DEXTER_VAULT_PROGRAM_ID } from '../constants/index.js';
 import { defaultAssembleSignV2, type AssembleSignV2 } from './assembleSignV2.js';
 import {
@@ -41,6 +44,29 @@ import {
  * Every credit verb routes through here so chain assembly never forks
  * (anti-bypass-drift, global CLAUDE.md).
  */
+
+/** Chain-clock read for the accrual_ts contract (never Date.now() — local
+ *  skew past the validator clock reverts AccrualTsInvalid). */
+export async function chainAccrualTs(connection: Connection): Promise<bigint> {
+  const slot = await connection.getSlot('confirmed');
+  const t = await connection.getBlockTime(slot);
+  if (t == null) throw new Error('chain clock unavailable for accrual_ts');
+  return BigInt(t);
+}
+
+/** PrincipalNodeState (string/number fields) → the BigInt accrual view. */
+function accruingNode(n: {
+  borrowed: string; rateBps: number; accruedFee: string; lastAccrual: number; shortfall: string;
+}): AccruingNode {
+  return {
+    borrowed: BigInt(n.borrowed),
+    rateBps: n.rateBps,
+    accruedFee: BigInt(n.accruedFee),
+    lastAccrual: BigInt(n.lastAccrual),
+    shortfall: BigInt(n.shortfall),
+  };
+}
+
 export async function resolveDrawChain(
   connection: Connection,
   userVaultPda: PublicKey,
@@ -102,10 +128,14 @@ export interface RepayCreditParams {
   connection: Connection;
   userVaultPda: PublicKey;
   userSwig: PublicKey;            // user funds the repayment
+  /** Intended repay, clamped ON-CHAIN to principal + accrued interest. Pass
+   *  quotePayoff(...) (or any larger number) for a full payoff. */
   amount: bigint;
   dexterAuthority: PublicKey;
   financierAta: PublicKey;
   feePayer: PublicKey;
+  /** Override the accrual timestamp (defaults to the chain clock now). */
+  accrualTs?: bigint;
   assembleSignV2?: AssembleSignV2;
 }
 
@@ -117,21 +147,42 @@ export interface RepayCreditParams {
  */
 export async function repayCredit(p: RepayCreditParams): Promise<TransactionInstruction[]> {
   const { drawingNode, chain } = await resolveDrawChain(p.connection, p.userVaultPda);
+
+  // SPREAD ENGINE: quote the settlement at a chain-clock accrual_ts so the
+  // legs we build here equal the handler's math to the atomic unit (D6). The
+  // treasury leg is priced from GraphConfig.interest_take_bps — protocol
+  // state, never a local constant (D5).
+  const nodeState = await readPrincipalNode(p.connection, drawingNode);
+  if (!nodeState) throw new Error(`drawing node ${drawingNode.toBase58()} not found`);
+  const cfg = await readGraphConfigOnchain(p.connection);
+  const accrualTs = p.accrualTs ?? (await chainAccrualTs(p.connection));
+  const quote = quoteRepay(accruingNode(nodeState), p.amount, accrualTs, cfg.interestTakeBps);
+
   const vaultIx = buildRepayCreditInstruction({
     swigAddress: p.userSwig,
     vaultPda: p.userVaultPda,
     drawingNode,
     dexterAuthority: p.dexterAuthority,
     amount: p.amount,
+    accrualTs,
     chain,
   });
+  const transfers = [
+    { destinationAta: p.financierAta, amount: quote.financierLegAtomic },
+  ];
+  if (quote.treasuryLegAtomic > 0n) {
+    transfers.push({
+      destinationAta: getAssociatedTokenAddressSync(cfg.usdcMint, cfg.feeTreasury, true),
+      amount: quote.treasuryLegAtomic,
+    });
+  }
   const assemble = p.assembleSignV2 ?? defaultAssembleSignV2;
   const signV2Ixs = await assemble({
     connection: p.connection,
     swigAddress: p.userSwig,
     feePayer: p.feePayer,
     vaultIx,
-    transfers: [{ destinationAta: p.financierAta, amount: p.amount }],
+    transfers,
   });
   // CONTRACT: signV2Ixs INCLUDES vaultIx (see drawCredit / assembleSignV2.ts).
   // Re-adding vaultIx would run repay_credit TWICE and revert.
@@ -147,33 +198,57 @@ export interface SeizeCollateralParams {
   dexterAuthority: PublicKey;
   financierAta: PublicKey;
   feePayer: PublicKey;
-  seizeAmount: bigint;           // the borrowed amount being seized
+  /** Override the accrual timestamp (defaults to the chain clock now). */
+  accrualTs?: bigint;
   assembleSignV2?: AssembleSignV2;
 }
 
 /**
- * The deadline liquidation. seize_collateral moves the borrowed slice USER →
- * financier, so the SignV2 transfer spends the USER swig. The on-chain
- * SeizeCollateralArgs is empty (the contract zeroes vault.borrowed); seizeAmount
- * is used ONLY for the SignV2 transfer leg — the snapshot of what's owed.
+ * The deadline liquidation. seize_collateral moves the owed slice USER →
+ * financier, so the SignV2 transfer spends the USER swig. The seizure is
+ * computed ON-CHAIN — principal-FIRST from the live collateral balance, then
+ * interest, the uncollected remainder written off (spread-engine D3/D4) — and
+ * this wrapper mirrors that math (quoteSeize) to build matching legs: the
+ * financier leg plus, when GraphConfig.interest_take_bps > 0 and interest was
+ * collectable, the fee_treasury leg (D5). The pre-spread `seizeAmount` param is
+ * GONE: the legs derive from chain state, never a caller-supplied number.
  */
 export async function seizeCollateral(p: SeizeCollateralParams): Promise<TransactionInstruction[]> {
   const { drawingNode, chain } = await resolveDrawChain(p.connection, p.userVaultPda);
+
+  const nodeState = await readPrincipalNode(p.connection, drawingNode);
+  if (!nodeState) throw new Error(`drawing node ${drawingNode.toBase58()} not found`);
+  const cfg = await readGraphConfigOnchain(p.connection);
+  const accrualTs = p.accrualTs ?? (await chainAccrualTs(p.connection));
+  const collateral = await p.connection.getTokenAccountBalance(p.collateralAta, 'confirmed');
+  const available = BigInt(collateral.value.amount);
+  const quote = quoteSeize(accruingNode(nodeState), available, accrualTs, cfg.interestTakeBps);
+
   const vaultIx = buildSeizeCollateralInstruction({
     swigAddress: p.userSwig,
     vaultPda: p.userVaultPda,
     drawingNode,
     collateralAta: p.collateralAta,
     dexterAuthority: p.dexterAuthority,
+    accrualTs,
     chain,
   });
+  const transfers = [
+    { destinationAta: p.financierAta, amount: quote.financierLegAtomic },
+  ];
+  if (quote.treasuryLegAtomic > 0n) {
+    transfers.push({
+      destinationAta: getAssociatedTokenAddressSync(cfg.usdcMint, cfg.feeTreasury, true),
+      amount: quote.treasuryLegAtomic,
+    });
+  }
   const assemble = p.assembleSignV2 ?? defaultAssembleSignV2;
   const signV2Ixs = await assemble({
     connection: p.connection,
     swigAddress: p.userSwig,
     feePayer: p.feePayer,
     vaultIx,
-    transfers: [{ destinationAta: p.financierAta, amount: p.seizeAmount }],
+    transfers,
   });
   // CONTRACT: signV2Ixs INCLUDES vaultIx (see drawCredit / assembleSignV2.ts).
   // Re-adding vaultIx would run seize_collateral TWICE and revert.
