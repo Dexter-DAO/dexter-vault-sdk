@@ -51,13 +51,27 @@ import {
  *  Date.now() (local skew) and never getBlockTime (its corrected bank
  *  timestamps can run AHEAD of the executing bank's clock → AccrualTsInvalid
  *  "in the future"; observed live on a fork validator). The margin costs
- *  nothing: un-quoted seconds accrue at the borrower's next touch. */
+ *  nothing: un-quoted seconds accrue at the borrower's next touch.
+ *
+ *  CONTRACT (D6): callers that know the node MUST floor this at
+ *  `node.last_accrual` (see accrualTsFor) — a settlement built within the
+ *  margin of a clock-advancing touch (draw / reprice / settle) would
+ *  otherwise quote BEFORE the node's accrual clock and revert
+ *  AccrualTsInvalid. `last_accrual` was written from a prior bank's clock,
+ *  so the floored value can never exceed `now` at landing. */
 export async function chainAccrualTs(connection: Connection): Promise<bigint> {
   const info = await connection.getAccountInfo(SYSVAR_CLOCK_PUBKEY);
   if (!info) throw new Error('clock sysvar unavailable for accrual_ts');
   // Clock layout: slot u64 | epoch_start_timestamp i64 | epoch u64 |
   // leader_schedule_epoch u64 | unix_timestamp i64 @ offset 32.
   return BigInt(Buffer.from(info.data).readBigInt64LE(32)) - 2n;
+}
+
+/** The accrual_ts a settlement should quote for `node`: the margin-adjusted
+ *  chain clock, floored at the node's accrual clock (both D6 bounds honored). */
+export function accrualTsFor(chainTs: bigint, node: { lastAccrual: number | bigint }): bigint {
+  const floor = BigInt(node.lastAccrual);
+  return chainTs > floor ? chainTs : floor;
 }
 
 /** PrincipalNodeState (string/number fields) → the BigInt accrual view. */
@@ -161,7 +175,8 @@ export async function repayCredit(p: RepayCreditParams): Promise<TransactionInst
   const nodeState = await readPrincipalNode(p.connection, drawingNode);
   if (!nodeState) throw new Error(`drawing node ${drawingNode.toBase58()} not found`);
   const cfg = await readGraphConfigOnchain(p.connection);
-  const accrualTs = p.accrualTs ?? (await chainAccrualTs(p.connection));
+  const accrualTs =
+    p.accrualTs ?? accrualTsFor(await chainAccrualTs(p.connection), nodeState);
   const quote = quoteRepay(accruingNode(nodeState), p.amount, accrualTs, cfg.interestTakeBps);
 
   const vaultIx = buildRepayCreditInstruction({
@@ -225,7 +240,8 @@ export async function seizeCollateral(p: SeizeCollateralParams): Promise<Transac
   const nodeState = await readPrincipalNode(p.connection, drawingNode);
   if (!nodeState) throw new Error(`drawing node ${drawingNode.toBase58()} not found`);
   const cfg = await readGraphConfigOnchain(p.connection);
-  const accrualTs = p.accrualTs ?? (await chainAccrualTs(p.connection));
+  const accrualTs =
+    p.accrualTs ?? accrualTsFor(await chainAccrualTs(p.connection), nodeState);
   const collateral = await p.connection.getTokenAccountBalance(p.collateralAta, 'confirmed');
   const available = BigInt(collateral.value.amount);
   const quote = quoteSeize(accruingNode(nodeState), available, accrualTs, cfg.interestTakeBps);

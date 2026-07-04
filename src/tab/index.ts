@@ -10,7 +10,7 @@ export { settleTab } from './settleTab.js';
 export type { SettleTabParams } from './settleTab.js';
 export { readTabMeter } from './readTabMeter.js';
 export type { TabMeter } from './readTabMeter.js';
-export { drawCredit, repayCredit, seizeCollateral, resolveDrawChain } from './credit.js';
+export { drawCredit, repayCredit, seizeCollateral, resolveDrawChain, chainAccrualTs, accrualTsFor } from './credit.js';
 export type { DrawCreditParams, RepayCreditParams, SeizeCollateralParams } from './credit.js';
 export { setStandbyReserve, closeStandby } from './credit.js';
 export type { SetStandbyReserveArgs, CloseStandbyArgs } from './credit.js';
