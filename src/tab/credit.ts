@@ -12,6 +12,7 @@ import {
   VersionedTransaction,
   type AddressLookupTableAccount,
   type SimulatedTransactionResponse,
+  SYSVAR_CLOCK_PUBKEY,
 } from '@solana/web3.js';
 import {
   buildDrawCreditInstruction,
@@ -45,13 +46,18 @@ import {
  * (anti-bypass-drift, global CLAUDE.md).
  */
 
-/** Chain-clock read for the accrual_ts contract (never Date.now() — local
- *  skew past the validator clock reverts AccrualTsInvalid). */
+/** Chain-clock read for the accrual_ts contract. Reads the CLOCK SYSVAR the
+ *  program itself compares against, minus a 2s safety margin — never
+ *  Date.now() (local skew) and never getBlockTime (its corrected bank
+ *  timestamps can run AHEAD of the executing bank's clock → AccrualTsInvalid
+ *  "in the future"; observed live on a fork validator). The margin costs
+ *  nothing: un-quoted seconds accrue at the borrower's next touch. */
 export async function chainAccrualTs(connection: Connection): Promise<bigint> {
-  const slot = await connection.getSlot('confirmed');
-  const t = await connection.getBlockTime(slot);
-  if (t == null) throw new Error('chain clock unavailable for accrual_ts');
-  return BigInt(t);
+  const info = await connection.getAccountInfo(SYSVAR_CLOCK_PUBKEY);
+  if (!info) throw new Error('clock sysvar unavailable for accrual_ts');
+  // Clock layout: slot u64 | epoch_start_timestamp i64 | epoch u64 |
+  // leader_schedule_epoch u64 | unix_timestamp i64 @ offset 32.
+  return BigInt(Buffer.from(info.data).readBigInt64LE(32)) - 2n;
 }
 
 /** PrincipalNodeState (string/number fields) → the BigInt accrual view. */
