@@ -43,6 +43,12 @@ export interface RegisterSessionWithRetryArgs {
    *  (own-USDC counted as 0 on-chain). Resolve via `resolveVaultUsdcAta`. */
   vaultUsdcAta: PublicKey | null;
   payer: PublicKey;
+  /** V7 node-backed credit gate: the vault's welded PrincipalNode
+   *  (== vault.node), read-only. When passed, the overcommit gate counts the
+   *  node's pro-forma drawable credit as backing — a credit-backed $0 vault
+   *  can open a session. Omit for own-USDC-only (pre-V7 behavior; REQUIRED
+   *  against a pre-V7 program). See buildRegisterSessionKeyInstruction. */
+  weldedNodePda?: PublicKey | null;
   clientDataJSON: Uint8Array;
   authenticatorData: Uint8Array;
   /**
@@ -100,11 +106,13 @@ export async function registerSessionWithRetry(
       vaultUsdcAta: args.vaultUsdcAta,
       payer: args.payer,
       siblingSessionPdas: siblings,
+      weldedNodePda: args.weldedNodePda,
       clientDataJSON: args.clientDataJSON,
       authenticatorData: args.authenticatorData,
     });
-    // builder excludes the target + dedups: sibling metas = keys beyond the 8 fixed accounts
-    const siblingCount = registerIx.keys.length - 8;
+    // builder excludes the target + dedups: sibling metas = keys beyond the
+    // 8 fixed accounts (minus the appended welded node, which is not a sibling)
+    const siblingCount = registerIx.keys.length - 8 - (args.weldedNodePda ? 1 : 0);
     try {
       const signature = await args.send([...(args.preInstructions ?? []), registerIx]);
       return { signature, attempts: attempt, replaced, siblingCount };

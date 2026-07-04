@@ -232,6 +232,42 @@ describe('buildRegisterSessionKeyInstruction (V6)', () => {
     // not an arg, so optionality cannot change the signed message.
     expect(new Uint8Array(ixNull.data)).toEqual(new Uint8Array(ix.data));
   });
+
+  test('V7 welded node: appended read-only AFTER the siblings; data unchanged; omitted → identical to V6 shape', () => {
+    const weldedNodePda = PublicKey.unique();
+    const base = {
+      vaultPda,
+      sessionPubkey: new Uint8Array(32).fill(1),
+      maxAmount: 1_000_000n,
+      expiresAt: 4_000_000_000n,
+      allowedCounterparty: counterparty,
+      nonce: 7,
+      maxRevolvingCapacity: 500_000n,
+      swigAddress,
+      vaultUsdcAta,
+      payer,
+      siblingSessionPdas: siblings,
+      clientDataJSON: new Uint8Array([1, 2]),
+      authenticatorData: new Uint8Array(37),
+    };
+    const ixNode = buildRegisterSessionKeyInstruction({ ...base, weldedNodePda });
+    // One extra key, dead last, read-only non-signer — it must never join the
+    // sibling ordering (the program detects it by discriminator).
+    expect(ixNode.keys.length).toBe(ix.keys.length + 1);
+    expect(ixNode.keys[ixNode.keys.length - 1]).toEqual({
+      pubkey: weldedNodePda,
+      isSigner: false,
+      isWritable: false,
+    });
+    for (let i = 0; i < ix.keys.length; i++) {
+      expect(ixNode.keys[i]).toEqual(ix.keys[i]);
+    }
+    // The node is an account, not an arg: the signed message is unchanged.
+    expect(new Uint8Array(ixNode.data)).toEqual(new Uint8Array(ix.data));
+    // Explicit null behaves exactly like omitted.
+    const ixNullNode = buildRegisterSessionKeyInstruction({ ...base, weldedNodePda: null });
+    expect(ixNullNode.keys.length).toBe(ix.keys.length);
+  });
 });
 
 describe('buildRevokeSessionKeyInstruction (V6)', () => {

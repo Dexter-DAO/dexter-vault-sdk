@@ -103,6 +103,16 @@ export interface BuildRegisterSessionKeyArgs {
    *  SessionWouldOvercommitVault…). See src/session/fetch.ts for the contract.
    *  Happy path: sessionPdasOf(await fetchVaultSessionAccounts(conn, vaultPda)). */
   siblingSessionPdas: PublicKey[];
+  /** V7 (the node-backed credit gate): the vault's welded PrincipalNode
+   *  (== vault.node), appended read-only. The program detects it by
+   *  discriminator — it never joins the sibling ordering — and counts its
+   *  pro-forma drawable credit as session backing, so a credit-backed vault
+   *  can open a session past its own USDC. The key MUST equal the link-once
+   *  vault.node (anything else reverts SessionAccountForeign). Omit (or null)
+   *  for own-USDC-only backing — the pre-V7 behavior, and the only valid
+   *  shape against a pre-V7 program (which treats the node as a sibling and
+   *  reverts). */
+  weldedNodePda?: PublicKey | null;
   clientDataJSON: Uint8Array;        // WebAuthn ceremony output
   authenticatorData: Uint8Array;     // WebAuthn ceremony output
 }
@@ -144,6 +154,11 @@ export function buildRegisterSessionKeyInstruction(
       { pubkey: args.payer, isSigner: true, isWritable: true },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ...siblingMetas,
+      // V7 node-backed credit gate: appended AFTER the siblings (position is
+      // free — discriminator-detected), read-only.
+      ...(args.weldedNodePda
+        ? [{ pubkey: args.weldedNodePda, isSigner: false, isWritable: false }]
+        : []),
     ],
     programId: DEXTER_VAULT_PROGRAM_ID,
     data: Buffer.from(data),
