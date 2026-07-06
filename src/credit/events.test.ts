@@ -84,7 +84,7 @@ describe('decodeSpreadEventsFromTransaction', () => {
   it('extracts the event when the inner CPI targets the program', () => {
     const evs = decodeSpreadEventsFromTransaction(fakeTx(1, [PublicKey.unique(), PROGRAM]), PROGRAM);
     expect(evs).toHaveLength(1);
-    expect(evs[0].kind).toBe('creditRepaid');
+    expect(evs[0]!.kind).toBe('creditRepaid');
   });
 
   it('ignores inner CPIs of other programs and non-event data', () => {
