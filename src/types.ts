@@ -99,6 +99,13 @@ export interface LockedClaimState {
   status: LockedClaimStatus;
   settledAt: number | null;         // unix seconds | null
   recoveredAt: number | null;       // unix seconds | null
+  /** K-T1 #77 on-chain seller binding: the session's SEED-PROVEN
+   *  allowed_counterparty, snapshotted at lock time. base58 | null. On-chain
+   *  Option<Pubkey> TAIL field: legacy (pre-#77, 191-byte) claims decode as
+   *  null (no binding — settle destination comes from off-chain state); new
+   *  (224-byte) claims always carry the seller pubkey, pinning
+   *  settle_locked_voucher's money leg to that seller's canonical USDC ATA. */
+  allowedCounterparty: string | null;
 }
 
 // ── V6 SessionAccount (per-counterparty session PDA) ─────────────────────

@@ -18,10 +18,23 @@
  *    …   1  status u8 (0=Pending, 1=Settled, 2=Abandoned)
  *    …  1+(8 if Some)  settled_at Option<i64>
  *    …  1+(8 if Some)  recovered_at Option<i64>
+ *    …  1+(32 if Some)  allowed_counterparty Option<Pubkey>   ← K-T1 #77 tail
  *
  * The fields after created_at sit at VARIABLE offsets because of the two
  * Option<i64> fields, so we decode with a MOVING CURSOR: read the 1-byte Borsh
  * Option tag (0x00 None / 0x01 Some), then advance 1 (None) or 9 (Some).
+ *
+ * TAIL-CARVE COMPATIBILITY (allowed_counterparty, K-T1 #77): the field exists
+ * in TWO account generations. Legacy (pre-#77) claims are 191-byte accounts
+ * (8 disc + 183 old INIT_SPACE) whose content ends at buffer offset ≤183
+ * (8-byte disc + ≤175 Borsh bytes; settled_at/recovered_at are mutually
+ * exclusive, so all-four-Options-Some is unreachable) — the allocation bytes
+ * after the content are GUARANTEED-ZERO padding, so reading the Option tag
+ * from them yields 0x00 → null. That is the
+ * fork proof (state.rs::locked_claim_layout_tests): legacy claims MUST decode
+ * as null, and we must NOT over-read past a 191-byte buffer. New (#77) claims
+ * are 224-byte accounts (8 + 183 + 33) and always carry Some(seed-proven
+ * seller). Mainnet ground truth 2026-07-06: all 44 live claims are 191 bytes.
  */
 import { Connection, PublicKey } from '@solana/web3.js';
 import {
@@ -104,6 +117,29 @@ export function decodeLockedClaim(
   const settledAt = readOptionI64();
   const recoveredAt = readOptionI64();
 
+  // K-T1 #77 tail: Option<Pubkey> allowed_counterparty. Legacy (191-byte)
+  // claims never wrote this field — the cursor now sits in their guaranteed-
+  // zero allocation padding, whose 0x00 reads as the Borsh None tag → null.
+  // We never over-read: a Some tag pulls exactly 32 more bytes, which only new
+  // (224-byte) claims have. `cursor >= buf.length` (no padding byte at all)
+  // cannot occur on a real account of either generation, but decode it as the
+  // same "no binding" null rather than throwing on a hypothetical source that
+  // trims trailing zeros.
+  let allowedCounterparty: string | null = null;
+  if (cursor < buf.length) {
+    const tag = buf.readUInt8(cursor);
+    cursor += 1;
+    if (tag === 1) {
+      requireBytes(32);
+      allowedCounterparty = new PublicKey(buf.subarray(cursor, cursor + 32)).toBase58();
+      cursor += 32;
+    } else if (tag !== 0) {
+      throw new Error(
+        `LockedClaim ${address} invalid allowed_counterparty Option tag: ${tag}`,
+      );
+    }
+  }
+
   return {
     address,
     version,
@@ -119,6 +155,7 @@ export function decodeLockedClaim(
     status,
     settledAt,
     recoveredAt,
+    allowedCounterparty,
   };
 }
 
