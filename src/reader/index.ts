@@ -1,5 +1,12 @@
 export * from './accountReader.js';
-export { readGraphConfigOnchain, parseGraphConfigData, type GraphConfigOnchain } from './graphConfig.js';
+export {
+  readGraphConfigOnchain,
+  parseGraphConfigData,
+  effectiveMaxSellerAtRiskAtomic,
+  MAX_SELLER_AT_RISK_CAP,
+  MAX_SELLER_AT_RISK_DEFAULT,
+  type GraphConfigOnchain,
+} from './graphConfig.js';
 export { decodeLockedClaim, fetchVaultLockedClaims } from './lockedClaimReader.js';
 export type { LockedClaimState, LockedClaimStatus } from '../types.js';
 export { readCreditRoot, fetchCreditEvents, decodeCreditRoot, decodeCreditEvent } from './creditRootReader.js';
