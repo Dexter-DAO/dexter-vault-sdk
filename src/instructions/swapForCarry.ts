@@ -47,8 +47,6 @@ export const SWAP_DIRECTION_SELL = 1;
 /** Program cap on intent lifetime (slots past the tip). Sign tighter. */
 export const MAX_SWAP_INTENT_HORIZON_SLOTS = 1000n;
 
-const OP_TAG = 'swap_for_carry'; // 14 bytes
-
 function encodeBytesVec(buf: Uint8Array): Buffer {
   const len = Buffer.alloc(4);
   len.writeUInt32LE(buf.length, 0);
@@ -71,44 +69,8 @@ export function deriveSwapBracketPda(
   );
 }
 
-export interface SwapIntent {
-  vault: PublicKey;
-  /** SWAP_DIRECTION_BUY (USDC -> base) or SWAP_DIRECTION_SELL. */
-  direction: number;
-  /** Exact input the route must spend (ExactIn — program-enforced). */
-  amountIn: bigint;
-  /** The user's signed slippage floor — set TIGHT. */
-  minOut: bigint;
-  baseMint: PublicKey;
-  /** Must equal the bracket's current nonce at execution. */
-  nonce: bigint;
-  /** Last valid execution slot; within MAX_SWAP_INTENT_HORIZON_SLOTS of tip. */
-  expirySlot: bigint;
-}
-
-/**
- * The 111-byte op message the passkey endorses. MUST mirror swap_for_carry.rs
- * byte-exactly: "swap_for_carry" || vault(32) || direction(1) || amount_in(8 LE)
- * || min_out(8 LE) || base_mint(32) || nonce(8 LE) || expiry_slot(8 LE).
- * Vault binding right after the tag is the GATE-1 cross-vault-replay fix.
- * The WebAuthn challenge is sha256 of THESE bytes.
- */
-export function buildSwapForCarryMessage(i: SwapIntent): Uint8Array {
-  const out = Buffer.concat([
-    Buffer.from(OP_TAG, 'ascii'),
-    i.vault.toBuffer(),
-    Buffer.from([i.direction]),
-    u64le(i.amountIn),
-    u64le(i.minOut),
-    i.baseMint.toBuffer(),
-    u64le(i.nonce),
-    u64le(i.expirySlot),
-  ]);
-  if (out.length !== 111) {
-    throw new Error(`swap_for_carry op message must be 111 bytes, got ${out.length}`);
-  }
-  return Uint8Array.from(out);
-}
+import { buildSwapForCarryMessage, type SwapIntent } from '../messages/swap.js';
+export { buildSwapForCarryMessage, type SwapIntent };
 
 export interface BuildSwapForCarryIxParams {
   intent: SwapIntent;
