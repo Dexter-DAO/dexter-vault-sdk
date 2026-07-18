@@ -21,6 +21,7 @@
  *   role 5 — ProgramExec(vault, marker=repay_credit), all (recourse repay leg)
  *   role 6 — ProgramExec(vault, marker=seize_collateral), all (recourse seize leg)
  *   role 7 — ProgramExec(vault, marker=seize_ancestor), all (RUNG-3 cascade leg)
+ *   role 9 — ProgramExec(vault, marker=swap_for_carry), all (carry swap leg; 2026-07-18)
  *
  * The HMAC key the Swig-id derivation needs is a CALLER-PROVIDED 32-byte
  * seed. Production passes its session-master secret; tests pass a stable
@@ -78,6 +79,14 @@ export const SWIG_PROGRAM_EXEC_PREFIX_SEIZE = new Uint8Array(
 export const SWIG_PROGRAM_EXEC_PREFIX_SEIZE_ANCESTOR = new Uint8Array(
   DISCRIMINATORS.seize_ancestor,
 );
+// Carry swap-leg marker (added 2026-07-18, → canonical 10-authority set). Role 9
+// authorizes the SignV2 that wraps the pinned-Jupiter route between swap_for_carry
+// and finish_swap. MUST match set_swig_atomic.rs SWIG_MARKER_SWAP_FOR_CARRY. A
+// vault born WITHOUT this marker cannot carry-swap (the SignV2 finds no matching
+// ProgramExec role → the whole tx reverts, fail-closed).
+export const SWIG_PROGRAM_EXEC_PREFIX_SWAP_FOR_CARRY = new Uint8Array(
+  DISCRIMINATORS.swap_for_carry,
+);
 export const SWIG_PROGRAM_EXEC_MARKERS: readonly Uint8Array[] = [
   SWIG_PROGRAM_EXEC_PREFIX,
   SWIG_PROGRAM_EXEC_PREFIX_SETTLE_TAB,
@@ -85,6 +94,7 @@ export const SWIG_PROGRAM_EXEC_MARKERS: readonly Uint8Array[] = [
   SWIG_PROGRAM_EXEC_PREFIX_REPAY,
   SWIG_PROGRAM_EXEC_PREFIX_SEIZE,
   SWIG_PROGRAM_EXEC_PREFIX_SEIZE_ANCESTOR,
+  SWIG_PROGRAM_EXEC_PREFIX_SWAP_FOR_CARRY,
 ];
 
 /**
@@ -199,6 +209,17 @@ export async function buildSwigCreationBundle(
   );
   const vaultSeizeAncestorActions = Actions.set().all().get();
 
+  // Role 9 — carry swap leg. Same All-actions ProgramExec pattern as the other
+  // vault markers; it authorizes ONLY a SignV2 immediately preceded by
+  // swap_for_carry, which forward-introspects the pinned-Jupiter route + finish_swap
+  // (the guards live in the vault program, not in this grant). Without it, a vault
+  // cannot carry-swap. Must stay byte-identical to set_swig_atomic.rs's role 9.
+  const vaultSwapForCarryAuthorityInfo = createProgramExecAuthorityInfo(
+    vaultProgramIdBytes,
+    SWIG_PROGRAM_EXEC_PREFIX_SWAP_FOR_CARRY,
+  );
+  const vaultSwapForCarryActions = Actions.set().all().get();
+
   const sessionAuthorityInfo = createEd25519SessionAuthorityInfo(
     dexterPubkeyBytes,
     sessionTtlSeconds,
@@ -222,7 +243,8 @@ export async function buildSwigCreationBundle(
     .addAuthority(vaultSettleLockedAuthorityInfo, vaultSettleLockedActions)
     .addAuthority(vaultRepayAuthorityInfo, vaultRepayActions)
     .addAuthority(vaultSeizeAuthorityInfo, vaultSeizeActions)
-    .addAuthority(vaultSeizeAncestorAuthorityInfo, vaultSeizeAncestorActions);
+    .addAuthority(vaultSeizeAncestorAuthorityInfo, vaultSeizeAncestorActions)
+    .addAuthority(vaultSwapForCarryAuthorityInfo, vaultSwapForCarryActions);
 
   const contexts = await builder.getInstructionContexts();
   const instructions = contexts.flatMap((ctx) => getInstructionsFromContext(ctx));

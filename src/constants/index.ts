@@ -177,6 +177,8 @@ export const DISCRIMINATORS = Object.freeze({
   set_pause:               Uint8Array.from([63, 32, 154, 2, 56, 103, 79, 45]),
   seize_ancestor:          Uint8Array.from([84, 38, 138, 134, 2, 144, 8, 218]),
   close_node:              Uint8Array.from([19, 61, 232, 69, 247, 135, 255, 107]),
+  swap_for_carry:          Uint8Array.from([208, 132, 10, 189, 236, 110, 28, 204]),
+  finish_swap:             Uint8Array.from([70, 8, 250, 46, 108, 174, 22, 2]),
 });
 
 // The trusted operator/upgrade authority gated to post interim World ID roots
