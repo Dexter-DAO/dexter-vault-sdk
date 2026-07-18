@@ -87,3 +87,79 @@ export function buildAttachNodeMessage(vaultPda: PublicKey, node: PublicKey): Ui
   if (out.length !== 75) throw new Error(`attach_node message wrong length: ${out.length}`);
   return out;
 }
+
+/**
+ * "request_withdrawal" || amount u64 LE || destination(32) || signed_at i64 LE.
+ * MUST match request_withdrawal.rs byte-for-byte. (Absorbed from dexter-fe's
+ * hand-rolled operationMessages.ts, 2026-07-18 — the SDK owns protocol bytes.)
+ */
+export function buildRequestWithdrawalMessage(
+  amount: bigint,
+  destination: PublicKey,
+  signedAt: bigint,
+): Uint8Array {
+  const tag = Buffer.from('request_withdrawal', 'utf8'); // 18
+  const buf = new Uint8Array(tag.length + 8 + 32 + 8);
+  let o = 0;
+  buf.set(tag, o); o += tag.length;
+  new DataView(buf.buffer).setBigUint64(o, amount, true); o += 8;
+  buf.set(destination.toBytes(), o); o += 32;
+  new DataView(buf.buffer).setBigInt64(o, signedAt, true); o += 8;
+  if (o !== 66) throw new Error(`request_withdrawal message wrong length: ${o}`);
+  return buf;
+}
+
+/** "finalize_withdrawal" || amount u64 LE || destination(32). MUST match
+ *  finalize_withdrawal.rs byte-for-byte. */
+export function buildFinalizeWithdrawalMessage(
+  amount: bigint,
+  destination: PublicKey,
+): Uint8Array {
+  const tag = Buffer.from('finalize_withdrawal', 'utf8'); // 19
+  const buf = new Uint8Array(tag.length + 8 + 32);
+  let o = 0;
+  buf.set(tag, o); o += tag.length;
+  new DataView(buf.buffer).setBigUint64(o, amount, true); o += 8;
+  buf.set(destination.toBytes(), o); o += 32;
+  if (o !== 59) throw new Error(`finalize_withdrawal message wrong length: ${o}`);
+  return buf;
+}
+
+/** "force_release" || swig_address(32). MUST match force_release.rs. */
+export function buildForceReleaseMessage(swigAddress: PublicKey): Uint8Array {
+  const tag = Buffer.from('force_release', 'utf8'); // 13
+  const buf = new Uint8Array(tag.length + 32);
+  buf.set(tag, 0);
+  buf.set(swigAddress.toBytes(), tag.length);
+  return buf;
+}
+
+/**
+ * The 32-byte challenge a passkey proves when CLAIMING a vault into an
+ * account: sha256("claim_vault" || vault_pda). Environment-neutral (node
+ * crypto or WebCrypto). The backend derives this identically and rejects
+ * mismatches.
+ */
+export async function buildClaimVaultChallenge(vaultPda: PublicKey): Promise<Uint8Array> {
+  const tag = Buffer.from('claim_vault', 'utf8');
+  const preimage = new Uint8Array(tag.length + 32);
+  preimage.set(tag, 0);
+  preimage.set(vaultPda.toBytes(), tag.length);
+  const subtle = (globalThis as any).crypto?.subtle;
+  if (subtle) {
+    return new Uint8Array(await subtle.digest('SHA-256', preimage));
+  }
+  const { createHash } = await import('node:crypto');
+  return Uint8Array.from(createHash('sha256').update(preimage).digest());
+}
+
+/** "siwx_login" || challenge(32) — the prove_passkey op message. The on-chain
+ *  handler hardcodes the prefix (prove_passkey.rs). */
+export function buildProvePasskeyMessage(challenge: Uint8Array): Uint8Array {
+  if (challenge.length !== 32) throw new Error('challenge must be 32 bytes');
+  const tag = Buffer.from('siwx_login', 'utf8');
+  const buf = new Uint8Array(tag.length + 32);
+  buf.set(tag, 0);
+  buf.set(challenge, tag.length);
+  return buf;
+}
