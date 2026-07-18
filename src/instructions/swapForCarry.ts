@@ -254,3 +254,109 @@ export async function wrapRouteWithSwapSignV2(
   }
   return signV2;
 }
+
+// ── Facilitator co-sign gate for the swap bracket ───────────────────────────
+//
+// The fee payer must never blind-sign; its numeric role allowlist cannot cover
+// the swap role (marker-matched, variable index across the ceremony-backfilled
+// fleet). This gate allows a tx ONLY when it is the exact carry bracket:
+//   1. every swig instruction is SignV2 (no admin/create/session ops),
+//   2. the vault program appears with swap_for_carry AND finish_swap,
+//   3. program-mirroring adjacency: each SignV2 is immediately preceded by
+//      swap_for_carry and immediately followed by finish_swap,
+//   4. every SignV2 role, resolved against the LIVE swig account, carries the
+//      ProgramExec(vault, swap_for_carry) authority.
+// Fails closed on any resolution error.
+
+import { inspectSwigInstructions } from './inspectSwigSign.js';
+
+const SWIG_SIGN_V2_DISC = 11;
+
+export async function isCarrySwapCoSignSafe(
+  connection: Connection,
+  tx: import('@solana/web3.js').VersionedTransaction,
+  deps?: {
+    _fetchSwig?: typeof fetchSwig;
+    _getLookups?: (addrs: PublicKey[]) => Promise<(import('@solana/web3.js').AddressLookupTableAccount | null)[]>;
+  },
+): Promise<boolean> {
+  try {
+    // (1) only SignV2 swig ops.
+    const swigRefs = inspectSwigInstructions(tx);
+    if (swigRefs.length === 0) return false;
+    if (!swigRefs.every((r) => r.discriminator === SWIG_SIGN_V2_DISC)) return false;
+
+    // Resolve the full account key list (route accounts ride in ALTs).
+    const lookups = tx.message.addressTableLookups ?? [];
+    const fetchLookup = deps?._getLookups
+      ?? (async (addrs: PublicKey[]) =>
+        Promise.all(addrs.map(async (a) => (await connection.getAddressLookupTable(a)).value)));
+    const tables = await fetchLookup(lookups.map((l) => l.accountKey));
+    if (tables.some((t) => !t)) return false; // unresolvable ALT → fail closed
+    const keys = tx.message.getAccountKeys({
+      addressLookupTableAccounts: tables as import('@solana/web3.js').AddressLookupTableAccount[],
+    });
+
+    // (2)+(3) the exact bracket, by discriminator + adjacency.
+    const ixs = tx.message.compiledInstructions;
+    const vaultProgramIdx: number[] = [];
+    let sawSwap = false;
+    let sawFinish = false;
+    const signV2Positions: number[] = [];
+    for (let i = 0; i < ixs.length; i += 1) {
+      const ix = ixs[i]!;
+      const pid = keys.get(ix.programIdIndex);
+      if (!pid) return false;
+      if (pid.equals(DEXTER_VAULT_PROGRAM_ID)) {
+        vaultProgramIdx.push(i);
+        const d = Buffer.from(ix.data.slice(0, 8));
+        if (d.equals(Buffer.from(DISCRIMINATORS.swap_for_carry))) sawSwap = true;
+        if (d.equals(Buffer.from(DISCRIMINATORS.finish_swap))) sawFinish = true;
+      }
+      const SWIG_PROGRAM = 'swigypWHEksbC64pWKwah1WTeh9JXwx8H1rJHLdbQMB';
+      if (pid.toBase58() === SWIG_PROGRAM) signV2Positions.push(i);
+    }
+    if (!sawSwap || !sawFinish || signV2Positions.length === 0) return false;
+    for (const pos of signV2Positions) {
+      const prev = pos > 0 ? ixs[pos - 1] : null;
+      const next = pos + 1 < ixs.length ? ixs[pos + 1] : null;
+      const prevIsSwap =
+        prev && keys.get(prev.programIdIndex)?.equals(DEXTER_VAULT_PROGRAM_ID) &&
+        Buffer.from(prev.data.slice(0, 8)).equals(Buffer.from(DISCRIMINATORS.swap_for_carry));
+      const nextIsFinish =
+        next && keys.get(next.programIdIndex)?.equals(DEXTER_VAULT_PROGRAM_ID) &&
+        Buffer.from(next.data.slice(0, 8)).equals(Buffer.from(DISCRIMINATORS.finish_swap));
+      if (!prevIsSwap || !nextIsFinish) return false;
+    }
+
+    // (4) every SignV2 role carries the swap marker on the LIVE swig.
+    const fetchSwigFn = deps?._fetchSwig ?? fetchSwig;
+    const rpc = getRpc(connection);
+    for (const pos of signV2Positions) {
+      const ix = ixs[pos]!;
+      const view = new DataView(ix.data.buffer, ix.data.byteOffset, ix.data.byteLength);
+      if (ix.data.length < 8 || view.getUint16(0, true) !== SWIG_SIGN_V2_DISC) return false;
+      const roleId = view.getUint32(4, true);
+      const swigKeyIndex = ix.accountKeyIndexes[0];
+      if (swigKeyIndex === undefined) return false;
+      const swigAddr = keys.get(swigKeyIndex);
+      if (!swigAddr) return false;
+      const swig = await fetchSwigFn(rpc, kitAddress(swigAddr.toBase58()));
+      if (!swig) return false;
+      let markerRole: number;
+      try {
+        markerRole = findProgramExecRoleId(
+          swig as any,
+          Uint8Array.from(DEXTER_VAULT_PROGRAM_ID.toBytes()),
+          SWIG_PROGRAM_EXEC_PREFIX_SWAP_FOR_CARRY,
+        );
+      } catch {
+        return false;
+      }
+      if (markerRole !== roleId) return false;
+    }
+    return true;
+  } catch {
+    return false; // any surprise → fail closed
+  }
+}
