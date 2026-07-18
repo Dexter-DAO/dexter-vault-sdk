@@ -17,3 +17,4 @@ export * from './migrateV5ToV6.js';
 export { buildCloseSessionInstruction, type BuildCloseSessionArgs } from './closeSession.js';
 export * from './creditIdentity.js';
 export * from './inspectSwigSign.js';
+export * from './swapForCarry.js';
