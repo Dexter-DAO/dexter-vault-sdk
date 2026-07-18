@@ -1,0 +1,23 @@
+# Reviewed exceptions for audit-byte-drift.sh — each line is a grep -F filter.
+# COMMENTS documenting message shapes (no bytes constructed):
+passkeyVault.ts:592
+passkeyVault.ts:712
+passkeyVault.ts:713
+passkeyVault.ts:789
+passkeyVaultAnon.ts:1059
+passkeyVaultAnon.ts:1108
+passkey-anon/challenges.ts:57
+prove-turnkey-deploy.mjs:139
+prove-turnkey-deploy.mjs:143
+tabSettle.ts:359
+# TRACKED TODO (deliberate, migrate on next natural touch of each repo):
+# - facilitator hardcodes establish/upgrade credit-root discriminators; SDK
+#   should export them and the facilitator consume (money perimeter — do not
+#   churn twice in one day).
+instantEstablish.ts:90
+settlement/index.ts:49
+identityCredit.test.ts:13
+# - x402-sdk seller-side VERIFY duplicates the session-register domain constant;
+#   vault SDK should export the domain, x402-sdk import it (publish cascade —
+#   ride the next x402-sdk release train).
+tab/seller/verify.ts
