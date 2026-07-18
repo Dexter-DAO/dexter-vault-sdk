@@ -1539,8 +1539,8 @@
         {
           "name": "root_cache",
           "docs": [
-            "The singleton World ID root cache. Read-only here; its `root` is the",
-            "value the proof's merkle_root MUST match (`bind_world_id_context`)."
+            "The singleton World ID root cache. Read-only here; its `root` is the LIVE",
+            "value the proof's merkle_root may match (`bind_world_id_context_with_history`)."
           ],
           "pda": {
             "seeds": [
@@ -1560,6 +1560,44 @@
                   111,
                   111,
                   116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "root_history",
+          "docs": [
+            "PERFECT-2 — the registry-HISTORY ring. Read-only; the proof's merkle_root",
+            "may ALSO match any root here (a tap-time root the keeper has attested),",
+            "letting a late establish bind trustlessly against a no-longer-latest root."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  108,
+                  100,
+                  95,
+                  105,
+                  100,
+                  95,
+                  114,
+                  111,
+                  111,
+                  116,
+                  95,
+                  104,
+                  105,
+                  115,
+                  116,
+                  111,
+                  114,
+                  121
                 ]
               }
             ]
@@ -1639,7 +1677,7 @@
           ],
           "writable": true,
           "signer": true,
-          "address": "X4o2kSLzqEQjnAzhq3L3BW92aawMV2n2F37EXd2GMpy"
+          "address": "Root1qgf4hpvihXWivsvHNAhDdPMhwgVkwyGJiz38iL"
         },
         {
           "name": "system_program",
@@ -1729,6 +1767,48 @@
                   97,
                   116,
                   101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "root_history",
+          "docs": [
+            "PERFECT-2 — the registry-HISTORY ring (zero-copy; created once by",
+            "`init_root_history`). `mut` + seeds fails closed if it doesn't exist yet,",
+            "so the deploy runbook MUST init it before the keeper resumes — the same",
+            "bootstrap discipline as `light_client`. `establish_root` inserts each",
+            "SP1-verified attested root; a BRAND-NEW singleton, the existing root cache",
+            "is never grown/migrated."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  108,
+                  100,
+                  95,
+                  105,
+                  100,
+                  95,
+                  114,
+                  111,
+                  111,
+                  116,
+                  95,
+                  104,
+                  105,
+                  115,
+                  116,
+                  111,
+                  114,
+                  121
                 ]
               }
             ]
@@ -1942,6 +2022,121 @@
           }
         }
       ]
+    },
+    {
+      "name": "finish_swap",
+      "docs": [
+        "Carry swap leg — CLOSING bracket. Re-reads the vault's canonical ATAs",
+        "and enforces the passkey-signed delta bounds (and, on buys, the",
+        "obligations reservation invariant); burns the replay nonce. The swap",
+        "between the brackets reverts with the transaction if any bound fails."
+      ],
+      "discriminator": [
+        70,
+        8,
+        250,
+        46,
+        108,
+        174,
+        22,
+        2
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "Position 0 — swap_for_carry's forward introspection pins THIS account",
+            "as the vault the closing bracket serves; keep it first."
+          ]
+        },
+        {
+          "name": "swap_bracket",
+          "docs": [
+            "The bracket swap_for_carry armed earlier in this transaction."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  97,
+                  112,
+                  95,
+                  98,
+                  114,
+                  97,
+                  99,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_usdc_ata",
+          "docs": [
+            "The vault's canonical USDC ATA — post-swap balance read. Key-verified",
+            "in the handler against the canonical derivation (same pin as the",
+            "opening bracket, so both reads measure the same account)."
+          ]
+        },
+        {
+          "name": "vault_base_ata",
+          "docs": [
+            "The vault's canonical base-asset ATA — post-swap balance read."
+          ]
+        },
+        {
+          "name": "node",
+          "docs": [
+            "The vault's welded PrincipalNode — REQUIRED iff welded (same contract",
+            "as finalize_withdrawal): a BUY must reserve the node's full credit",
+            "liability in USDC. Omitted for a plain vault."
+          ],
+          "optional": true
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "Graph admin spine — canonical usdc_mint for the reservation math."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "force_release",
@@ -2163,7 +2358,7 @@
           ],
           "writable": true,
           "signer": true,
-          "address": "X4o2kSLzqEQjnAzhq3L3BW92aawMV2n2F37EXd2GMpy"
+          "address": "Root1qgf4hpvihXWivsvHNAhDdPMhwgVkwyGJiz38iL"
         },
         {
           "name": "system_program",
@@ -2180,6 +2375,70 @@
           }
         }
       ]
+    },
+    {
+      "name": "init_root_history",
+      "docs": [
+        "PERFECT-2 — one-time creation of the World ID registry-HISTORY ring (the",
+        "settlement singleton). Permissionless (allocates an EMPTY ring); the deploy",
+        "runbook calls it once, before the keeper resumes posting attested roots."
+      ],
+      "discriminator": [
+        129,
+        81,
+        41,
+        88,
+        218,
+        12,
+        170,
+        111
+      ],
+      "accounts": [
+        {
+          "name": "root_history",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  108,
+                  100,
+                  95,
+                  105,
+                  100,
+                  95,
+                  114,
+                  111,
+                  111,
+                  116,
+                  95,
+                  104,
+                  105,
+                  115,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "initialize_vault",
@@ -3022,7 +3281,7 @@
           "name": "authority",
           "writable": true,
           "signer": true,
-          "address": "X4o2kSLzqEQjnAzhq3L3BW92aawMV2n2F37EXd2GMpy"
+          "address": "Root1qgf4hpvihXWivsvHNAhDdPMhwgVkwyGJiz38iL"
         },
         {
           "name": "system_program",
@@ -3792,7 +4051,7 @@
           "name": "authority",
           "writable": true,
           "signer": true,
-          "address": "X4o2kSLzqEQjnAzhq3L3BW92aawMV2n2F37EXd2GMpy"
+          "address": "Root1qgf4hpvihXWivsvHNAhDdPMhwgVkwyGJiz38iL"
         },
         {
           "name": "system_program",
@@ -5606,6 +5865,261 @@
       ]
     },
     {
+      "name": "swap_for_carry",
+      "docs": [
+        "Carry swap leg — OPENING bracket (Option-A delta-sandwich, 2026-07-15).",
+        "Verifies the passkey swap intent, snapshots vault balances into the",
+        "SwapBracket, and forward-introspects that a pinned-Jupiter SignV2 and",
+        "finish_swap complete the transaction. No money moves here."
+      ],
+      "discriminator": [
+        208,
+        132,
+        10,
+        189,
+        236,
+        110,
+        28,
+        204
+      ],
+      "accounts": [
+        {
+          "name": "swig",
+          "docs": [
+            "Position 0 — REQUIRED at this index by Swig's ProgramExec authority",
+            "validator (same contract as finalize_withdrawal: when the following",
+            "SignV2 authenticates, Swig inspects accounts[0..1] of the preceding",
+            "top-level instruction and requires [swig, swig_wallet])."
+          ]
+        },
+        {
+          "name": "swig_wallet_address",
+          "docs": [
+            "Position 1 — required by Swig's ProgramExec validator (see `swig`)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  105,
+                  103,
+                  45,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  45,
+                  97,
+                  100,
+                  100,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "swig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                13,
+                12,
+                233,
+                66,
+                225,
+                231,
+                197,
+                6,
+                226,
+                24,
+                223,
+                13,
+                125,
+                241,
+                197,
+                47,
+                175,
+                220,
+                53,
+                41,
+                228,
+                141,
+                103,
+                77,
+                29,
+                178,
+                76,
+                117,
+                181,
+                76,
+                204,
+                190
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Boxed: try_accounts stack frame headroom (SBF 4096-byte limit)."
+          ]
+        },
+        {
+          "name": "swap_bracket",
+          "docs": [
+            "The per-vault bracket: transient snapshot carrier + durable replay",
+            "nonce. Created lazily on the vault's first swap; `init_if_needed` is",
+            "safe here because every meaningful field is (re)written below on every",
+            "pass, `in_flight` is required false on entry, and the PDA seeds bind it",
+            "to exactly this vault."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  97,
+                  112,
+                  95,
+                  98,
+                  114,
+                  97,
+                  99,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "asset_config",
+          "docs": [
+            "The approved-asset row for the base asset being bought/sold. Full-seeds",
+            "bound to `base_mint` — a config for mint A can never gate a swap in",
+            "mint B. Its `enabled` flag is the listing gate."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint",
+          "docs": [
+            "The base asset of this swap."
+          ]
+        },
+        {
+          "name": "vault_usdc_ata",
+          "docs": [
+            "The vault's canonical USDC ATA (owner = swig wallet PDA, mint =",
+            "graph_config.usdc_mint) — snapshot source. Address-verified in the",
+            "handler against the canonical ATA derivation so a caller cannot smuggle",
+            "a different funded account into the snapshot."
+          ]
+        },
+        {
+          "name": "vault_base_ata",
+          "docs": [
+            "The vault's canonical base-asset ATA — snapshot source. Same canonical",
+            "derivation check in the handler."
+          ]
+        },
+        {
+          "name": "graph_config",
+          "docs": [
+            "Graph admin spine — pause gate + canonical usdc_mint."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_payer",
+          "docs": [
+            "Pays rent for the bracket PDA on first use (the facilitator fee payer)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SwapForCarryArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "transfer_lock_ownership",
       "discriminator": [
         193,
@@ -5793,8 +6307,9 @@
         {
           "name": "root_cache",
           "docs": [
-            "The singleton World ID root cache. Read-only here; its `root` is the value",
-            "the proof's merkle_root MUST match, and its `source` MUST be Sp1Helios."
+            "The singleton World ID root cache. Read-only; its `root` is the LIVE value",
+            "the proof's merkle_root may match (with the strict freshness + Sp1Helios",
+            "gates), OR the proof may match an attested HISTORY root below."
           ],
           "pda": {
             "seeds": [
@@ -5814,6 +6329,46 @@
                   111,
                   111,
                   116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "root_history",
+          "docs": [
+            "PERFECT-2 — the registry-HISTORY ring. Read-only. THE settlement path: a",
+            "v2 CreditRoot minted instantly at tap time converges to trustless (v1) by",
+            "proving against its tap-time root once the ~7-day fault-proof anchor has",
+            "passed and the keeper has attested that root here — no re-tap, no waiting",
+            "on it to still be `_latestRoot`."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  108,
+                  100,
+                  95,
+                  105,
+                  100,
+                  95,
+                  114,
+                  111,
+                  111,
+                  116,
+                  95,
+                  104,
+                  105,
+                  115,
+                  116,
+                  111,
+                  114,
+                  121
                 ]
               }
             ]
@@ -5981,6 +6536,19 @@
       ]
     },
     {
+      "name": "SwapBracket",
+      "discriminator": [
+        140,
+        78,
+        165,
+        229,
+        104,
+        51,
+        147,
+        158
+      ]
+    },
+    {
       "name": "Vault",
       "discriminator": [
         211,
@@ -6004,6 +6572,19 @@
         214,
         54,
         241
+      ]
+    },
+    {
+      "name": "WorldIdRootHistory",
+      "discriminator": [
+        224,
+        58,
+        222,
+        251,
+        26,
+        184,
+        190,
+        122
       ]
     }
   ],
@@ -6767,6 +7348,51 @@
       "code": 6109,
       "name": "NodeNotClean",
       "msg": "draw_leverage requires a clean node (no outstanding borrowed or accrued_fee) — a position always opens at its own rate"
+    },
+    {
+      "code": 6110,
+      "name": "SwapBracketMismatch",
+      "msg": "swap bracket is mid-flight or does not belong to this vault"
+    },
+    {
+      "code": 6111,
+      "name": "SwapNonceMismatch",
+      "msg": "swap intent nonce does not match the bracket's replay counter"
+    },
+    {
+      "code": 6112,
+      "name": "SwapIntentExpired",
+      "msg": "swap intent expired (expiry_slot passed before execution)"
+    },
+    {
+      "code": 6113,
+      "name": "SwapUnsupportedDirection",
+      "msg": "swap direction must be 0 (buy) or 1 (sell)"
+    },
+    {
+      "code": 6114,
+      "name": "SwapEnvelopeInvalid",
+      "msg": "the following SignV2 must wrap exactly one instruction for the pinned swap program"
+    },
+    {
+      "code": 6115,
+      "name": "SwapBracketNotClosed",
+      "msg": "finish_swap missing, malformed, or not exactly two instructions after swap_for_carry"
+    },
+    {
+      "code": 6116,
+      "name": "SwapDeltaShortfall",
+      "msg": "swap moved balances outside the passkey-signed bounds (input overspent or output below min_out)"
+    },
+    {
+      "code": 6117,
+      "name": "SwapWouldViolateReservation",
+      "msg": "buying the base asset would strip USDC that backs live obligations (locks + credit liability)"
+    },
+    {
+      "code": 6118,
+      "name": "SwapIntentHorizonTooFar",
+      "msg": "swap intent expiry_slot is further than MAX_SWAP_INTENT_HORIZON_SLOTS ahead — sign a tighter window"
     }
   ],
   "types": [
@@ -8296,7 +8922,9 @@
             "name": "cumulative_amount",
             "docs": [
               "Voucher's cumulative amount. Must strictly exceed the XOR frontier",
-              "`max(session.spent, session.crystallized_cumulative)`."
+              "`max(session.spent, session.crystallized_cumulative)`. The claim",
+              "crystallizes `cumulative_amount − frontier` (the uncovered span) and",
+              "the crystallized odometer is SET to this value."
             ],
             "type": "u64"
           },
@@ -10028,9 +10656,10 @@
           {
             "name": "cumulative_amount",
             "docs": [
-              "Total cumulative amount this voucher authorizes. Must be > the",
-              "vault's recorded `active_session.spent` (monotonic) and <= the",
-              "session's `max_amount` cap."
+              "Total cumulative amount this voucher authorizes. Must strictly exceed",
+              "the session's XOR frontier `max(spent, crystallized_cumulative)`",
+              "(monotonic across BOTH terminals) and be <= the session's",
+              "`max_amount` cap. The settle pays `cumulative_amount − frontier`."
             ],
             "type": "u64"
           },
@@ -10099,6 +10728,171 @@
           {
             "name": "emancipated_node",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SwapBracket",
+      "docs": [
+        "Transient intra-tx state carrier + permanent replay counter for the carry",
+        "swap leg (BUILD-SPEC component 6; Option-A delta-sandwich, 2026-07-15).",
+        "",
+        "One per vault at `[SWAP_BRACKET_SEED, vault]`, created lazily on the first",
+        "swap (`init_if_needed`, fee-payer rent). The bracket fields are meaningful",
+        "ONLY between `swap_for_carry` (writes) and `finish_swap` (consumes + clears)",
+        "inside one atomic transaction — `swap_for_carry` forward-introspects that",
+        "`finish_swap` is present two instructions ahead, so `in_flight = true` can",
+        "never persist past the transaction (the tx either reaches finish_swap or",
+        "reverts whole). `nonce` alone is durable: it increments on every completed",
+        "swap and is bound into the passkey op_msg, so a signed swap intent can",
+        "execute EXACTLY once."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version. First field per house style."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical bump for this PDA."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "The vault this bracket is 1:1 with."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Durable per-vault replay counter for signed swap intents. HARD INVARIANT:",
+              "this is monotonic and the bracket is NEVER closed — do not add a",
+              "close_swap_bracket (rent-reclaim) that lets the PDA be recreated at",
+              "nonce 0, or every previously-signed low-nonce intent becomes replayable."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "in_flight",
+            "docs": [
+              "True only between swap_for_carry and finish_swap within one tx."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "direction",
+            "docs": [
+              "0 = buy (USDC -> base), 1 = sell (base -> USDC)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "amount_in",
+            "docs": [
+              "Maximum input the swap may spend (passkey-signed bound)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_out",
+            "docs": [
+              "Minimum output the vault must receive (passkey-signed bound)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "base_mint",
+            "docs": [
+              "The base asset of this swap (binds the AssetConfig row + base ATA)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "usdc_before",
+            "docs": [
+              "Balance snapshots taken by swap_for_carry, consumed by finish_swap."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "base_before",
+            "type": "u64"
+          },
+          {
+            "name": "snapshot_slot",
+            "docs": [
+              "Transaction-position guards: finish_swap must run in the SAME slot at",
+              "EXACTLY snapshot_ix_index + 2 (marker, SignV2, finish)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "snapshot_ix_index",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SwapForCarryArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "direction",
+            "docs": [
+              "0 = buy (USDC -> base), 1 = sell (base -> USDC)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "amount_in",
+            "docs": [
+              "Maximum input the swap may spend."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_out",
+            "docs": [
+              "Minimum output the vault must receive."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Replay counter — must equal the bracket's current nonce."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "expiry_slot",
+            "docs": [
+              "Last slot at which this signed intent may execute."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "client_data_json",
+            "docs": [
+              "WebAuthn clientDataJSON; challenge must be sha256(op_msg)."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "authenticator_data",
+            "type": "bytes"
           }
         ]
       }
@@ -10419,6 +11213,80 @@
               "defined": {
                 "name": "RootSource"
               }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "WorldIdRootHistory",
+      "docs": [
+        "Singleton ring of SP1-Helios-attested World ID registry-HISTORY roots (seed",
+        "`[WORLD_ID_ROOT_HISTORY_SEED]`). PERFECT-2: `establish_root` inserts each root",
+        "the guest proved present in `rootTimestamps` (slot 14, nonzero) at the",
+        "fault-proof-anchored L2 state; `upgrade_credit_root` / `establish_credit_root`",
+        "accept a proof whose merkle_root matches the live cache OR ANY root in this",
+        "ring. Provenance is structural: only the SP1-verified `attestedRoots` output",
+        "can write here, so membership == \"this root was in World Chain's finalized",
+        "registry history\", the exact fact that makes a late upgrade trustless.",
+        "",
+        "ZERO-COPY (`AccountLoader`): the ~2KB ring is memory-mapped, never borsh-",
+        "deserialized onto the ~4KB BPF stack — the groth16 π₂ verify in the credit",
+        "handlers already fills the frame, so a stack-resident copy overflows. `repr(C)`",
+        "layout is padding-free (u16s land on even offsets; the align-1 `roots` array",
+        "follows), so it is `Pod` for bytemuck. Created once by `init_root_history`."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version. First field per house style."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical bump for this singleton PDA."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "head",
+            "docs": [
+              "Next write index into `roots` (wraps at WORLD_ID_ROOT_HISTORY_LEN)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "count",
+            "docs": [
+              "Count of live entries (saturates at WORLD_ID_ROOT_HISTORY_LEN once full)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "roots",
+            "docs": [
+              "The ring of attested roots (bn254 field elements, big-endian). Unused",
+              "slots (index >= count while not yet wrapped) are zero and never match."
+            ],
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                64
+              ]
             }
           }
         ]
